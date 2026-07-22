@@ -6,6 +6,7 @@
   "description": "Production fiber route analysis and annual fee assessment workspace",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:local": "node scripts/build-local.mjs",
     "check": "node --check production.js && node scripts/validate.mjs",
     "preview": "node scripts/serve.mjs"
   },

@@ -32,29 +32,28 @@ npm run build
 
 ผลลัพธ์อยู่ใน `dist/` การ build ในเครื่องโดยไม่มี environment variables ใช้ตรวจ UI ได้ แต่ Cloudflare Pages build จะบังคับให้มี Supabase configuration
 
-## Deploy บน Cloudflare Pages
+## Deploy บน Cloudflare Workers Static Assets
 
-เชื่อม repository กับ Cloudflare Pages แล้วตั้งค่า:
+เชื่อม repository กับ Cloudflare Workers Builds แล้วตั้งค่า:
 
 | ค่า | กำหนดเป็น |
 |---|---|
-| Framework preset | None |
 | Build command | `npm run build` |
-| Build output directory | `dist` |
+| Deploy command | `npx wrangler deploy` |
 | Node version | 20 หรือใหม่กว่า |
 
-เพิ่ม Environment variables ทั้ง Production และ Preview:
+เพิ่ม Environment variables ใน Workers Build Settings:
 
 - `SUPABASE_URL` = Project URL
 - `SUPABASE_PUBLISHABLE_KEY` = Publishable key (รองรับ `SUPABASE_ANON_KEY` เป็น fallback)
 
-ไฟล์ build จะสร้าง `app-config.js` จาก environment variables โดยอัตโนมัติ กุญแจดังกล่าวเป็น public client key และการป้องกันข้อมูลทำโดย Row Level Security ในฐานข้อมูล
+ไฟล์ build จะสร้าง `app-config.js` จาก environment variables โดยอัตโนมัติ และจะหยุด build หากไม่ได้กำหนดค่าทั้งสองตัว กุญแจดังกล่าวเป็น public client key และการป้องกันข้อมูลทำโดย Row Level Security ในฐานข้อมูล
 
 สามารถ deploy ผ่าน Wrangler ได้หลัง login:
 
 ```bash
 npm run build
-npx wrangler pages deploy dist --project-name permission-out
+npx wrangler deploy
 ```
 
 ## โครงสร้างสำคัญ
