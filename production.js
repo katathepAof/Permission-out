@@ -3,6 +3,7 @@
 
   const cfg = window.APP_CONFIG || {};
   const cloudEnabled = Boolean(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase?.createClient);
+  const cloudRequired = cfg.requireSupabase !== false;
   const client = cloudEnabled ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   }) : null;
@@ -298,7 +299,14 @@
     }
   }
 
+  function showConfigurationRequired() {
+    const content = document.createElement('div');
+    content.innerHTML = '<div class="auth-note" style="background:#fff4df;color:#744f08">Production workspace นี้กำหนดให้ใช้ Supabase แต่ยังไม่พบ Project URL หรือ Publishable Key กรุณาตั้งค่า Environment Variables ที่ Cloudflare Pages แล้ว deploy ใหม่</div><div class="modal-field"><label>Environment Variables ที่ต้องมี</label><input value="SUPABASE_URL" readonly><input value="SUPABASE_PUBLISHABLE_KEY" readonly></div>';
+    openModal('ต้องตั้งค่า Supabase', 'ระบบ Cloud ยังไม่พร้อมใช้งาน', content);
+  }
+
   function showAccount() {
+    if (cloudRequired && !cloudEnabled) { showConfigurationRequired(); return; }
     if (!currentUser) { showAuth(); return; }
     const content = document.createElement('div'); content.className = 'account-card';
     const avatar = document.createElement('div'); avatar.className = 'account-avatar'; avatar.textContent = (currentUser.email?.[0] || 'U').toUpperCase();
@@ -335,6 +343,12 @@
       setSaveState(currentUser ? 'Cloud พร้อมใช้งาน' : 'พร้อมใช้งาน');
     } else {
       updateAccountUI(); setSaveState('Local mode');
+      if (cloudRequired && location.protocol !== 'file:') {
+        setSaveState('ต้องตั้งค่า Supabase', 'dirty');
+        document.getElementById('saveProjectBtn').disabled = true;
+        document.getElementById('projectsBtn').disabled = true;
+        showConfigurationRequired();
+      }
     }
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });

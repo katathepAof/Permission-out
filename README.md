@@ -11,7 +11,7 @@
 - คำนวณเสา, diameter, อัตราค่าพาดสาย, surcharge และยอดรวมแบบ real-time
 - Export CSV, KML และ KMZ ตามตัวกรอง
 - ระบบบัญชี Supabase Auth, โครงการส่วนตัว, Cloud Sync และประวัติการวิเคราะห์
-- Local-first: หากยังไม่ตั้งค่า Supabase จะบันทึกในเบราว์เซอร์และยังวิเคราะห์ได้ตามปกติ
+- Supabase-required ใน Production: Cloudflare build จะหยุดทันทีหากไม่ได้กำหนด URL/Key ป้องกันการเปิดระบบโดยไม่มี Cloud Sync
 - PWA/offline shell, responsive UI, print layout และ security headers
 
 ## ตั้งค่า Supabase
@@ -30,7 +30,7 @@ npm run check
 npm run build
 ```
 
-ผลลัพธ์อยู่ใน `dist/` หากไม่ได้กำหนด environment variables ระบบจะ build เป็น Local mode
+ผลลัพธ์อยู่ใน `dist/` การ build ในเครื่องโดยไม่มี environment variables ใช้ตรวจ UI ได้ แต่ Cloudflare Pages build จะบังคับให้มี Supabase configuration
 
 ## Deploy บน Cloudflare Pages
 
@@ -74,4 +74,3 @@ npx wrangler pages deploy dist --project-name permission-out
 - เปิด Cloudflare Web Analytics/Logpush ตามนโยบายองค์กร
 - กำหนด retention และ backup/PITR ของ Supabase ตาม SLA
 - หากไฟล์เส้นทางมีข้อมูลอ่อนไหว ให้คงการประมวลผลฝั่ง client ตามค่าเริ่มต้น และทบทวนนโยบายการเก็บ snapshot ก่อนเปิด Cloud Sync
-

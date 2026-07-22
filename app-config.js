@@ -3,5 +3,6 @@ window.APP_CONFIG = window.APP_CONFIG || {
   supabaseUrl: '',
   supabaseAnonKey: '',
   appName: 'Permission Out',
-  autosave: true
+  autosave: true,
+  requireSupabase: true
 };
