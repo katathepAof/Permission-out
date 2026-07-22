@@ -1503,6 +1503,10 @@ function parallelDiffDeg(a, b) {
 
 let map, layerGroup;
 let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], removedA: 0, removedB: 0 };
+const LARGE_RESULT_THRESHOLD = 1500;
+const REPORT_ROW_LIMIT = 300;
+let aggregateResultMode = false;
+let provinceBuildToken = 0;
 
 const fileBase = document.getElementById('fileBase');
 const fileCompare = document.getElementById('fileCompare');
@@ -2083,7 +2087,12 @@ function segmentStatusPopup(seg, idx) {
 
 function drawResults(resB) {
   initMap();
-  const bounds = [];
+  aggregateResultMode = resB.segments.length > LARGE_RESULT_THRESHOLD;
+  const bounds = L.latLngBounds();
+  if (aggregateResultMode) {
+    renderAggregateResults(resB.segments, true);
+    return;
+  }
   resB.segments.forEach((seg, idx) => {
     const m = STATUS_META[seg.status] || STATUS_META.new;
     const isRemove = seg.status === 'remove';
@@ -2096,12 +2105,42 @@ function drawResults(resB) {
     })
       .bindPopup(() => segmentStatusPopup(seg, idx))
       .addTo(layerGroup);
-    bounds.push(...ll);
+    ll.forEach(point => bounds.extend(point));
     seg._mapLayer = polyline; // let the report table (card 4) jump to this segment on click
     seg._mapBounds = ll;
     searchableLayers.push({ name: seg.name, routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`, layer: polyline, bounds: ll });
   });
-  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+  if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+}
+
+// Large networks are rendered as three Canvas paths instead of thousands of
+// interactive Leaflet layers. Calculations and exports still use every segment.
+function renderAggregateResults(segments, fitBounds = false) {
+  if (!aggregateResultMode || !layerGroup) return;
+  layerGroup.clearLayers();
+  searchableLayers = [];
+  const grouped = { new: [], same: [], remove: [] };
+  const bounds = L.latLngBounds();
+  segments.forEach(seg => {
+    const st = STATUS_META[seg.status] ? seg.status : 'new';
+    const ll = toLatLngs(seg.coords);
+    if (!ll.length) return;
+    grouped[st].push(ll);
+    if (fitBounds) ll.forEach(point => bounds.extend(point));
+  });
+  Object.entries(grouped).forEach(([status, paths]) => {
+    if (!paths.length) return;
+    const m = STATUS_META[status];
+    L.polyline(paths, {
+      color: m.color,
+      weight: status === 'remove' ? 3 : 4,
+      opacity: status === 'remove' ? 0.78 : 0.9,
+      dashArray: status === 'remove' ? '6,7' : null,
+      interactive: false,
+      renderer: L.canvas({ padding: 0.35 })
+    }).addTo(layerGroup);
+  });
+  if (fitBounds && bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
 }
 
 /* ===================== Province lookup (offline boundaries) ===================== */
@@ -2188,11 +2227,21 @@ function buildReportTable() {
     body.innerHTML = '<tr><td colspan="12" style="color:var(--ink-mute); padding:24px; text-align:center;">ไม่พบช่วงเส้นทาง</td></tr>';
     return;
   }
-  state.segmentsB.forEach((seg, i) => { seg._index = i; });
-  const html = state.segmentsB.map((seg, i) => {
+  const selectedProvinces = getSelectedProvinces();
+  const activeStatuses = getActiveStatuses();
+  const activeOverlaps = getActiveOverlaps();
+  const selectedCableStatuses = getSelectedCableStatuses();
+  state.segmentsB.forEach((seg, i) => { seg._index = i; seg._reportRow = null; });
+  const matching = state.segmentsB
+    .map((seg, i) => ({ seg, i }))
+    .filter(({ seg }) => activeStatuses[STATUS_META[seg.status] ? seg.status : 'new'] && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses));
+  const visible = matching.slice(0, REPORT_ROW_LIMIT);
+  const html = visible.map(({ seg, i }) => {
     const km = seg.length / 1000;
     const billable = (STATUS_META[seg.status] || STATUS_META.new).billable;
-    const defaultDiam = (seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM;
+    const defaultDiam = seg._diameterOverride !== undefined
+      ? seg._diameterOverride
+      : ((seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM);
     const typeCoreText = seg.type ? `${seg.type}${seg.core !== null && seg.core !== undefined ? ' / ' + seg.core + ' core' : ''}` : '—';
     const sourceTag = seg.diameterSource === 'table' ? '<div style="font-size:.7rem;color:var(--emerald);font-weight:500;margin-top:2px;">ตารางอ้างอิง</div>'
                      : seg.diameterSource === 'file' ? '<div style="font-size:.7rem;color:var(--ink-mute);margin-top:2px;">จากไฟล์ KML</div>' : '';
@@ -2215,11 +2264,18 @@ function buildReportTable() {
       `<td style="font-size:.74rem; white-space:nowrap; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace;">${endCoord}</td>` +
       `<td class="num" id="rowcost-${i}">—</td></tr>`;
   }).join('');
-  body.innerHTML = html; // single DOM write — far faster than appendChild per row for large networks
+  const limitNotice = matching.length > visible.length
+    ? `<tr><td colspan="12" style="padding:14px;text-align:center;color:var(--ink-mute);background:var(--surface-soft);">แสดง ${visible.length.toLocaleString('th-TH')} จาก ${matching.length.toLocaleString('th-TH')} ช่วง เพื่อให้ระบบทำงานรวดเร็ว · การคำนวณและ Export ใช้ข้อมูลครบทั้งหมด</td></tr>`
+    : '';
+  body.innerHTML = html + limitNotice;
   const trs = body.querySelectorAll('tr.reportRow');
-  state.segmentsB.forEach((seg, i) => { seg._reportRow = trs[i]; }); // cache node for province/status filtering
+  visible.forEach(({ seg }, rowIndex) => { seg._reportRow = trs[rowIndex]; });
   document.querySelectorAll('.diamInput').forEach(inp => {
-    inp.addEventListener('input', recomputeAll);
+    inp.addEventListener('input', event => {
+      const seg = state.segmentsB[parseInt(event.target.dataset.idx, 10)];
+      if (seg) seg._diameterOverride = parseFloat(event.target.value) || 0;
+      recomputeAll();
+    });
   });
 }
 
@@ -2230,8 +2286,10 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
   const row = e.target.closest('tr.reportRow');
   if (!row) return;
   const seg = state.segmentsB[parseInt(row.dataset.idx, 10)];
-  if (!seg || !seg._mapBounds || !map) return;
-  map.fitBounds(seg._mapBounds, { padding: [60, 60], maxZoom: 18 });
+  if (!seg || !map) return;
+  const segmentBounds = seg._mapBounds || toLatLngs(seg.coords);
+  if (!segmentBounds.length) return;
+  map.fitBounds(segmentBounds, { padding: [60, 60], maxZoom: 18 });
   try { seg._mapLayer && seg._mapLayer.openPopup(); } catch (err) { /* layer no longer on map — bounds already zoomed, ignore */ }
 });
 
@@ -2239,14 +2297,35 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
 function populateProvinceFilter() {
   const container = document.getElementById('provinceFilter');
   if (!container) return;
-  const provinces = Array.from(new Set(state.segmentsB.map(getSegProvince).filter(p => p && p !== '-')))
-    .sort((a, b) => a.localeCompare(b, 'th'));
   const prev = Array.from(container.querySelectorAll('.provinceFilterOption:checked')).map(o => o.value);
-  const selected = prev.filter(p => provinces.includes(p));
-  const useAll = prev.includes('__ALL__') || selected.length === 0;
-  container.innerHTML = `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" ${useAll ? 'checked' : ''}>ทุกจังหวัด</label>` +
-    provinces.map(p => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;"><input type="checkbox" class="provinceFilterOption" value="${p}" ${!useAll && selected.includes(p) ? 'checked' : ''}>${p}</label>`).join('');
-  bindProvinceFilterOptions();
+  const token = ++provinceBuildToken;
+  const renderOptions = provinces => {
+    if (token !== provinceBuildToken) return;
+    provinces.sort((a, b) => a.localeCompare(b, 'th'));
+    const selected = prev.filter(p => provinces.includes(p));
+    const useAll = prev.includes('__ALL__') || selected.length === 0;
+    container.innerHTML = `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" ${useAll ? 'checked' : ''}>ทุกจังหวัด</label>` +
+      provinces.map(p => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;"><input type="checkbox" class="provinceFilterOption" value="${p}" ${!useAll && selected.includes(p) ? 'checked' : ''}>${p}</label>`).join('');
+    bindProvinceFilterOptions();
+  };
+  if (state.segmentsB.length <= LARGE_RESULT_THRESHOLD) {
+    renderOptions(Array.from(new Set(state.segmentsB.map(getSegProvince).filter(p => p && p !== '-'))));
+    return;
+  }
+  container.innerHTML = '<label style="display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" checked>ทุกจังหวัด</label><span style="font-size:.76rem;color:var(--ink-mute);">กำลังเตรียมตัวกรองจังหวัดเบื้องหลัง…</span>';
+  const provinces = new Set();
+  let cursor = 0;
+  const processChunk = () => {
+    if (token !== provinceBuildToken) return;
+    const end = Math.min(cursor + 180, state.segmentsB.length);
+    for (; cursor < end; cursor++) {
+      const province = getSegProvince(state.segmentsB[cursor]);
+      if (province && province !== '-') provinces.add(province);
+    }
+    if (cursor < state.segmentsB.length) setTimeout(processChunk, 0);
+    else renderOptions(Array.from(provinces));
+  };
+  setTimeout(processChunk, 0);
 }
 
 // ===== ตัวกรอง Status ของสาย (จากไฟล์ KML) — dynamic เหมือนตัวกรองจังหวัด =====
@@ -2302,24 +2381,26 @@ function applyProvinceFilter() {
   const selectedText = selectedProvinces.filter(p => p !== '__ALL__').join(', ');
   const active = getActiveStatuses();
   const activeOverlaps = getActiveOverlaps();
-  let shown = 0;
-  state.segmentsB.forEach((seg, i) => {
+  const selectedCableStatuses = getSelectedCableStatuses();
+  const matching = [];
+  state.segmentsB.forEach(seg => {
     const statusOk = active[STATUS_META[seg.status] ? seg.status : 'new'];
-    const match = statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps);
-    const row = seg._reportRow;
-    if (row) row.style.display = match ? '' : 'none';
-    if (seg._mapLayer && typeof layerGroup !== 'undefined' && layerGroup) {
+    const match = statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses);
+    if (match) matching.push(seg);
+    if (!aggregateResultMode && seg._mapLayer && typeof layerGroup !== 'undefined' && layerGroup) {
       if (match) {
         if (!layerGroup.hasLayer(seg._mapLayer)) seg._mapLayer.addTo(layerGroup);
       } else if (layerGroup.hasLayer(seg._mapLayer)) {
         layerGroup.removeLayer(seg._mapLayer);
       }
     }
-    if (match) shown++;
   });
+  if (aggregateResultMode) renderAggregateResults(matching, false);
+  buildReportTable();
+  const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
   if (cnt) cnt.textContent = showAllProv ? `แสดง ${shown} ช่วง` : `แสดง ${shown} ช่วง ในจังหวัด: ${selectedText}`;
-  const selectedStatuses = getSelectedCableStatuses();
+  const selectedStatuses = selectedCableStatuses;
   const showAllStatus = selectedStatuses.length === 0 || selectedStatuses.includes('__ALL__');
   const statusCnt = document.getElementById('cableStatusFilterCount');
   if (statusCnt) statusCnt.textContent = showAllStatus ? 'ทุก Status' : `เลือก: ${selectedStatuses.filter(s => s !== '__ALL__').join(', ')}`;
@@ -2383,21 +2464,24 @@ function recomputeAll() {
   const active = getActiveStatuses();
   const selectedProvinces = getSelectedProvinces();
   const activeOverlaps = getActiveOverlaps();
+  const selectedCableStatuses = getSelectedCableStatuses();
 
   let totalPoles = 0;
   const cost = { new: 0, same: 0, remove: 0 };
   const km = { new: 0, same: 0, remove: 0 };
   let costActive = 0;
   state.segmentsB.forEach((seg, i) => {
-    const polesEl = document.getElementById('poles-' + i);
-    const costEl = document.getElementById('rowcost-' + i);
+    const row = seg._reportRow;
+    const polesEl = row ? row.querySelector('[id^="poles-"]') : null;
+    const costEl = row ? row.querySelector('[id^="rowcost-"]') : null;
     const st = STATUS_META[seg.status] ? seg.status : 'new';
     const segKm = seg.length / 1000;
     const poles = Math.ceil(segKm * polesPerKm);
-    const diamInput = document.querySelector(`.diamInput[data-idx="${i}"]`);
-    const diam = diamInput ? (parseFloat(diamInput.value) || 0) : DEFAULT_DIAMETER_MM;
+    const diam = seg._diameterOverride !== undefined
+      ? seg._diameterOverride
+      : ((seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM);
     const segCost = diam * poles * rateB;
-    const inReportScope = segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps);
+    const inReportScope = segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses);
     if (!inReportScope) {
       if (polesEl) polesEl.textContent = '—';
       if (costEl) costEl.textContent = '—';
@@ -2537,11 +2621,11 @@ async function runAnalysis() {
 
     previews = { BASE: null, COMPARE: null };
     drawResults(resB);
-    document.getElementById('mapStatus').textContent = singleFileMode
-      ? 'แสดงเส้นทางทั้งหมดจากไฟล์ที่นำเข้า — คลิกเส้นเพื่อดูข้อมูล'
-      : 'น้ำเงิน = New · เขียว = Same · เทา = Remove — เลือกหมวดที่จะแสดง/คิดค่าได้ในการ์ดรายงาน';
-    buildReportTable();
-    recomputeAll();
+    document.getElementById('mapStatus').textContent = aggregateResultMode
+      ? `แสดงผลแบบรวมเส้นความเร็วสูง ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง · คำนวณและ Export ครบทั้งหมด`
+      : (singleFileMode
+        ? 'แสดงเส้นทางทั้งหมดจากไฟล์ที่นำเข้า — คลิกเส้นเพื่อดูข้อมูล'
+        : 'น้ำเงิน = New · เขียว = Same · เทา = Remove — เลือกหมวดที่จะแสดง/คิดค่าได้ในการ์ดรายงาน');
     populateProvinceFilter();
     populateCableStatusFilter();
     applyProvinceFilter();
