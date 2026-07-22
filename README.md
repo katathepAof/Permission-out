@@ -9,7 +9,7 @@
 - แผนที่ Leaflet, ค้นหาชื่อเส้นทางหรือพิกัด, ระบุจังหวัดแบบออฟไลน์
 - ตัวกรองจังหวัด สถานะสาย และระดับการทับซ้อน
 - คำนวณเสา, diameter, อัตราค่าพาดสาย, surcharge และยอดรวมแบบ real-time
-- Export CSV, KML และ KMZ ตามตัวกรอง
+- Export CSV, KML และ KMZ ตามตัวกรอง พร้อมรหัส/ชื่อ/ประเภทพื้นที่ PEA ของแต่ละเส้นทาง และแนบ Polygon พื้นที่ PEA ใน KML/KMZ
 - ระบบบัญชี Supabase Auth, โครงการส่วนตัว, Cloud Sync และประวัติการวิเคราะห์
 - Supabase-required ใน Production: Cloudflare Worker สร้าง runtime config จาก Variables and Secrets และหน้าแอปจะแจ้งเตือนหากตั้งค่าไม่ครบ
 - PWA/offline shell, responsive UI, print layout และ security headers
@@ -19,8 +19,9 @@
 
 1. สร้าง Supabase project แล้วเปิด **SQL Editor**
 2. รันไฟล์ [`supabase/schema.sql`](supabase/schema.sql) ทั้งไฟล์
-3. ใน **Authentication → URL Configuration** กำหนด Site URL เป็นโดเมน Cloudflare Pages และเพิ่ม localhost/preview URLs ที่ต้องใช้
-4. ใช้ Project URL และ Publishable key (หรือ legacy anon key) เท่านั้น ห้ามนำ `service_role` key มาใส่ฝั่งเว็บ
+3. รัน [`supabase/migrations/20260723100000_billing_engine.sql`](supabase/migrations/20260723100000_billing_engine.sql) เพื่อสร้างสูตรคำนวณกลางแบบมีเวอร์ชัน, RPC สำหรับคำนวณรายรายการ/แบบชุด และตาราง audit
+4. ใน **Authentication → URL Configuration** กำหนด Site URL เป็นโดเมน Cloudflare Pages และเพิ่ม localhost/preview URLs ที่ต้องใช้
+5. ใช้ Project URL และ Publishable key (หรือ legacy anon key) เท่านั้น ห้ามนำ `service_role` key มาใส่ฝั่งเว็บ
 
 ## ทดสอบและ Build
 
@@ -84,6 +85,14 @@ npx wrangler deploy
 - `analysis/*.json.gz` ใช้สำหรับวิเคราะห์บนเว็บอย่างรวดเร็ว ส่วน `exchange/*.geojson.gz` เป็น GeoJSON ตาม RFC 7946 สำหรับส่งต่อหน่วยงานอื่น
 - `manifest.json` มีจำนวนเส้น ขนาดไฟล์ SHA-256 และ CRS ส่วน `data-dictionary.csv` อธิบายโครงสร้างข้อมูล
 - เตรียมข้อมูลด้วย `npm run data:prepare-ufm` และอัปโหลดด้วย `npm run data:upload-ufm`
+
+## สูตรคำนวณกลางและข้อมูลพื้นที่ PEA ใน Export
+
+- สูตร `permission_fee` เก็บแบบ versioned ใน `billing_formula_versions` และหน้าเว็บอ่านสูตร active ผ่าน `get_active_billing_formula`
+- ระบบอื่นเรียก `calculate_permission_fee_v1` สำหรับหนึ่งรายการ หรือ `calculate_permission_fee_batch_v1` สำหรับหลายรายการได้ โดยผลลัพธ์ระบุ `formula_code` และ `formula_version`
+- การคำนวณแบบชุดรวมต้นทุนที่ยังไม่ปัดเศษก่อน แล้วปัดเฉพาะยอดสรุป 2 ตำแหน่งให้ตรงกับหน้าเว็บและ Export
+- ตอน Export ระบบจะ densify เส้นทุกประมาณ 0.02 องศาและโหลดเฉพาะ PEA chunk ที่เป็นผู้สมัครของจุดเหล่านั้น จึงครอบคลุมเส้นที่ผ่านหลายพื้นที่โดยไม่เพิ่มภาระในการเปิดหน้าเว็บและการวิเคราะห์ปกติ
+- CSV ระบุ PEA Area ID, ชื่อ, ประเภทสำนักงาน และวิธีจับคู่ต่อเส้น ส่วน KML/KMZ แนบทั้งข้อมูลดังกล่าวและ Polygon เพื่อให้หน่วยงานอื่นนำไปใช้ต่อได้
 
 ## Checklist ก่อนเปิดใช้งานจริง
 

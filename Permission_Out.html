@@ -2786,7 +2786,23 @@ function csvEscape(val) {
   return s;
 }
 
-function exportCSV() {
+async function ensurePeaAreasForExport(segments) {
+  if (typeof window.permissionOutResolvePeaAreas === 'function') {
+    await window.permissionOutResolvePeaAreas(segments);
+  } else {
+    segments.forEach(segment => { if (!Array.isArray(segment._peaAreas)) segment._peaAreas = []; });
+  }
+}
+
+function peaAreaExportValue(segment, field) {
+  return (segment._peaAreas || []).map(area => area[field] || '').filter(Boolean).join(' | ');
+}
+
+function activeBillingFormula() {
+  return window.permissionOutBillingFormula || { code: 'permission_fee', version: 1, source: 'local-fallback' };
+}
+
+async function exportCSV() {
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
   const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm').value)) || 29;
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
@@ -2804,8 +2820,11 @@ function exportCSV() {
     activeCsv[STATUS_META[seg.status] ? seg.status : 'new'] &&
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
+  await ensurePeaAreasForExport(exportSegments);
+  const formula = activeBillingFormula();
 
   const rows = [];
+  rows.push(['Calculation formula', `${formula.code} v${formula.version}`, formula.source || 'unknown']);
   rows.push(['รายงานเปรียบเทียบเส้นทาง KML และค่าบริการ']);
   rows.push(['วันที่ออกรายงาน', new Date().toLocaleString('th-TH')]);
   rows.push([]);
@@ -2862,6 +2881,16 @@ function exportCSV() {
     rows.push([i + 1, srcFile, seg.name, province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
   });
 
+  const detailStartIndex = rows.length - exportSegments.length;
+  rows[detailStartIndex - 1].splice(4, 0, 'PEA Area IDs', 'PEA Area Names', 'PEA Office Types', 'PEA Assignment Method');
+  exportSegments.forEach((segment, index) => {
+    rows[detailStartIndex + index].splice(4, 0,
+      peaAreaExportValue(segment, 'id'),
+      peaAreaExportValue(segment, 'name'),
+      peaAreaExportValue(segment, 'officeType'),
+      peaAreaExportValue(segment, 'assignmentMethod'));
+  });
+
   const subtotal = costActiveTotal;
   const surchargePct = parseFloat(document.getElementById('surchargePct').value) || 0;
   const surcharge = subtotal * (surchargePct / 100);
@@ -2878,6 +2907,12 @@ function exportCSV() {
   rows.push(['รวมค่าบริการทั้งหมด (รวมส่วนเพิ่ม) (บาท)', exportedTotal.toFixed(2)]);
   rows.push(['ยอดรวมที่แสดงบนหน้าเว็บ ณ เวลา Export (บาท)', screenTotal.toFixed(2)]);
   rows.push(['ผลต่างระหว่างหน้าเว็บกับ Export (บาท)', reconciliationDifference.toFixed(2), Math.abs(reconciliationDifference) < 0.01 ? 'ตรงกัน' : 'โปรดตรวจสอบ']);
+
+  const uniquePeaAreas = new Map(exportSegments.flatMap(segment => segment._peaAreas || []).map(area => [area.id, area]));
+  rows.push([]);
+  rows.push(['PEA areas included in this export']);
+  rows.push(['PEA Area ID', 'PEA Area Name', 'PEA Office Type']);
+  uniquePeaAreas.forEach(area => rows.push([area.id, area.name, area.officeType]));
 
   const csvContent = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM so Excel reads Thai correctly
@@ -2921,8 +2956,13 @@ function downloadBlob(blob, filename) {
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
-function buildSelectedKml() {
-  const segments = selectedSegmentsForExport();
+function geoJsonPolygonToKml(geometry) {
+  const polygon = rings => `<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${rings[0].map(c => `${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing></outerBoundaryIs>${rings.slice(1).map(ring => `<innerBoundaryIs><LinearRing><coordinates>${ring.map(c => `${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>`;
+  if (geometry?.type === 'Polygon') return polygon(geometry.coordinates);
+  if (geometry?.type === 'MultiPolygon') return `<MultiGeometry>${geometry.coordinates.map(polygon).join('')}</MultiGeometry>`;
+  return '';
+}
+function buildSelectedKml(segments, peaFeatures = []) {
   const provinceList = getSelectedProvinces();
   const provinceLabel = provinceList.length === 0 || provinceList.includes('__ALL__') ? 'ทุกจังหวัด' : provinceList.join(', ');
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
@@ -2932,6 +2972,7 @@ function buildSelectedKml() {
   const subtotal = billingRows.reduce((sum, row) => sum + row.cost, 0);
   const surcharge = subtotal * surchargePct / 100;
   const total = subtotal + surcharge;
+  const formula = activeBillingFormula();
   const styles = Object.entries(STATUS_META).map(([key, meta]) =>
     `<Style id="${key}"><LineStyle><color>ff${meta.color.slice(1).match(/../g).reverse().join('')}</color><width>5</width></LineStyle></Style>`
   ).join('');
@@ -2942,6 +2983,10 @@ function buildSelectedKml() {
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
     return `<Placemark><name>${xmlEscape(seg.name || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${seg.status || 'new'}</styleUrl><ExtendedData>` +
       `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
+      `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
+      `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
+      `<Data name="pea_office_types"><value>${xmlEscape(peaAreaExportValue(seg, 'officeType'))}</value></Data>` +
+      `<Data name="pea_assignment_method"><value>${xmlEscape(peaAreaExportValue(seg, 'assignmentMethod'))}</value></Data>` +
       `<Data name="status"><value>${xmlEscape(status.th)}</value></Data>` +
       `<Data name="relationship"><value>${xmlEscape(overlap.th)}</value></Data>` +
       `<Data name="source_file"><value>${xmlEscape(seg.sourceFile || '')}</value></Data>` +
@@ -2956,13 +3001,14 @@ function buildSelectedKml() {
   const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
     `<Data name="segment_count"><value>${segments.length}</value></Data>` +
+    `<Data name="calculation_formula"><value>${xmlEscape(`${formula.code} v${formula.version}`)}</value></Data>` +
     `<Data name="poles_per_km"><value>${polesPerKm}</value></Data>` +
     `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
     `<Data name="subtotal_baht"><value>${subtotal.toFixed(2)}</value></Data>` +
     `<Data name="surcharge_percent"><value>${surchargePct}</value></Data>` +
     `<Data name="surcharge_baht"><value>${surcharge.toFixed(2)}</value></Data>` +
     `<Data name="total_baht"><value>${total.toFixed(2)}</value></Data>` +
-    `</ExtendedData>${styles}${placemarks}</Document></kml>`;
+    `</ExtendedData>${styles}<Style id="pea-area"><LineStyle><color>ffb44b6d</color><width>2</width></LineStyle><PolyStyle><color>337c3aed</color></PolyStyle></Style>${placemarks}<Folder><name>PEA Areas</name>${peaFeatures.map(feature => `<Placemark><name>${xmlEscape(feature.properties?.name || feature.id || 'PEA area')}</name><styleUrl>#pea-area</styleUrl><ExtendedData><Data name="pea_area_id"><value>${xmlEscape(feature.id || feature.properties?.pea_id || '')}</value></Data><Data name="pea_area_name"><value>${xmlEscape(feature.properties?.name || '')}</value></Data><Data name="pea_office_type"><value>${xmlEscape(feature.properties?.office_type || '')}</value></Data></ExtendedData>${geoJsonPolygonToKml(feature.geometry)}</Placemark>`).join('')}</Folder></Document></kml>`;
 }
 function ensureSegmentsAvailableForExport() {
   if (state.segmentsB.length === 0 && state.totalB === 0) {
@@ -2975,28 +3021,36 @@ function ensureSegmentsAvailableForExport() {
   }
   return true;
 }
-function exportKML() {
+async function exportKML() {
   if (!ensureSegmentsAvailableForExport()) return;
-  downloadBlob(new Blob([buildSelectedKml()], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' }), `kml_compare_selected_${exportTimestamp()}.kml`);
+  const segments = selectedSegmentsForExport();
+  await ensurePeaAreasForExport(segments);
+  const peaFeatures = typeof window.permissionOutPeaFeaturesForSegments === 'function' ? await window.permissionOutPeaFeaturesForSegments(segments) : [];
+  downloadBlob(new Blob([buildSelectedKml(segments, peaFeatures)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' }), `kml_compare_selected_${exportTimestamp()}.kml`);
 }
 async function exportKMZ() {
   if (!ensureSegmentsAvailableForExport()) return;
   if (typeof JSZip === 'undefined') { alert('ไม่สามารถสร้างไฟล์ KMZ ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่'); return; }
+  const segments = selectedSegmentsForExport();
+  await ensurePeaAreasForExport(segments);
+  const peaFeatures = typeof window.permissionOutPeaFeaturesForSegments === 'function' ? await window.permissionOutPeaFeaturesForSegments(segments) : [];
   const zip = new JSZip();
-  zip.file('doc.kml', buildSelectedKml());
+  zip.file('doc.kml', buildSelectedKml(segments, peaFeatures));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   downloadBlob(blob, `kml_compare_selected_${exportTimestamp()}.kmz`);
 }
 
-document.getElementById('exportCsvBtn').addEventListener('click', (e) => {
+document.getElementById('exportCsvBtn').addEventListener('click', async (e) => {
   e.preventDefault();
   if (state.segmentsB.length === 0 && state.totalB === 0) {
     alert('กรุณานำเข้าและวิเคราะห์เส้นทางก่อน Export');
     return;
   }
-  exportCSV();
+  try { await exportCSV(); } catch (err) { alert('Export CSV failed: ' + err.message); }
 });
-document.getElementById('exportKmlBtn').addEventListener('click', exportKML);
+document.getElementById('exportKmlBtn').addEventListener('click', () => {
+  exportKML().catch(err => { alert('Export KML failed: ' + err.message); });
+});
 document.getElementById('exportKmzBtn').addEventListener('click', () => {
   exportKMZ().catch(err => { alert('ไม่สามารถสร้างไฟล์ KMZ ได้: ' + err.message); });
 });

@@ -24,6 +24,8 @@
   const peaSelected = new Set();
   const peaChunkCache = new Map();
   let peaManifest = null;
+  let peaLookupGrid = null;
+  const PEA_LOOKUP_CELL_DEG = 0.25;
   let peaOverlayLayer = null;
   let peaRenderTimer = null;
   let peaRenderVersion = 0;
@@ -43,6 +45,20 @@
   const compareCatalogSelected = new Set();
   const compareAnalysisCache = new Map();
   let compareCatalogManifest = null;
+  const DEFAULT_BILLING_FORMULA = Object.freeze({
+    formula_id: null,
+    code: 'permission_fee',
+    version: 1,
+    name: 'Permission fee formula v1',
+    parameters: {
+      poles_per_km: 29,
+      rate_baht_per_line_mm_pole: 2.8,
+      surcharge_percent: 5,
+      currency: 'THB'
+    },
+    source: 'local-fallback'
+  });
+  window.permissionOutBillingFormula = DEFAULT_BILLING_FORMULA;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -441,6 +457,123 @@
     catch (error) { peaChunkCache.delete(path); throw error; }
   }
 
+  function peaGridKey(lon, lat) {
+    return `${Math.floor(lon / PEA_LOOKUP_CELL_DEG)}:${Math.floor(lat / PEA_LOOKUP_CELL_DEG)}`;
+  }
+
+  function buildPeaLookupGrid() {
+    const grid = new Map();
+    for (const item of peaManifest?.items || []) {
+      const [minLon, minLat, maxLon, maxLat] = item.bbox || [];
+      if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) continue;
+      const minX = Math.floor(minLon / PEA_LOOKUP_CELL_DEG);
+      const maxX = Math.floor(maxLon / PEA_LOOKUP_CELL_DEG);
+      const minY = Math.floor(minLat / PEA_LOOKUP_CELL_DEG);
+      const maxY = Math.floor(maxLat / PEA_LOOKUP_CELL_DEG);
+      for (let x = minX; x <= maxX; x += 1) {
+        for (let y = minY; y <= maxY; y += 1) {
+          const key = `${x}:${y}`;
+          if (!grid.has(key)) grid.set(key, []);
+          grid.get(key).push(item);
+        }
+      }
+    }
+    peaLookupGrid = grid;
+  }
+
+  function peaCandidatesForPoint(point) {
+    if (!peaLookupGrid) buildPeaLookupGrid();
+    const [lon, lat] = point;
+    return (peaLookupGrid?.get(peaGridKey(lon, lat)) || []).filter(item => {
+      const [minLon, minLat, maxLon, maxLat] = item.bbox || [];
+      return lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat;
+    });
+  }
+
+  function pointInRing(point, ring) {
+    const [x, y] = point;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      const crosses = ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi) / ((yj - yi) || Number.EPSILON)) + xi);
+      if (crosses) inside = !inside;
+    }
+    return inside;
+  }
+
+  function pointInPeaGeometry(point, geometry) {
+    const inPolygon = polygon => polygon?.length > 0 &&
+      pointInRing(point, polygon[0]) && !polygon.slice(1).some(ring => pointInRing(point, ring));
+    if (geometry?.type === 'Polygon') return inPolygon(geometry.coordinates);
+    if (geometry?.type === 'MultiPolygon') return geometry.coordinates.some(inPolygon);
+    return false;
+  }
+
+  function segmentSamplePoints(segment) {
+    const coords = segment?.coords || [];
+    if (!coords.length) return [];
+    if (coords.length === 1) return [coords[0]];
+    const samples = [coords[0]];
+    const maxStepDegrees = 0.02;
+    for (let i = 1; i < coords.length; i += 1) {
+      const dx = coords[i][0] - coords[i - 1][0];
+      const dy = coords[i][1] - coords[i - 1][1];
+      const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / maxStepDegrees));
+      for (let step = 1; step <= steps; step += 1) {
+        const ratio = step / steps;
+        samples.push([
+          coords[i - 1][0] + (dx * ratio),
+          coords[i - 1][1] + (dy * ratio)
+        ]);
+      }
+    }
+    return samples;
+  }
+
+  async function resolvePeaAreasForSegments(segments) {
+    if (!peaManifest) await initializePeaLayers();
+    if (!peaManifest) throw new Error('PEA area manifest is unavailable');
+    const unresolved = segments.filter(segment => !Array.isArray(segment._peaAreas));
+    const jobs = unresolved.map(segment => ({
+      segment,
+      samples: segmentSamplePoints(segment).map(point => ({ point, candidates: peaCandidatesForPoint(point) }))
+    }));
+    const chunkPaths = [...new Set(jobs.flatMap(job => job.samples.flatMap(sample => sample.candidates.map(item => item.chunk))))];
+    const chunks = await Promise.all(chunkPaths.map(fetchPeaChunk));
+    const featureById = new Map(chunks.flatMap(chunk => chunk.features || []).map(feature => [
+      String(feature.id || feature.properties?.pea_id), feature
+    ]));
+    for (const job of jobs) {
+      const matches = new Map();
+      for (const sample of job.samples) {
+        for (const item of sample.candidates) {
+          const feature = featureById.get(String(item.id));
+          if (feature && pointInPeaGeometry(sample.point, feature.geometry)) {
+            matches.set(String(item.id), {
+              id: String(item.id),
+              name: item.name || feature.properties?.name || '',
+              officeType: item.officeType || feature.properties?.office_type || '',
+              assignmentMethod: 'densified_point_in_polygon_0.02deg'
+            });
+          }
+        }
+      }
+      job.segment._peaAreas = [...matches.values()];
+    }
+    return { resolvedSegments: unresolved.length, loadedChunks: chunkPaths.length };
+  }
+
+  window.permissionOutResolvePeaAreas = resolvePeaAreasForSegments;
+  window.permissionOutPeaFeaturesForSegments = async segments => {
+    await resolvePeaAreasForSegments(segments);
+    const ids = new Set(segments.flatMap(segment => (segment._peaAreas || []).map(area => String(area.id))));
+    const paths = [...new Set((peaManifest?.items || []).filter(item => ids.has(String(item.id))).map(item => item.chunk))];
+    const chunks = await Promise.all(paths.map(fetchPeaChunk));
+    return chunks.flatMap(chunk => chunk.features || []).filter(feature => ids.has(String(feature.id || feature.properties?.pea_id)));
+  };
+
   async function updatePeaMap() {
     const version = ++peaRenderVersion;
     if (!peaSelected.size || !peaManifest) {
@@ -495,6 +628,7 @@
       const response = await fetch(peaAssetUrl('manifest.json'));
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       peaManifest = await response.json();
+      buildPeaLookupGrid();
       peaLayerTypes.innerHTML = '';
       for (const [type, count] of Object.entries(peaManifest.typeCounts || {})) {
         const label = document.createElement('label'); label.className = 'pea-type-filter';
@@ -507,6 +641,18 @@
     } catch (error) {
       updatePeaSummary(`โหลดรายการไม่สำเร็จ: ${error.message}`);
     } finally { peaLayerTrigger.disabled = false; }
+  }
+
+  async function initializeBillingFormula() {
+    if (!client) return;
+    try {
+      const { data, error } = await client.rpc('get_active_billing_formula', { p_code: 'permission_fee' });
+      if (error) throw error;
+      const formula = Array.isArray(data) ? data[0] : data;
+      if (formula) window.permissionOutBillingFormula = { ...formula, source: 'supabase' };
+    } catch (error) {
+      console.warn('Using local billing formula fallback:', error.message);
+    }
   }
 
   function openModal(title, subtitle, content, wide = false) {
@@ -877,7 +1023,7 @@
         showConfigurationRequired();
       }
     }
-    await Promise.all([initializePeaLayers(), initializeBaseCatalog(), initializeCompareCatalog()]);
+    await Promise.all([initializePeaLayers(), initializeBaseCatalog(), initializeCompareCatalog(), initializeBillingFormula()]);
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
