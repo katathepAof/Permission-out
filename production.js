@@ -27,6 +27,7 @@
   let peaOverlayLayer = null;
   let peaRenderTimer = null;
   let peaRenderVersion = 0;
+  let peaShouldFocus = false;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -103,7 +104,7 @@
       input.addEventListener('change', () => {
         if (input.checked) peaSelected.add(item.id); else peaSelected.delete(item.id);
         updatePeaSummary();
-        schedulePeaMapUpdate();
+        schedulePeaMapUpdate(true);
       });
       const name = document.createElement('span'); name.textContent = item.name;
       const type = document.createElement('em'); type.textContent = item.officeType;
@@ -135,6 +136,7 @@
     const version = ++peaRenderVersion;
     if (!peaSelected.size || !peaManifest) {
       clearPeaOverlay();
+      peaShouldFocus = false;
       updatePeaSummary();
       return;
     }
@@ -156,15 +158,22 @@
           layer.bindTooltip(name, { sticky: true, direction: 'top' });
         }
       }).addTo(map);
+      if (peaShouldFocus) {
+        const bounds = peaOverlayLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 12 });
+      }
+      peaShouldFocus = false;
       updatePeaSummary(`แสดง ${features.length.toLocaleString('th-TH')} พื้นที่ · โหลด ${chunkPaths.length} ชุดข้อมูล`);
     } catch (error) {
       if (version !== peaRenderVersion) return;
+      peaShouldFocus = false;
       updatePeaSummary(`โหลดข้อมูลไม่สำเร็จ: ${error.message}`);
       toast(`โหลดพื้นที่ PEA ไม่สำเร็จ: ${error.message}`, 'error');
     }
   }
 
-  function schedulePeaMapUpdate() {
+  function schedulePeaMapUpdate(focus = false) {
+    if (focus) peaShouldFocus = true;
     clearTimeout(peaRenderTimer);
     peaRenderTimer = setTimeout(updatePeaMap, 120);
   }
@@ -497,7 +506,7 @@
   });
   document.getElementById('peaLayerSelectVisible')?.addEventListener('click', () => {
     for (const item of filteredPeaItems()) peaSelected.add(item.id);
-    renderPeaOptions(); updatePeaSummary(); schedulePeaMapUpdate();
+    renderPeaOptions(); updatePeaSummary(); schedulePeaMapUpdate(true);
   });
   document.getElementById('peaLayerClearAll')?.addEventListener('click', () => {
     peaSelected.clear(); renderPeaOptions(); updatePeaSummary(); schedulePeaMapUpdate();
