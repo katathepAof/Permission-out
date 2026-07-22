@@ -2094,20 +2094,14 @@ function segmentStatusPopup(seg, idx) {
     const note = seg.status === 'same' ? 'เส้นทางเหมือนกันทั้งฐานและเปรียบเทียบ — ไม่คิดค่าบริการ' : 'ไม่คิดค่าบริการ';
     return base + badge + `<br><span style="color:var(--ink-mute); font-size:.82rem;">${note}</span>`;
   }
-  const km = seg.length / 1000;
   const rateB = parseFloat(document.getElementById('rateB')?.value) || 0;
   const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm')?.value)) || 29;
-  const poles = Math.ceil(km * polesPerKm);
   const diamInput = document.querySelector(`.diamInput[data-idx="${idx}"]`);
-  const diam = diamInput
-    ? (parseFloat(diamInput.value) || 0)
-    : (seg._diameterOverride !== undefined
-      ? seg._diameterOverride
-      : ((seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM));
-  const cost = diam * poles * rateB;
+  if (diamInput) seg._diameterOverride = parseFloat(diamInput.value) || 0;
+  const billing = billingForSegment(seg, rateB, polesPerKm);
   const costLine = rateB > 0
-    ? `<br><b style="color:var(--navy-800);">ค่าบริการ:</b> ${poles} ต้น × ${diam} มม. × ${rateB} บาท = <b style="color:var(--gold-deep);">${fmtNum(cost)} บาท</b>`
-    : `<br><b style="color:var(--ink-mute);">ค่าบริการ:</b> ${poles} ต้น (ยังไม่ได้กรอกอัตราค่าบริการ)`;
+    ? `<br><b style="color:var(--navy-800);">ค่าบริการ:</b> ${billing.poles} ต้น × ${billing.diameter} มม. × ${rateB} บาท = <b style="color:var(--gold-deep);">${fmtNum(billing.cost)} บาท</b>`
+    : `<br><b style="color:var(--ink-mute);">ค่าบริการ:</b> ${billing.poles} ต้น (ยังไม่ได้กรอกอัตราค่าบริการ)`;
   return base + badge + costLine;
 }
 
@@ -2330,6 +2324,28 @@ function getSegProvince(seg) {
 function fmtKm(meters) { return (meters / 1000).toFixed(3); }
 function fmtNum(n) { return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+// Single source of truth for billing. UI, CSV, KML and KMZ must all call this
+// instead of reading only the currently rendered (maximum 300) table rows.
+function segmentDiameterValue(seg) {
+  if (seg._diameterOverride !== undefined) return seg._diameterOverride;
+  if (seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) return Number(seg.diameter);
+  return DEFAULT_DIAMETER_MM;
+}
+
+function segmentDiameterSourceLabel(seg) {
+  if (seg._diameterOverride !== undefined) return 'กรอกเอง';
+  if (seg.diameterSource === 'table') return 'ตารางอ้างอิง';
+  if (seg.diameterSource === 'file') return 'ไฟล์ KML/KMZ';
+  return 'ค่าเริ่มต้น';
+}
+
+function billingForSegment(seg, rateB, polesPerKm) {
+  const km = seg.length / 1000;
+  const poles = Math.ceil(km * polesPerKm);
+  const diameter = segmentDiameterValue(seg);
+  return { km, poles, diameter, cost: diameter * poles * rateB };
+}
+
 function fmtCoord(coord) {
   // coord is [lon, lat] (KML order) -> display as Lat, Lon (Google Maps order)
   return coord[1].toFixed(6) + ', ' + coord[0].toFixed(6);
@@ -2354,9 +2370,7 @@ function buildReportTable() {
   const html = visible.map(({ seg, i }) => {
     const km = seg.length / 1000;
     const billable = (STATUS_META[seg.status] || STATUS_META.new).billable;
-    const defaultDiam = seg._diameterOverride !== undefined
-      ? seg._diameterOverride
-      : ((seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM);
+    const defaultDiam = segmentDiameterValue(seg);
     const typeCoreText = seg.type ? `${seg.type}${seg.core !== null && seg.core !== undefined ? ' / ' + seg.core + ' core' : ''}` : '—';
     const sourceTag = seg.diameterSource === 'table' ? '<div style="font-size:.7rem;color:var(--emerald);font-weight:500;margin-top:2px;">ตารางอ้างอิง</div>'
                      : seg.diameterSource === 'file' ? '<div style="font-size:.7rem;color:var(--ink-mute);margin-top:2px;">จากไฟล์ KML</div>' : '';
@@ -2591,12 +2605,10 @@ function recomputeAll() {
     const polesEl = row ? row.querySelector('[id^="poles-"]') : null;
     const costEl = row ? row.querySelector('[id^="rowcost-"]') : null;
     const st = STATUS_META[seg.status] ? seg.status : 'new';
-    const segKm = seg.length / 1000;
-    const poles = Math.ceil(segKm * polesPerKm);
-    const diam = seg._diameterOverride !== undefined
-      ? seg._diameterOverride
-      : ((seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM);
-    const segCost = diam * poles * rateB;
+    const billing = billingForSegment(seg, rateB, polesPerKm);
+    const segKm = billing.km;
+    const poles = billing.poles;
+    const segCost = billing.cost;
     const inReportScope = segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses);
     if (!inReportScope) {
       if (polesEl) polesEl.textContent = '—';
@@ -2838,13 +2850,12 @@ function exportCSV() {
     const cableTypeVal = seg.cableType || '-';
     const typeVal = seg.rawType || seg.type || '-';
     const cableStatusVal = seg.cableStatus || '-';
-    const originalIndex = seg._index;
-    const diamInput = document.querySelector(`.diamInput[data-idx="${originalIndex}"]`);
-    const diam = diamInput ? (parseFloat(diamInput.value) || 0) : DEFAULT_DIAMETER_MM;
-    const sourceLabel = seg.diameterSource === 'table' ? 'ตารางอ้างอิง' : seg.diameterSource === 'file' ? 'ไฟล์ KML' : 'ค่าเริ่มต้น/กรอกเอง';
+    const billing = billingForSegment(seg, rateB, polesPerKm);
+    const diam = billing.diameter;
+    const sourceLabel = segmentDiameterSourceLabel(seg);
     const province = getSegProvince(seg);
-    const poles = Math.ceil(km * polesPerKm);
-    const cost = diam * poles * rateB;
+    const poles = billing.poles;
+    const cost = billing.cost;
     costByStatus[st] += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
     costActiveTotal += cost;
@@ -2881,9 +2892,10 @@ function selectedSegmentsForExport() {
   const activeStatuses = getActiveStatuses();
   const selectedProvinces = getSelectedProvinces();
   const activeOverlaps = getActiveOverlaps();
+  const selectedCableStatuses = getSelectedCableStatuses();
   return state.segmentsB.filter(seg =>
     activeStatuses[STATUS_META[seg.status] ? seg.status : 'new'] &&
-    segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps)
+    segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
 }
 function xmlEscape(value) {
@@ -2908,12 +2920,20 @@ function buildSelectedKml() {
   const segments = selectedSegmentsForExport();
   const provinceList = getSelectedProvinces();
   const provinceLabel = provinceList.length === 0 || provinceList.includes('__ALL__') ? 'ทุกจังหวัด' : provinceList.join(', ');
+  const rateB = parseFloat(document.getElementById('rateB').value) || 0;
+  const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm').value)) || 29;
+  const surchargePct = parseFloat(document.getElementById('surchargePct').value) || 0;
+  const billingRows = segments.map(seg => billingForSegment(seg, rateB, polesPerKm));
+  const subtotal = billingRows.reduce((sum, row) => sum + row.cost, 0);
+  const surcharge = subtotal * surchargePct / 100;
+  const total = subtotal + surcharge;
   const styles = Object.entries(STATUS_META).map(([key, meta]) =>
     `<Style id="${key}"><LineStyle><color>ff${meta.color.slice(1).match(/../g).reverse().join('')}</color><width>5</width></LineStyle></Style>`
   ).join('');
   const placemarks = segments.map((seg, index) => {
     const status = STATUS_META[seg.status] || STATUS_META.new;
     const overlap = OVERLAP_META[seg.overlapType] || OVERLAP_META.none;
+    const billing = billingRows[index];
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
     return `<Placemark><name>${xmlEscape(seg.name || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${seg.status || 'new'}</styleUrl><ExtendedData>` +
       `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
@@ -2921,9 +2941,23 @@ function buildSelectedKml() {
       `<Data name="relationship"><value>${xmlEscape(overlap.th)}</value></Data>` +
       `<Data name="source_file"><value>${xmlEscape(seg.sourceFile || '')}</value></Data>` +
       `<Data name="length_km"><value>${(seg.length / 1000).toFixed(3)}</value></Data>` +
+      `<Data name="diameter_mm"><value>${billing.diameter}</value></Data>` +
+      `<Data name="diameter_source"><value>${xmlEscape(segmentDiameterSourceLabel(seg))}</value></Data>` +
+      `<Data name="poles"><value>${billing.poles}</value></Data>` +
+      `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
+      `<Data name="cost_baht"><value>${billing.cost.toFixed(2)}</value></Data>` +
       `</ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coordinates}</coordinates></LineString></Placemark>`;
   }).join('');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(`จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length}`)}</description>${styles}${placemarks}</Document></kml>`;
+  const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
+    `<Data name="segment_count"><value>${segments.length}</value></Data>` +
+    `<Data name="poles_per_km"><value>${polesPerKm}</value></Data>` +
+    `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
+    `<Data name="subtotal_baht"><value>${subtotal.toFixed(2)}</value></Data>` +
+    `<Data name="surcharge_percent"><value>${surchargePct}</value></Data>` +
+    `<Data name="surcharge_baht"><value>${surcharge.toFixed(2)}</value></Data>` +
+    `<Data name="total_baht"><value>${total.toFixed(2)}</value></Data>` +
+    `</ExtendedData>${styles}${placemarks}</Document></kml>`;
 }
 function ensureSegmentsAvailableForExport() {
   if (state.segmentsB.length === 0 && state.totalB === 0) {
