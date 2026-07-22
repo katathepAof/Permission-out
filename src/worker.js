@@ -12,7 +12,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.pathname === '/app-config.js') {
+    if (url.pathname === '/bootstrap.js') {
       const config = {
         supabaseUrl: env.SUPABASE_URL || '',
         supabaseAnonKey: env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || '',

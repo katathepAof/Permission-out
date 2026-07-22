@@ -6,7 +6,7 @@ const env = {
   ASSETS: { fetch: async () => new Response('asset-ok') }
 };
 
-const configResponse = await worker.fetch(new Request('https://example.com/app-config.js'), env);
+const configResponse = await worker.fetch(new Request('https://example.com/bootstrap.js'), env);
 const configBody = await configResponse.text();
 if (!configBody.includes(env.SUPABASE_URL) || configResponse.headers.get('Cache-Control') !== 'no-store, no-cache, must-revalidate') {
   throw new Error('Runtime app config test failed');
