@@ -700,11 +700,16 @@
       settings: {
         threshold: numeric('threshold', 20), interval: numeric('interval', 5),
         polesPerKm: numeric('polesPerKm', 29), rateB: numeric('rateB', 2.8),
-        surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked)
+        surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked),
+        sourceRolesSwapped: window.permissionOutRolesSwapped === true
       },
       sourceFiles: {
-        base: (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name),
-        compare: (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id)).map(item => item.name)
+        base: window.permissionOutRolesSwapped === true
+          ? (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id)).map(item => item.name)
+          : (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name),
+        compare: window.permissionOutRolesSwapped === true
+          ? (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name)
+          : (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id)).map(item => item.name)
       },
       result: {
         totalA: state?.totalA || 0, totalB: state?.totalB || 0,
@@ -740,6 +745,8 @@
     applyValue('polesPerKm', s.polesPerKm); applyValue('rateB', s.rateB);
     applyValue('surchargePct', s.surchargePct);
     if (document.getElementById('dedupeToggle')) document.getElementById('dedupeToggle').checked = Boolean(s.dedupe);
+    window.permissionOutRolesSwapped = Boolean(s.sourceRolesSwapped);
+    if (typeof updateSourceRoleUI === 'function') updateSourceRoleUI();
     state = {
       totalA: data.result.totalA || 0, totalB: data.result.totalB || 0,
       nonOverlapB: data.result.nonOverlapB || 0, newLen: data.result.newLen || 0,

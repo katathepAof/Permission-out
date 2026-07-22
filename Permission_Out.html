@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="production.css?v=20260723-pea-export">
+<link rel="stylesheet" href="production.css?v=20260723-role-swap">
 <style>
 /* ============================================================
    PREMIUM EXECUTIVE DESIGN SYSTEM
@@ -1036,6 +1036,14 @@ table.report td.num{
       อัปโหลดไฟล์ KML
       <span class="liveBadge"><span class="liveDot"></span>Active</span>
     </h2>
+    <div class="source-role-switch" aria-label="กำหนดบทบาทชุดข้อมูล">
+      <div>
+        <span class="source-role-pill is-base" id="baseRoleSummary">ฐาน: PEA</span>
+        <span class="source-role-arrow" aria-hidden="true">→</span>
+        <span class="source-role-pill is-compare" id="compareRoleSummary">เปรียบเทียบ: UFM</span>
+      </div>
+      <button type="button" id="swapSourceRoles" aria-pressed="false" title="สลับ PEA และ UFM ระหว่างชุดฐานกับชุดเปรียบเทียบ">⇄ สลับฐาน / เปรียบเทียบ</button>
+    </div>
     <div class="grid2">
       <div class="fileBox" id="boxBase">
         <div class="base-catalog-head">
@@ -1047,7 +1055,7 @@ table.report td.num{
             </svg>
           </div>
           <div>
-            <strong>ไฟล์ฐานจาก PEA</strong>
+            <strong id="peaCatalogRoleLabel">PEA · ชุดฐาน</strong>
             <small id="baseCatalogStatus">กำลังโหลดรายการจาก Supabase…</small>
           </div>
           <span id="baseCatalogCount" class="base-catalog-count">0</span>
@@ -1069,7 +1077,7 @@ table.report td.num{
             </svg>
           </div>
           <div>
-            <strong>ไฟล์เปรียบเทียบจาก UFM</strong>
+            <strong id="ufmCatalogRoleLabel">UFM · ชุดเปรียบเทียบ</strong>
             <small id="compareCatalogStatus">กำลังโหลดรายการจาก Supabase…</small>
           </div>
           <span id="compareCatalogCount" class="base-catalog-count">0</span>
@@ -1535,6 +1543,10 @@ const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเที�
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
 window.permissionOutBaseDatasetIds = window.permissionOutBaseDatasetIds || [];
 window.permissionOutCompareDatasetIds = window.permissionOutCompareDatasetIds || [];
+window.permissionOutRolesSwapped = window.permissionOutRolesSwapped === true;
+function sourceRolesAreSwapped() {
+  return window.permissionOutRolesSwapped === true;
+}
 function filesForGroup(groupKey) {
   return groupKey === 'BASE' && Array.isArray(window.permissionOutBaseFiles)
     ? window.permissionOutBaseFiles
@@ -1547,12 +1559,16 @@ function selectedCompareDatasetCount() {
   return Array.isArray(window.permissionOutCompareDatasetIds) ? window.permissionOutCompareDatasetIds.length : 0;
 }
 function hasBaseSources() {
-  return filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0;
+  return sourceRolesAreSwapped()
+    ? filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0
+    : filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0;
 }
 function hasCompareSources() {
-  return filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0;
+  return sourceRolesAreSwapped()
+    ? filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0
+    : filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0;
 }
-function sourceNamesForGroup(groupKey) {
+function physicalSourceNames(groupKey) {
   if (groupKey === 'BASE' && Array.isArray(window.permissionOutBaseDatasetNames) && window.permissionOutBaseDatasetNames.length) {
     return window.permissionOutBaseDatasetNames;
   }
@@ -1560,6 +1576,32 @@ function sourceNamesForGroup(groupKey) {
     return window.permissionOutCompareDatasetNames;
   }
   return filesForGroup(groupKey).map(file => file.name);
+}
+function sourceNamesForGroup(groupKey) {
+  const physicalGroup = sourceRolesAreSwapped()
+    ? (groupKey === 'BASE' ? 'COMPARE' : 'BASE')
+    : groupKey;
+  return physicalSourceNames(physicalGroup);
+}
+
+function updateSourceRoleUI() {
+  const swapped = sourceRolesAreSwapped();
+  GROUP_LABELS.BASE = 'ฐาน';
+  GROUP_LABELS.COMPARE = 'เปรียบเทียบ';
+  const peaLabel = document.getElementById('peaCatalogRoleLabel');
+  const ufmLabel = document.getElementById('ufmCatalogRoleLabel');
+  const baseSummary = document.getElementById('baseRoleSummary');
+  const compareSummary = document.getElementById('compareRoleSummary');
+  const swapButton = document.getElementById('swapSourceRoles');
+  if (peaLabel) peaLabel.textContent = swapped ? 'PEA · ชุดเปรียบเทียบ' : 'PEA · ชุดฐาน';
+  if (ufmLabel) ufmLabel.textContent = swapped ? 'UFM · ชุดฐาน' : 'UFM · ชุดเปรียบเทียบ';
+  if (baseSummary) baseSummary.textContent = `ฐาน: ${swapped ? 'UFM' : 'PEA'}`;
+  if (compareSummary) compareSummary.textContent = `เปรียบเทียบ: ${swapped ? 'PEA' : 'UFM'}`;
+  if (swapButton) swapButton.setAttribute('aria-pressed', String(swapped));
+  boxBase?.classList.toggle('is-base-role', !swapped);
+  boxBase?.classList.toggle('is-compare-role', swapped);
+  boxCompare?.classList.toggle('is-base-role', swapped);
+  boxCompare?.classList.toggle('is-compare-role', !swapped);
 }
 // รวมชื่อไฟล์ในฝั่งหนึ่งเป็นข้อความสั้นๆ สำหรับ tag
 function fileListLabel(files) {
@@ -2505,7 +2547,7 @@ function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinc
   const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(seg));
   return provOk && overlapOk && cableStatusOk;
 }
-function applyProvinceFilter() {
+function applyProvinceFilter(fitMapToSelection = false) {
   const selectedProvinces = getSelectedProvinces();
   const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
   const selectedText = selectedProvinces.filter(p => p !== '__ALL__').join(', ');
@@ -2525,7 +2567,15 @@ function applyProvinceFilter() {
       }
     }
   });
-  if (aggregateResultMode) renderAggregateResults(matching, false);
+  if (aggregateResultMode) renderAggregateResults(matching, fitMapToSelection);
+  else if (fitMapToSelection && map && matching.length) {
+    const bounds = L.latLngBounds();
+    matching.forEach(seg => {
+      const points = seg._mapBounds || toLatLngs(seg.coords);
+      points.forEach(point => bounds.extend(point));
+    });
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 12 });
+  }
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
@@ -2534,8 +2584,6 @@ function applyProvinceFilter() {
   const showAllStatus = selectedStatuses.length === 0 || selectedStatuses.includes('__ALL__');
   const statusCnt = document.getElementById('cableStatusFilterCount');
   if (statusCnt) statusCnt.textContent = showAllStatus ? 'ทุก Status' : `เลือก: ${selectedStatuses.filter(s => s !== '__ALL__').join(', ')}`;
-  // Do not re-fit the map on every filter change: this is expensive with large KML files
-  // and interrupts users who are inspecting a location. The visible layers update immediately.
   recomputeAll();
 }
 
@@ -2552,20 +2600,20 @@ function bindProvinceFilterOptions() {
     } else if (event.target.value !== '__ALL__' && event.target.checked && all) {
       all.checked = false;
     }
-    applyProvinceFilter();
+    applyProvinceFilter(true);
   }));
 }
 bindProvinceFilterOptions();
 document.getElementById('selectAllProvinces').addEventListener('click', () => {
   document.querySelectorAll('.provinceFilterOption').forEach(o => { o.checked = o.value === '__ALL__'; });
-  applyProvinceFilter();
+  applyProvinceFilter(true);
 });
 document.getElementById('clearProvinceSelection').addEventListener('click', () => {
   document.querySelectorAll('.provinceFilterOption').forEach(o => { o.checked = false; });
-  applyProvinceFilter();
+  applyProvinceFilter(true);
 });
 document.querySelectorAll('.statusFilter').forEach(cb => cb.addEventListener('change', onStatusFilterChange));
-document.querySelectorAll('.overlapFilter').forEach(cb => cb.addEventListener('change', applyProvinceFilter));
+document.querySelectorAll('.overlapFilter').forEach(cb => cb.addEventListener('change', () => applyProvinceFilter()));
 document.getElementById('selectAllCableStatus').addEventListener('click', () => {
   document.querySelectorAll('.cableStatusOption').forEach(o => { o.checked = o.value === '__ALL__'; });
   applyProvinceFilter();
@@ -2681,11 +2729,11 @@ async function runAnalysis() {
     const singleFileMode = hasBase !== hasCompare; // มีไฟล์แค่ฝั่งฐานหรือฝั่งเปรียบเทียบเพียงฝั่งเดียว
 
     // อ่านและรวมไฟล์ฐาน (A + B) เป็นชุดเดียว และไฟล์เปรียบเทียบ (C + D) เป็นอีกชุดหนึ่ง
-    const baseFiles = filesForGroup('BASE');
-    const compareFiles = filesForGroup('COMPARE');
-    const [baseTexts, compareTexts, optimizedBaseLines, optimizedCompareLines] = await Promise.all([
-      Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
-      Promise.all(compareFiles.map(f => readKmlOrKmzText(f))),
+    const peaFiles = filesForGroup('BASE');
+    const ufmFiles = filesForGroup('COMPARE');
+    const [peaTexts, ufmTexts, optimizedPeaLines, optimizedUfmLines] = await Promise.all([
+      Promise.all(peaFiles.map(f => readKmlOrKmzText(f))),
+      Promise.all(ufmFiles.map(f => readKmlOrKmzText(f))),
       selectedBaseDatasetCount() && typeof window.permissionOutLoadBaseLines === 'function'
         ? window.permissionOutLoadBaseLines()
         : Promise.resolve([]),
@@ -2694,8 +2742,10 @@ async function runAnalysis() {
         : Promise.resolve([])
     ]);
 
-    let linesA = optimizedBaseLines.concat(baseTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = baseFiles[i] ? baseFiles[i].name : ''; return l; })));    // ฐาน: Supabase datasets + local files
-    let linesB = optimizedCompareLines.concat(compareTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = compareFiles[i] ? compareFiles[i].name : ''; return l; }))); // เปรียบเทียบ: Supabase UFM + local files
+    const peaLines = optimizedPeaLines.concat(peaTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = peaFiles[i] ? peaFiles[i].name : ''; return l; })));
+    const ufmLines = optimizedUfmLines.concat(ufmTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = ufmFiles[i] ? ufmFiles[i].name : ''; return l; })));
+    let linesA = sourceRolesAreSwapped() ? ufmLines : peaLines;
+    let linesB = sourceRolesAreSwapped() ? peaLines : ufmLines;
 
     const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้จริงจากไฟล์ฐาน (ก่อนตัดซ้ำ)
     const rawCountB = linesB.length;
@@ -3055,6 +3105,19 @@ document.getElementById('exportKmzBtn').addEventListener('click', () => {
   exportKMZ().catch(err => { alert('ไม่สามารถสร้างไฟล์ KMZ ได้: ' + err.message); });
 });
 
+const swapSourceRolesButton = document.getElementById('swapSourceRoles');
+swapSourceRolesButton?.addEventListener('click', async () => {
+  if (swapSourceRolesButton.disabled) return;
+  window.permissionOutRolesSwapped = !sourceRolesAreSwapped();
+  updateSourceRoleUI();
+  if (hasBaseSources() || hasCompareSources()) {
+    swapSourceRolesButton.disabled = true;
+    try { await runAnalysis(); }
+    finally { swapSourceRolesButton.disabled = false; }
+  }
+});
+updateSourceRoleUI();
+
 document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
 
 function clearAll() {
@@ -3064,6 +3127,8 @@ function clearAll() {
   window.permissionOutBaseDatasetNames = [];
   window.permissionOutCompareDatasetIds = [];
   window.permissionOutCompareDatasetNames = [];
+  window.permissionOutRolesSwapped = false;
+  updateSourceRoleUI();
   FILE_GROUPS.forEach(groupKey => {
     GROUP_INPUTS[groupKey].value = '';
     GROUP_TAGS[groupKey].textContent = '';
@@ -3223,6 +3288,6 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260723-pea-export"></script>
+<script src="production.js?v=20260723-role-swap"></script>
 </body>
 </html>
