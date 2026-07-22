@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v4';
-const CORE = ['/', '/production.css', '/production.js', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v5';
+const CORE = ['/', '/production.css?v=20260723-pea-export', '/production.js?v=20260723-pea-export', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
