@@ -14,6 +14,19 @@
   let currentProjectId = null;
   let dirty = false;
   let autoSaveTimer = null;
+  const peaLayerTrigger = document.getElementById('peaLayerTrigger');
+  const peaLayerPanel = document.getElementById('peaLayerPanel');
+  const peaLayerStatus = document.getElementById('peaLayerStatus');
+  const peaLayerCount = document.getElementById('peaLayerCount');
+  const peaLayerSearch = document.getElementById('peaLayerSearch');
+  const peaLayerList = document.getElementById('peaLayerList');
+  const peaLayerTypes = document.getElementById('peaLayerTypes');
+  const peaSelected = new Set();
+  const peaChunkCache = new Map();
+  let peaManifest = null;
+  let peaOverlayLayer = null;
+  let peaRenderTimer = null;
+  let peaRenderVersion = 0;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -34,6 +47,148 @@
   function setSaveState(text, kind = '') {
     saveState.textContent = text;
     saveState.className = `save-state ${kind ? `is-${kind}` : ''}`.trim();
+  }
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+  }
+
+  function peaAssetUrl(path) {
+    const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
+    const encoded = String(path).split('/').map(encodeURIComponent).join('/');
+    return `${base}/storage/v1/object/public/permission-out-data/pea-area/v1/${encoded}`;
+  }
+
+  function activePeaTypes() {
+    return new Set(Array.from(peaLayerTypes?.querySelectorAll('input:checked') || []).map(input => input.value));
+  }
+
+  function filteredPeaItems() {
+    if (!peaManifest) return [];
+    const query = peaLayerSearch?.value.trim().toLocaleLowerCase('th') || '';
+    const types = activePeaTypes();
+    return peaManifest.items.filter(item => {
+      const typeMatch = !types.size || types.has(item.officeType);
+      const textMatch = !query || `${item.name} ${item.officeType}`.toLocaleLowerCase('th').includes(query);
+      return typeMatch && textMatch;
+    });
+  }
+
+  function updatePeaSummary(message = '') {
+    if (peaLayerCount) peaLayerCount.textContent = peaSelected.size.toLocaleString('th-TH');
+    if (!peaLayerStatus) return;
+    peaLayerStatus.textContent = message || (peaManifest
+      ? `เลือก ${peaSelected.size.toLocaleString('th-TH')} จาก ${peaManifest.featureCount.toLocaleString('th-TH')} พื้นที่`
+      : 'ยังไม่พบรายการข้อมูล');
+  }
+
+  function renderPeaOptions() {
+    if (!peaLayerList) return;
+    const items = filteredPeaItems();
+    peaLayerList.innerHTML = '';
+    if (!items.length) {
+      peaLayerList.innerHTML = '<div class="pea-layer-empty">ไม่พบพื้นที่ที่ตรงกับตัวกรอง</div>';
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const item of items) {
+      const label = document.createElement('label');
+      label.className = 'pea-layer-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = item.id;
+      input.checked = peaSelected.has(item.id);
+      input.addEventListener('change', () => {
+        if (input.checked) peaSelected.add(item.id); else peaSelected.delete(item.id);
+        updatePeaSummary();
+        schedulePeaMapUpdate();
+      });
+      const name = document.createElement('span'); name.textContent = item.name;
+      const type = document.createElement('em'); type.textContent = item.officeType;
+      label.append(input, name, type);
+      fragment.appendChild(label);
+    }
+    peaLayerList.appendChild(fragment);
+  }
+
+  function clearPeaOverlay() {
+    if (peaOverlayLayer && map) {
+      try { map.removeLayer(peaOverlayLayer); } catch (_) { /* map may have been recreated */ }
+    }
+    peaOverlayLayer = null;
+  }
+
+  async function fetchPeaChunk(path) {
+    if (peaChunkCache.has(path)) return peaChunkCache.get(path);
+    const promise = fetch(peaAssetUrl(path)).then(response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    });
+    peaChunkCache.set(path, promise);
+    try { return await promise; }
+    catch (error) { peaChunkCache.delete(path); throw error; }
+  }
+
+  async function updatePeaMap() {
+    const version = ++peaRenderVersion;
+    if (!peaSelected.size || !peaManifest) {
+      clearPeaOverlay();
+      updatePeaSummary();
+      return;
+    }
+    if (!map) initMap();
+    const selectedItems = peaManifest.items.filter(item => peaSelected.has(item.id));
+    const chunkPaths = [...new Set(selectedItems.map(item => item.chunk))];
+    updatePeaSummary(`กำลังโหลด ${peaSelected.size.toLocaleString('th-TH')} พื้นที่…`);
+    try {
+      const chunks = await Promise.all(chunkPaths.map(fetchPeaChunk));
+      if (version !== peaRenderVersion) return;
+      const features = chunks.flatMap(chunk => chunk.features || []).filter(feature => peaSelected.has(feature.id || feature.properties?.pea_id));
+      clearPeaOverlay();
+      peaOverlayLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
+        style: { color: '#6d4bb4', fillColor: '#8b5cf6', fillOpacity: 0.13, opacity: 0.9, weight: 1.7 },
+        onEachFeature(feature, layer) {
+          const name = escapeHtml(feature.properties?.name || 'พื้นที่ PEA');
+          const type = escapeHtml(feature.properties?.office_type || '');
+          layer.bindPopup(`<strong>${name}</strong>${type ? `<br><span>${type}</span>` : ''}`);
+          layer.bindTooltip(name, { sticky: true, direction: 'top' });
+        }
+      }).addTo(map);
+      updatePeaSummary(`แสดง ${features.length.toLocaleString('th-TH')} พื้นที่ · โหลด ${chunkPaths.length} ชุดข้อมูล`);
+    } catch (error) {
+      if (version !== peaRenderVersion) return;
+      updatePeaSummary(`โหลดข้อมูลไม่สำเร็จ: ${error.message}`);
+      toast(`โหลดพื้นที่ PEA ไม่สำเร็จ: ${error.message}`, 'error');
+    }
+  }
+
+  function schedulePeaMapUpdate() {
+    clearTimeout(peaRenderTimer);
+    peaRenderTimer = setTimeout(updatePeaMap, 120);
+  }
+
+  async function initializePeaLayers() {
+    if (!peaLayerTrigger || !cfg.supabaseUrl) return;
+    peaLayerTrigger.disabled = true;
+    updatePeaSummary('กำลังโหลดรายการจาก Supabase…');
+    try {
+      const response = await fetch(peaAssetUrl('manifest.json'));
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      peaManifest = await response.json();
+      peaLayerTypes.innerHTML = '';
+      for (const [type, count] of Object.entries(peaManifest.typeCounts || {})) {
+        const label = document.createElement('label'); label.className = 'pea-type-filter';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.value = type; input.checked = true;
+        input.addEventListener('change', renderPeaOptions);
+        const text = document.createElement('span'); text.textContent = `${type} ${Number(count).toLocaleString('th-TH')}`;
+        label.append(input, text); peaLayerTypes.appendChild(label);
+      }
+      renderPeaOptions(); updatePeaSummary();
+    } catch (error) {
+      updatePeaSummary(`โหลดรายการไม่สำเร็จ: ${error.message}`);
+    } finally { peaLayerTrigger.disabled = false; }
   }
 
   function openModal(title, subtitle, content, wide = false) {
@@ -330,6 +485,33 @@
   document.getElementById('projectsBtn').addEventListener('click', showProjects);
   document.getElementById('newProjectBtn').addEventListener('click', newProject);
   document.getElementById('accountBtn').addEventListener('click', showAccount);
+  peaLayerTrigger?.addEventListener('click', () => {
+    const open = peaLayerPanel.hidden;
+    peaLayerPanel.hidden = !open;
+    peaLayerTrigger.setAttribute('aria-expanded', String(open));
+    if (open) peaLayerSearch?.focus();
+  });
+  peaLayerSearch?.addEventListener('input', renderPeaOptions);
+  document.getElementById('peaLayerClear')?.addEventListener('click', () => {
+    peaLayerSearch.value = ''; renderPeaOptions(); peaLayerSearch.focus();
+  });
+  document.getElementById('peaLayerSelectVisible')?.addEventListener('click', () => {
+    for (const item of filteredPeaItems()) peaSelected.add(item.id);
+    renderPeaOptions(); updatePeaSummary(); schedulePeaMapUpdate();
+  });
+  document.getElementById('peaLayerClearAll')?.addEventListener('click', () => {
+    peaSelected.clear(); renderPeaOptions(); updatePeaSummary(); schedulePeaMapUpdate();
+  });
+  document.addEventListener('click', event => {
+    const control = document.getElementById('peaLayerControl');
+    if (control && !control.contains(event.target) && !peaLayerPanel.hidden) {
+      peaLayerPanel.hidden = true; peaLayerTrigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+  window.addEventListener('permissionout:map-ready', () => {
+    peaOverlayLayer = null;
+    if (peaSelected.size) schedulePeaMapUpdate();
+  });
   window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมบันทึกโครงการ', 'success'); });
   window.addEventListener('online', () => toast('กลับมาออนไลน์แล้ว', 'success'));
   window.addEventListener('offline', () => toast('ออฟไลน์ — แอปยังวิเคราะห์และบันทึกในเครื่องได้'));
@@ -350,6 +532,7 @@
         showConfigurationRequired();
       }
     }
+    await initializePeaLayers();
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

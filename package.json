@@ -7,6 +7,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:local": "node scripts/build-local.mjs",
+    "data:prepare-pea": "node scripts/prepare-pea-data.mjs",
     "check": "node --check production.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs",
     "preview": "node scripts/serve.mjs"
   },
@@ -15,7 +16,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
+    "@tmcw/togeojson": "^7.1.2",
+    "@turf/simplify": "^7.3.5",
+    "@xmldom/xmldom": "^0.9.10",
     "jszip": "^3.10.1",
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "tus-js-client": "^4.3.1"
   }
 }

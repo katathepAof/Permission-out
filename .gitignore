@@ -4,5 +4,8 @@ dist/
 node_modules/
 *.log
 *.zip
+API_Key.txt
+PEA Area.kmz
+data-out/
 .agents/
 .codex/

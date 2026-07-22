@@ -1328,6 +1328,26 @@ table.report td.num{
       แผนที่เส้นทาง
       <span class="title-meta" id="mapStatus">แสดงทันทีเมื่อนำเข้าไฟล์ — คลิกเส้นเพื่อดูข้อมูล</span>
     </h2>
+    <div class="pea-layer-control" id="peaLayerControl">
+      <button type="button" class="pea-layer-trigger" id="peaLayerTrigger" aria-expanded="false" aria-controls="peaLayerPanel">
+        <span class="pea-layer-trigger-icon" aria-hidden="true">▱</span>
+        <span class="pea-layer-trigger-copy"><strong>พื้นที่ PEA</strong><small id="peaLayerStatus">กำลังโหลดรายการ…</small></span>
+        <span class="pea-layer-count" id="peaLayerCount">0</span>
+        <span class="pea-layer-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="pea-layer-panel" id="peaLayerPanel" hidden>
+        <div class="pea-layer-search-row">
+          <input type="search" id="peaLayerSearch" placeholder="ค้นหาชื่อ กฟจ. / กฟอ. / กฟส. / กฟย." autocomplete="off">
+          <button type="button" id="peaLayerClear">ล้าง</button>
+        </div>
+        <div class="pea-layer-actions">
+          <button type="button" id="peaLayerSelectVisible">เลือกผลค้นหาทั้งหมด</button>
+          <button type="button" id="peaLayerClearAll">ยกเลิกทั้งหมด</button>
+        </div>
+        <div class="pea-layer-types" id="peaLayerTypes" aria-label="กรองประเภทหน่วยงาน"></div>
+        <div class="pea-layer-list" id="peaLayerList" role="group" aria-label="เลือกพื้นที่ PEA หลายรายการ"></div>
+      </div>
+    </div>
     <div class="map-search-wrap">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/>
@@ -2023,6 +2043,7 @@ function initMap() {
     window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
     mapResizeBound = true;
   }
+  window.dispatchEvent(new CustomEvent('permissionout:map-ready'));
 }
 
 function toLatLngs(coords) { return coords.map(c => [c[1], c[0]]); }
