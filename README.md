@@ -49,6 +49,8 @@ npm run build
 
 Worker จะสร้าง `/app-config.js` แบบ `no-store` จาก environment variables ตอน runtime และมี `/api/health` สำหรับตรวจสถานะโดยไม่เปิดเผยค่า credentials กุญแจดังกล่าวเป็น public client key และการป้องกันข้อมูลทำโดย Row Level Security ในฐานข้อมูล
 
+`keep_vars = true` ใน `wrangler.toml` จะรักษา Variables and Secrets ที่ตั้งผ่าน Dashboard ไม่ให้ถูก `wrangler deploy` ลบหรือเขียนทับ
+
 สามารถ deploy ผ่าน Wrangler ได้หลัง login:
 
 ```bash
