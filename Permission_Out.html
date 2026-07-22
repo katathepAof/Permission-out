@@ -1519,10 +1519,23 @@ const GROUP_TAGS = { BASE: tagBase, COMPARE: tagCompare };
 const GROUP_COLORS = { BASE: '#e07b39', COMPARE: '#3a7bd5' };
 const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเทียบ' };
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
+window.permissionOutBaseDatasetIds = window.permissionOutBaseDatasetIds || [];
 function filesForGroup(groupKey) {
   return groupKey === 'BASE' && Array.isArray(window.permissionOutBaseFiles)
     ? window.permissionOutBaseFiles
     : Array.from(GROUP_INPUTS[groupKey].files);
+}
+function selectedBaseDatasetCount() {
+  return Array.isArray(window.permissionOutBaseDatasetIds) ? window.permissionOutBaseDatasetIds.length : 0;
+}
+function hasBaseSources() {
+  return filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0;
+}
+function sourceNamesForGroup(groupKey) {
+  if (groupKey === 'BASE' && Array.isArray(window.permissionOutBaseDatasetNames) && window.permissionOutBaseDatasetNames.length) {
+    return window.permissionOutBaseDatasetNames;
+  }
+  return filesForGroup(groupKey).map(file => file.name);
 }
 // รวมชื่อไฟล์ในฝั่งหนึ่งเป็นข้อความสั้นๆ สำหรับ tag
 function fileListLabel(files) {
@@ -1998,7 +2011,7 @@ FILE_GROUPS.forEach(groupKey => {
     tag.textContent = fileListLabel(selectedFiles);
     box.classList.add('hasFile');
     if (event.detail?.skipPreview) return;
-    const hasBase = filesForGroup('BASE').length > 0;
+    const hasBase = hasBaseSources();
     const hasCompare = filesForGroup('COMPARE').length > 0;
     if (hasBase && hasCompare) { await runAnalysis(); } else { await previewGroup(groupKey); }
   });
@@ -2035,7 +2048,7 @@ async function previewGroup(groupKey) {
     const allBounds = FILE_GROUPS.flatMap(k => previews[k] ? previews[k].bounds : []);
     if (allBounds.length) map.fitBounds(allBounds, { padding: [30, 30] });
     const statusParts = FILE_GROUPS.map(k => {
-      const n = filesForGroup(k).length;
+      const n = k === 'BASE' ? (filesForGroup(k).length + selectedBaseDatasetCount()) : filesForGroup(k).length;
       return `${GROUP_LABELS[k]} ${n ? n + ' ไฟล์' : '-'}`;
     }).join(' / ');
     mapStatus.textContent = `พรีวิว: ${statusParts} — กด "วิเคราะห์เส้นทาง" เพื่อดูผลเปรียบเทียบ`;
@@ -2431,7 +2444,7 @@ function recomputeAll() {
 
 async function runAnalysis() {
   errBox.style.display = 'none';
-  const hasBase = filesForGroup('BASE').length > 0;
+  const hasBase = hasBaseSources();
   const hasCompare = filesForGroup('COMPARE').length > 0;
   if (!hasBase && !hasCompare) {
     errBox.textContent = 'กรุณาเลือกไฟล์ KML อย่างน้อย 1 ไฟล์ก่อนวิเคราะห์ (ฝั่งฐาน หรือ ฝั่งเปรียบเทียบ)';
@@ -2458,12 +2471,15 @@ async function runAnalysis() {
     // อ่านและรวมไฟล์ฐาน (A + B) เป็นชุดเดียว และไฟล์เปรียบเทียบ (C + D) เป็นอีกชุดหนึ่ง
     const baseFiles = filesForGroup('BASE');
     const compareFiles = filesForGroup('COMPARE');
-    const [baseTexts, compareTexts] = await Promise.all([
+    const [baseTexts, compareTexts, optimizedBaseLines] = await Promise.all([
       Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
-      Promise.all(compareFiles.map(f => readKmlOrKmzText(f)))
+      Promise.all(compareFiles.map(f => readKmlOrKmzText(f))),
+      selectedBaseDatasetCount() && typeof window.permissionOutLoadBaseLines === 'function'
+        ? window.permissionOutLoadBaseLines()
+        : Promise.resolve([])
     ]);
 
-    let linesA = baseTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = baseFiles[i] ? baseFiles[i].name : ''; return l; }));    // ฐาน: A + B
+    let linesA = optimizedBaseLines.concat(baseTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = baseFiles[i] ? baseFiles[i].name : ''; return l; })));    // ฐาน: Supabase datasets + local files
     let linesB = compareTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = compareFiles[i] ? compareFiles[i].name : ''; return l; })); // เปรียบเทียบ: C + D
 
     const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้จริงจากไฟล์ฐาน (ก่อนตัดซ้ำ)
@@ -2580,7 +2596,7 @@ function exportCSV() {
   rows.push([]);
   rows.push(['ไฟล์ที่นำเข้า']);
   FILE_GROUPS.forEach(groupKey => {
-    const names = filesForGroup(groupKey).map(f => f.name);
+    const names = sourceNamesForGroup(groupKey);
     rows.push([`ฝั่ง${GROUP_LABELS[groupKey]}`, names.length ? names.join(', ') : '-']);
   });
   rows.push([]);
@@ -2748,6 +2764,8 @@ document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
 function clearAll() {
   // Reset file inputs
   window.permissionOutBaseFiles = [];
+  window.permissionOutBaseDatasetIds = [];
+  window.permissionOutBaseDatasetNames = [];
   FILE_GROUPS.forEach(groupKey => {
     GROUP_INPUTS[groupKey].value = '';
     GROUP_TAGS[groupKey].textContent = '';

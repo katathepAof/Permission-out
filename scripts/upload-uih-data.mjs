@@ -46,7 +46,10 @@ for (const absolute of files) {
   const objectPath = `${PREFIX}/${localRelative}`;
   const { error } = await client.storage.from(BUCKET).upload(objectPath, await readFile(absolute), {
     upsert: true,
-    contentType: absolute.endsWith('.json') ? 'application/json' : 'application/vnd.google-earth.kmz',
+    contentType: absolute.endsWith('.json') ? 'application/json'
+      : absolute.endsWith('.csv') ? 'text/csv'
+      : absolute.endsWith('.gz') ? 'application/gzip'
+      : 'application/vnd.google-earth.kmz',
     cacheControl: absolute.endsWith('manifest.json') ? '300' : '31536000'
   });
   if (error) throw new Error(`${objectPath}: ${error.message}`);

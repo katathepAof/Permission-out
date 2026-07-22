@@ -69,6 +69,14 @@ npx wrangler deploy
 - `_headers` — CSP และ security headers สำหรับ Cloudflare
 - `sw.js` — offline application shell
 
+## UIH spatial data
+
+- KMZ ต้นฉบับเก็บใน Supabase Storage ที่ `uih-20072026/v1/kmz/` สำหรับตรวจสอบย้อนหลังและใช้งานกับ Google Earth
+- หน้าเว็บเลือกด้วย Dataset ID และจะดาวน์โหลดข้อมูลแบบ compact gzip เมื่อกดวิเคราะห์เท่านั้น (`analysis/*.json.gz`)
+- ข้อมูลสำหรับส่งต่อเป็น GeoJSON ตาม RFC 7946 + gzip (`exchange/*.geojson.gz`) พร้อม `data-dictionary.csv`, SHA-256, CRS และ metadata ใน `manifest.json`
+- PostGIS schema, GiST spatial index และ API แบบแบ่งหน้าอยู่ใน `supabase/migrations/20260722190000_uih_postgis.sql`
+- หลัง apply migration ให้รัน `npm run data:import-uih-postgis` เพื่อนำ geometry เข้าตารางที่ค้นหาเชิงพื้นที่ได้
+
 ## Checklist ก่อนเปิดใช้งานจริง
 
 - เปิด Email confirmation และกำหนด SMTP ขององค์กรใน Supabase

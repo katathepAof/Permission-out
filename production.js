@@ -34,10 +34,8 @@
   const baseCatalogStatus = document.getElementById('baseCatalogStatus');
   const baseCatalogCount = document.getElementById('baseCatalogCount');
   const baseCatalogSelected = new Set();
-  const baseCatalogCache = new Map();
+  const baseAnalysisCache = new Map();
   let baseCatalogManifest = null;
-  let baseCatalogTimer = null;
-  let baseCatalogVersion = 0;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -78,12 +76,6 @@
     return `${base}/storage/v1/object/public/permission-out-data/uih-20072026/v1/${encoded}`;
   }
 
-  function formatBytes(bytes) {
-    if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
-    if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024).toLocaleString('th-TH')} KB`;
-    return `${(bytes / 1024 / 1024).toLocaleString('th-TH', { maximumFractionDigits: 1 })} MB`;
-  }
-
   function filteredBaseCatalogItems() {
     if (!baseCatalogManifest) return [];
     const query = baseCatalogSearch?.value.trim().toLocaleLowerCase('th') || '';
@@ -93,11 +85,11 @@
   function updateBaseCatalogSummary(message = '') {
     if (baseCatalogCount) baseCatalogCount.textContent = baseCatalogSelected.size.toLocaleString('th-TH');
     if (!baseCatalogStatus) return;
-    const selectedBytes = baseCatalogManifest?.items
+    const selectedLines = baseCatalogManifest?.items
       .filter(item => baseCatalogSelected.has(item.id))
-      .reduce((sum, item) => sum + item.bytes, 0) || 0;
+      .reduce((sum, item) => sum + (item.lineCount || item.placemarkCount || 0), 0) || 0;
     baseCatalogStatus.textContent = message || (baseCatalogManifest
-      ? `เลือก ${baseCatalogSelected.size.toLocaleString('th-TH')} จาก ${baseCatalogManifest.fileCount.toLocaleString('th-TH')} ไฟล์${selectedBytes ? ` · ${formatBytes(selectedBytes)}` : ''}`
+      ? `เลือก ${baseCatalogSelected.size.toLocaleString('th-TH')} จาก ${baseCatalogManifest.fileCount.toLocaleString('th-TH')} ชุดข้อมูล${selectedLines ? ` · ${selectedLines.toLocaleString('th-TH')} เส้น` : ''}`
       : 'ยังไม่พบรายการไฟล์');
   }
 
@@ -127,71 +119,108 @@
       input.checked = baseCatalogSelected.has(item.id);
       input.addEventListener('change', () => {
         if (input.checked) baseCatalogSelected.add(item.id); else baseCatalogSelected.delete(item.id);
+        window.permissionOutBaseDatasetIds = Array.from(baseCatalogSelected);
+        window.permissionOutBaseDatasetNames = (baseCatalogManifest?.items || []).filter(entry => baseCatalogSelected.has(entry.id)).map(entry => entry.name);
         updateBaseCatalogSummary();
-        scheduleBaseCatalogSync();
       });
       const name = document.createElement('span'); name.textContent = item.name;
-      const size = document.createElement('em'); size.textContent = formatBytes(item.bytes);
+      const size = document.createElement('em'); size.textContent = `${(item.lineCount || item.placemarkCount || 0).toLocaleString('th-TH')} เส้น`;
       label.append(input, name, size);
       fragment.appendChild(label);
     }
     baseCatalogList.appendChild(fragment);
   }
 
-  function fetchBaseCatalogBlob(item) {
-    if (baseCatalogCache.has(item.path)) return baseCatalogCache.get(item.path);
-    const request = fetch(uihAssetUrl(item.path)).then(response => {
+  function propertyValue(properties, patterns) {
+    for (const [key, value] of Object.entries(properties || {})) {
+      if (value == null || value === '') continue;
+      if (patterns.some(pattern => pattern.test(key))) return String(value);
+    }
+    return '';
+  }
+
+  function compactLineToApp(line, item) {
+    const properties = line.p || {};
+    const name = String(line.n || properties.name || 'ไม่ระบุชื่อ');
+    const cableType = propertyValue(properties, [/cable[_\s-]*type/i, /cabletype/i, /ชนิดสาย/i, /ประเภทสาย/i]);
+    const rawType = propertyValue(properties, [/^type$/i, /line[_\s-]*type/i, /ชนิด/i, /ประเภท/i]);
+    const cableStatus = propertyValue(properties, [/^status$/i, /cable[_\s-]*status/i, /line[_\s-]*status/i, /สถานะ/i]);
+    const combined = `${cableType} ${rawType} ${name}`.toUpperCase();
+    const type = /FIG\.?\s*8/.test(combined) ? 'FIG8'
+      : /DROP\s*WIRE/.test(combined) ? 'DROPWIRE'
+      : /ADSS/.test(combined) ? 'ADSS'
+      : /ARSS/.test(combined) ? 'ARSS'
+      : /FRP/.test(combined) ? 'FRP' : null;
+    const coreRaw = propertyValue(properties, [/core/i, /แกน/i, /count/i, /size/i]);
+    const coreMatch = coreRaw.match(/\d+/);
+    const core = coreMatch ? Number(coreMatch[0]) : null;
+    const diameterRaw = propertyValue(properties, [/diam/i, /ขนาด/i, /เส้นผ่านศูนย์กลาง/i]);
+    const diameterMatch = diameterRaw.match(/[\d.]+/);
+    let diameter = diameterMatch ? Number(diameterMatch[0]) : null;
+    let diameterSource = diameter !== null ? 'file' : null;
+    if (diameter === null && type && typeof lookupDiameterByTypeCore === 'function') {
+      diameter = lookupDiameterByTypeCore(type, core);
+      if (diameter !== null) diameterSource = 'table';
+    }
+    return {
+      coords: line.c,
+      name,
+      diameter,
+      unit: diameter !== null ? 'mm' : null,
+      type,
+      core,
+      diameterSource,
+      cableType,
+      rawType,
+      cableStatus,
+      extKeys: Object.keys(properties).join(', '),
+      sourceFile: item.name
+    };
+  }
+
+  function fetchBaseAnalysis(item) {
+    if (baseAnalysisCache.has(item.analysisPath)) return baseAnalysisCache.get(item.analysisPath);
+    const request = fetch(uihAssetUrl(item.analysisPath)).then(async response => {
       if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
-      return response.blob();
+      if (!response.body || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์ไม่รองรับการอ่านข้อมูล gzip แบบสตรีม');
+      const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+      return new Response(stream).json();
     }).catch(error => {
-      baseCatalogCache.delete(item.path);
+      baseAnalysisCache.delete(item.analysisPath);
       throw error;
     });
-    baseCatalogCache.set(item.path, request);
+    baseAnalysisCache.set(item.analysisPath, request);
     return request;
   }
 
-  async function syncBaseCatalogFiles() {
-    const version = ++baseCatalogVersion;
+  async function loadSelectedBaseLines() {
     const selectedItems = (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id));
     const box = document.getElementById('boxBase');
     box?.classList.toggle('is-loading', selectedItems.length > 0);
     baseCatalogList?.setAttribute('aria-busy', String(selectedItems.length > 0));
     try {
-      const files = [];
-      if (selectedItems.length) {
-        updateBaseCatalogSummary(`กำลังโหลด ${selectedItems.length.toLocaleString('th-TH')} ไฟล์จาก Supabase…`);
-        const blobs = [];
-        for (let offset = 0; offset < selectedItems.length; offset += 3) {
-          blobs.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchBaseCatalogBlob)));
-          if (version !== baseCatalogVersion) return;
-        }
-        selectedItems.forEach((item, index) => files.push(new File([blobs[index]], item.name, { type: item.contentType || 'application/vnd.google-earth.kmz' })));
+      if (!selectedItems.length) return [];
+      updateBaseCatalogSummary(`กำลังอ่าน ${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูลแบบ optimized…`);
+      const payloads = [];
+      for (let offset = 0; offset < selectedItems.length; offset += 3) {
+        payloads.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchBaseAnalysis)));
       }
-      if (version !== baseCatalogVersion) return;
-      window.permissionOutBaseFiles = files;
-      baseFileInput.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { skipPreview: true } }));
-      const selectedBytes = selectedItems.reduce((sum, item) => sum + item.bytes, 0);
-      updateBaseCatalogSummary(selectedItems.length
-        ? `${selectedItems.length.toLocaleString('th-TH')} ไฟล์พร้อมวิเคราะห์ · ${formatBytes(selectedBytes)}`
-        : 'ยังไม่ได้เลือกไฟล์ฐาน');
-      if (selectedItems.length) toast(`โหลดไฟล์ฐานจาก PEA แล้ว ${selectedItems.length.toLocaleString('th-TH')} ไฟล์`, 'success');
+      const lines = payloads.flatMap((payload, index) => (payload.lines || []).map(line => compactLineToApp(line, selectedItems[index])));
+      updateBaseCatalogSummary(`${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูล · พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
+      return lines;
     } catch (error) {
-      updateBaseCatalogSummary('โหลดไฟล์จาก Supabase ไม่สำเร็จ');
-      toast(`โหลดไฟล์ฐานไม่สำเร็จ: ${error.message}`, 'error');
+      updateBaseCatalogSummary('อ่านข้อมูล optimized ไม่สำเร็จ');
+      toast(`อ่านข้อมูลฐานไม่สำเร็จ: ${error.message}`, 'error');
+      throw error;
     } finally {
-      if (version === baseCatalogVersion) {
-        box?.classList.remove('is-loading');
-        baseCatalogList?.setAttribute('aria-busy', 'false');
-      }
+      box?.classList.remove('is-loading');
+      baseCatalogList?.setAttribute('aria-busy', 'false');
     }
   }
 
-  function scheduleBaseCatalogSync() {
-    clearTimeout(baseCatalogTimer);
-    baseCatalogVersion += 1;
-    baseCatalogTimer = setTimeout(syncBaseCatalogFiles, 320);
-  }
+  window.permissionOutBaseDatasetIds = [];
+  window.permissionOutBaseDatasetNames = [];
+  window.permissionOutLoadBaseLines = loadSelectedBaseLines;
 
   async function initializeBaseCatalog() {
     if (!baseCatalogList || !baseFileInput || !cloudEnabled) {
@@ -399,7 +428,7 @@
         surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked)
       },
       sourceFiles: {
-        base: Array.from(window.permissionOutBaseFiles || []).map(f => f.name),
+        base: (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name),
         compare: Array.from(document.getElementById('fileCompare')?.files || []).map(f => f.name)
       },
       result: {
@@ -648,13 +677,16 @@
   baseCatalogSearch?.addEventListener('input', renderBaseCatalog);
   document.getElementById('baseCatalogSelectAll')?.addEventListener('click', () => {
     for (const item of filteredBaseCatalogItems()) baseCatalogSelected.add(item.id);
-    renderBaseCatalog(); updateBaseCatalogSummary(); scheduleBaseCatalogSync();
+    window.permissionOutBaseDatasetIds = Array.from(baseCatalogSelected);
+    window.permissionOutBaseDatasetNames = (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name);
+    renderBaseCatalog(); updateBaseCatalogSummary();
   });
   document.getElementById('baseCatalogClear')?.addEventListener('click', () => {
-    baseCatalogSelected.clear(); renderBaseCatalog(); updateBaseCatalogSummary(); scheduleBaseCatalogSync();
+    baseCatalogSelected.clear(); window.permissionOutBaseDatasetIds = []; window.permissionOutBaseDatasetNames = [];
+    renderBaseCatalog(); updateBaseCatalogSummary();
   });
   window.addEventListener('permissionout:cleared', () => {
-    clearTimeout(baseCatalogTimer); baseCatalogVersion += 1; baseCatalogSelected.clear();
+    baseCatalogSelected.clear(); window.permissionOutBaseDatasetIds = []; window.permissionOutBaseDatasetNames = [];
     if (baseCatalogSearch) baseCatalogSearch.value = '';
     renderBaseCatalog(); updateBaseCatalogSummary();
   });

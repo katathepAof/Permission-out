@@ -94,3 +94,6 @@ revoke all on public.profiles, public.projects, public.analysis_runs from anon;
 grant select, insert, update, delete on public.projects to authenticated;
 grant select, insert, delete on public.analysis_runs to authenticated;
 grant select, update on public.profiles to authenticated;
+
+-- Queryable UIH geometry and public read APIs are defined in:
+-- supabase/migrations/20260722190000_uih_postgis.sql
