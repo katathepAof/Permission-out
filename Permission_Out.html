@@ -1328,19 +1328,6 @@ table.report td.num{
       แผนที่เส้นทาง
       <span class="title-meta" id="mapStatus">แสดงทันทีเมื่อนำเข้าไฟล์ — คลิกเส้นเพื่อดูข้อมูล</span>
     </h2>
-    <div class="reference-layer-toolbar" aria-label="ชั้นข้อมูลอ้างอิง">
-      <div class="reference-layer-heading">
-        <span class="reference-layer-icon" aria-hidden="true">◫</span>
-        <span><strong>ชั้นข้อมูลอ้างอิง</strong><small id="referenceLayerStatus">กำลังตรวจสอบข้อมูลจาก Supabase…</small></span>
-      </div>
-      <label class="reference-layer-select-wrap" for="referenceLayerSelect">
-        <span class="sr-only">เลือกชั้นข้อมูลอ้างอิง</span>
-        <select id="referenceLayerSelect" disabled>
-          <option value="">ไม่แสดงชั้นข้อมูล</option>
-        </select>
-      </label>
-      <button type="button" class="reference-layer-refresh" id="referenceLayerRefresh" aria-label="โหลดรายการชั้นข้อมูลใหม่" title="โหลดรายการใหม่">↻</button>
-    </div>
     <div class="map-search-wrap">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/>
@@ -2036,7 +2023,6 @@ function initMap() {
     window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
     mapResizeBound = true;
   }
-  window.dispatchEvent(new CustomEvent('permissionout:map-ready'));
 }
 
 function toLatLngs(coords) { return coords.map(c => [c[1], c[0]]); }

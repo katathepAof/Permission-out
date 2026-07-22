@@ -14,12 +14,6 @@
   let currentProjectId = null;
   let dirty = false;
   let autoSaveTimer = null;
-  const referenceLayerSelect = document.getElementById('referenceLayerSelect');
-  const referenceLayerStatus = document.getElementById('referenceLayerStatus');
-  const referenceLayerRefresh = document.getElementById('referenceLayerRefresh');
-  let referenceLayers = new Map();
-  let referenceFeatureGroup = null;
-  let referenceLayerLoading = false;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -40,159 +34,6 @@
   function setSaveState(text, kind = '') {
     saveState.textContent = text;
     saveState.className = `save-state ${kind ? `is-${kind}` : ''}`.trim();
-  }
-
-  function setReferenceStatus(text, isError = false) {
-    if (!referenceLayerStatus) return;
-    referenceLayerStatus.textContent = text;
-    referenceLayerStatus.style.color = isError ? '#a93932' : '';
-  }
-
-  function clearReferenceLayer() {
-    if (referenceFeatureGroup && map) {
-      try { map.removeLayer(referenceFeatureGroup); } catch (_) { /* map may have been recreated */ }
-    }
-    referenceFeatureGroup = null;
-  }
-
-  function referenceCoords(raw) {
-    return String(raw || '').trim().split(/\s+/).map(item => {
-      const parts = item.split(',').map(Number);
-      return [parts[1], parts[0]];
-    }).filter(item => Number.isFinite(item[0]) && Number.isFinite(item[1]));
-  }
-
-  function referencePopup(name, description) {
-    const escape = value => String(value || '').replace(/[&<>"']/g, char => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    })[char]);
-    return `<strong>${escape(name || 'พื้นที่อ้างอิง')}</strong>${description ? `<br><span>${escape(description)}</span>` : ''}`;
-  }
-
-  function drawReferenceKml(text, layerMeta) {
-    const xml = new DOMParser().parseFromString(text, 'text/xml');
-    if (xml.getElementsByTagName('parsererror').length) throw new Error('รูปแบบ KML ภายในไฟล์ไม่ถูกต้อง');
-    if (!map) initMap();
-    clearReferenceLayer();
-
-    const rawStyle = layerMeta.style || {};
-    const style = {
-      color: rawStyle.color || '#7c3aed',
-      fillColor: rawStyle.fillColor || rawStyle.color || '#8b5cf6',
-      fillOpacity: Number.isFinite(Number(rawStyle.fillOpacity)) ? Number(rawStyle.fillOpacity) : 0.12,
-      opacity: Number.isFinite(Number(rawStyle.opacity)) ? Number(rawStyle.opacity) : 0.88,
-      weight: Number.isFinite(Number(rawStyle.weight)) ? Number(rawStyle.weight) : 2
-    };
-    const layers = [];
-    const placemarks = Array.from(xml.getElementsByTagName('Placemark'));
-
-    for (const placemark of placemarks) {
-      const name = placemark.getElementsByTagName('name')[0]?.textContent?.trim() || layerMeta.name;
-      const description = placemark.getElementsByTagName('description')[0]?.textContent?.trim() || '';
-      const popup = referencePopup(name, description);
-
-      for (const polygon of Array.from(placemark.getElementsByTagName('Polygon'))) {
-        const rings = [];
-        const outer = polygon.getElementsByTagName('outerBoundaryIs')[0]?.getElementsByTagName('coordinates')[0];
-        const outerCoords = referenceCoords(outer?.textContent);
-        if (outerCoords.length >= 3) rings.push(outerCoords);
-        for (const inner of Array.from(polygon.getElementsByTagName('innerBoundaryIs'))) {
-          const hole = referenceCoords(inner.getElementsByTagName('coordinates')[0]?.textContent);
-          if (hole.length >= 3) rings.push(hole);
-        }
-        if (rings.length) layers.push(L.polygon(rings, style).bindPopup(popup));
-      }
-
-      for (const lineString of Array.from(placemark.getElementsByTagName('LineString'))) {
-        const coords = referenceCoords(lineString.getElementsByTagName('coordinates')[0]?.textContent);
-        if (coords.length >= 2) layers.push(L.polyline(coords, style).bindPopup(popup));
-      }
-
-      for (const point of Array.from(placemark.getElementsByTagName('Point'))) {
-        const coords = referenceCoords(point.getElementsByTagName('coordinates')[0]?.textContent);
-        if (coords.length) layers.push(L.circleMarker(coords[0], { ...style, radius: 5, fillOpacity: 0.75 }).bindPopup(popup));
-      }
-    }
-
-    if (!layers.length) throw new Error('ไม่พบ Polygon, LineString หรือ Point ในชั้นข้อมูลนี้');
-    referenceFeatureGroup = L.featureGroup(layers).addTo(map);
-    const bounds = referenceFeatureGroup.getBounds();
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
-    return layers.length;
-  }
-
-  async function loadSelectedReferenceLayer() {
-    if (!referenceLayerSelect || referenceLayerLoading) return;
-    const id = referenceLayerSelect.value;
-    if (!id) {
-      clearReferenceLayer();
-      setReferenceStatus(referenceLayers.size ? `พร้อมใช้งาน ${referenceLayers.size} ชั้นข้อมูล` : 'ยังไม่มีชั้นข้อมูล');
-      return;
-    }
-    const layerMeta = referenceLayers.get(id);
-    if (!layerMeta || !client) return;
-
-    referenceLayerLoading = true;
-    referenceLayerSelect.disabled = true;
-    setReferenceStatus(`กำลังโหลด ${layerMeta.name}…`);
-    try {
-      const publicResult = client.storage.from(layerMeta.storage_bucket).getPublicUrl(layerMeta.storage_path);
-      const publicUrl = publicResult?.data?.publicUrl;
-      if (!publicUrl) throw new Error('ไม่พบ URL ของไฟล์ใน Storage');
-      const response = await fetch(publicUrl);
-      if (!response.ok) throw new Error(`ดาวน์โหลดไฟล์ไม่สำเร็จ (HTTP ${response.status})`);
-      const file = new File([await response.blob()], layerMeta.storage_path, {
-        type: layerMeta.file_type === 'kmz' ? 'application/vnd.google-earth.kmz' : 'application/vnd.google-earth.kml+xml'
-      });
-      const text = await readKmlOrKmzText(file);
-      const featureCount = drawReferenceKml(text, layerMeta);
-      setReferenceStatus(`แสดง ${layerMeta.name} · ${featureCount.toLocaleString('th-TH')} รายการ`);
-    } catch (error) {
-      clearReferenceLayer();
-      setReferenceStatus(`โหลดไม่สำเร็จ: ${error.message}`, true);
-      toast(`เปิดชั้นข้อมูลไม่สำเร็จ: ${error.message}`, 'error');
-    } finally {
-      referenceLayerLoading = false;
-      referenceLayerSelect.disabled = false;
-    }
-  }
-
-  async function loadReferenceLayers() {
-    if (!referenceLayerSelect || !referenceLayerRefresh) return;
-    if (!client) {
-      referenceLayerSelect.disabled = true;
-      referenceLayerRefresh.disabled = true;
-      setReferenceStatus('ต้องเชื่อมต่อ Supabase ก่อน', true);
-      return;
-    }
-    referenceLayerSelect.disabled = true;
-    referenceLayerRefresh.disabled = true;
-    setReferenceStatus('กำลังโหลดรายการจาก Supabase…');
-    try {
-      const { data, error } = await client.from('reference_layers')
-        .select('id,name,description,storage_bucket,storage_path,file_type,style')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true })
-        .order('name', { ascending: true });
-      if (error) throw error;
-      const currentValue = referenceLayerSelect.value;
-      referenceLayers = new Map((data || []).map(item => [item.id, item]));
-      referenceLayerSelect.innerHTML = '<option value="">ไม่แสดงชั้นข้อมูล</option>';
-      for (const item of data || []) {
-        const option = document.createElement('option');
-        option.value = item.id;
-        option.textContent = item.name;
-        referenceLayerSelect.appendChild(option);
-      }
-      referenceLayerSelect.value = referenceLayers.has(currentValue) ? currentValue : '';
-      setReferenceStatus(referenceLayers.size ? `พร้อมใช้งาน ${referenceLayers.size} ชั้นข้อมูล` : 'ยังไม่มีชั้นข้อมูลใน Supabase');
-    } catch (error) {
-      referenceLayers = new Map();
-      setReferenceStatus(`อ่านรายการไม่สำเร็จ: ${error.message}`, true);
-    } finally {
-      referenceLayerSelect.disabled = false;
-      referenceLayerRefresh.disabled = false;
-    }
   }
 
   function openModal(title, subtitle, content, wide = false) {
@@ -489,11 +330,6 @@
   document.getElementById('projectsBtn').addEventListener('click', showProjects);
   document.getElementById('newProjectBtn').addEventListener('click', newProject);
   document.getElementById('accountBtn').addEventListener('click', showAccount);
-  referenceLayerSelect?.addEventListener('change', () => loadSelectedReferenceLayer());
-  referenceLayerRefresh?.addEventListener('click', () => loadReferenceLayers());
-  window.addEventListener('permissionout:map-ready', () => {
-    if (referenceLayerSelect?.value && !referenceLayerLoading) loadSelectedReferenceLayer();
-  });
   window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมบันทึกโครงการ', 'success'); });
   window.addEventListener('online', () => toast('กลับมาออนไลน์แล้ว', 'success'));
   window.addEventListener('offline', () => toast('ออฟไลน์ — แอปยังวิเคราะห์และบันทึกในเครื่องได้'));
@@ -505,10 +341,8 @@
       currentUser = data.session?.user || null; updateAccountUI();
       client.auth.onAuthStateChange((_event, session) => { currentUser = session?.user || null; currentProjectId = null; updateAccountUI(); });
       setSaveState(currentUser ? 'Cloud พร้อมใช้งาน' : 'พร้อมใช้งาน');
-      await loadReferenceLayers();
     } else {
       updateAccountUI(); setSaveState('Local mode');
-      await loadReferenceLayers();
       if (cloudRequired && location.protocol !== 'file:') {
         setSaveState('ต้องตั้งค่า Supabase', 'dirty');
         document.getElementById('saveProjectBtn').disabled = true;

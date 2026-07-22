@@ -4,6 +4,5 @@ dist/
 node_modules/
 *.log
 *.zip
-/PEA Area.kmz
 .agents/
 .codex/

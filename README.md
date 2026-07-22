@@ -22,15 +22,6 @@
 3. ใน **Authentication → URL Configuration** กำหนด Site URL เป็นโดเมน Cloudflare Pages และเพิ่ม localhost/preview URLs ที่ต้องใช้
 4. ใช้ Project URL และ Publishable key (หรือ legacy anon key) เท่านั้น ห้ามนำ `service_role` key มาใส่ฝั่งเว็บ
 
-### เพิ่มชั้นข้อมูล PEA Area
-
-1. รัน `supabase/schema.sql` เวอร์ชันล่าสุดเพื่อสร้างตาราง `reference_layers` และ Storage bucket `reference-layers`
-2. เปิด **Storage → reference-layers** ใน Supabase Dashboard แล้วอัปโหลด `PEA Area.kmz` ไว้ที่ root ของ bucket
-3. รัน [`supabase/seed-pea-area.sql`](supabase/seed-pea-area.sql) ใน SQL Editor เพื่อเพิ่ม metadata
-4. กลับมาที่หน้าแอป กดปุ่มรีเฟรชข้าง dropdown **ชั้นข้อมูลอ้างอิง** แล้วเลือก “เขตพื้นที่การไฟฟ้าส่วนภูมิภาค (PEA)”
-
-ไฟล์ KMZ ถูกเก็บใน Supabase Storage ส่วนตาราง PostgreSQL เก็บเฉพาะ metadata เพื่อให้ดาวน์โหลดและแสดงผลได้รวดเร็ว โดยไม่เพิ่ม binary ขนาดใหญ่ลงในแถวฐานข้อมูล
-
 ## ทดสอบและ Build
 
 ต้องใช้ Node.js 20 ขึ้นไป และไม่มี package dependency ที่ต้องติดตั้ง
