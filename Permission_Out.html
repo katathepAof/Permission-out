@@ -2865,6 +2865,9 @@ function exportCSV() {
   const subtotal = costActiveTotal;
   const surchargePct = parseFloat(document.getElementById('surchargePct').value) || 0;
   const surcharge = subtotal * (surchargePct / 100);
+  const exportedTotal = subtotal + surcharge;
+  const screenTotal = Number((document.getElementById('costTotalBig')?.textContent || '0').replace(/,/g, '')) || 0;
+  const reconciliationDifference = exportedTotal - screenTotal;
   rows.push([]);
   rows.push(['สรุปค่าบริการ']);
   rows.push(['ค่าพาดสาย – New (บาท)', costByStatus.new.toFixed(2), activeCsv.new ? 'รวมในยอด' : 'ไม่รวม']);
@@ -2872,7 +2875,9 @@ function exportCSV() {
   rows.push(['ค่าพาดสาย – Remove (บาท)', costByStatus.remove.toFixed(2), activeCsv.remove ? 'รวมในยอด' : 'ไม่รวม']);
   rows.push(['รวมค่าบริการ (ก่อนส่วนเพิ่ม) เฉพาะหมวดที่เลือก (บาท)', subtotal.toFixed(2)]);
   rows.push([`ส่วนเพิ่ม ${surchargePct}% (บาท)`, surcharge.toFixed(2)]);
-  rows.push(['รวมค่าบริการทั้งหมด (รวมส่วนเพิ่ม) (บาท)', (subtotal + surcharge).toFixed(2)]);
+  rows.push(['รวมค่าบริการทั้งหมด (รวมส่วนเพิ่ม) (บาท)', exportedTotal.toFixed(2)]);
+  rows.push(['ยอดรวมที่แสดงบนหน้าเว็บ ณ เวลา Export (บาท)', screenTotal.toFixed(2)]);
+  rows.push(['ผลต่างระหว่างหน้าเว็บกับ Export (บาท)', reconciliationDifference.toFixed(2), Math.abs(reconciliationDifference) < 0.01 ? 'ตรงกัน' : 'โปรดตรวจสอบ']);
 
   const csvContent = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM so Excel reads Thai correctly

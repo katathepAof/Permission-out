@@ -9,6 +9,14 @@ for (const id of ['projectTitle', 'saveProjectBtn', 'analyzeBtn', 'reportBody', 
   if (!html.includes(`id="${id}"`)) throw new Error(`Missing required element: ${id}`);
 }
 if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis lifecycle event is missing');
+if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('billingForSegment(seg, rateB, polesPerKm)')) {
+  throw new Error('Shared UI/export billing logic is missing');
+}
+const csvSection = html.slice(html.indexOf('function exportCSV()'), html.indexOf('function selectedSegmentsForExport()'));
+if (csvSection.includes('document.querySelector(`.diamInput')) {
+  throw new Error('CSV export must not depend on rendered report rows');
+}
+if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
 if (!html.includes('<script src="bootstrap.js"></script>')) throw new Error('Runtime bootstrap script is missing');
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match => match[1]).filter(Boolean);
 for (const source of inlineScripts) new Function(source);
