@@ -1038,17 +1038,28 @@ table.report td.num{
     </h2>
     <div class="grid2">
       <div class="fileBox" id="boxBase">
-        <div class="fileBox-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
+        <div class="base-catalog-head">
+          <div class="fileBox-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="8" ry="3"/>
+              <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/>
+              <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>
+            </svg>
+          </div>
+          <div>
+            <strong>ไฟล์ฐานจาก PEA</strong>
+            <small id="baseCatalogStatus">กำลังโหลดรายการจาก Supabase…</small>
+          </div>
+          <span id="baseCatalogCount" class="base-catalog-count">0</span>
         </div>
-        <label for="fileBase">ไฟล์ฐาน (เลือกได้หลายไฟล์)</label>
-        <input type="file" id="fileBase" accept=".kml,.kmz" multiple>
-        <label for="fileBase" class="fileBtn">เลือกไฟล์</label>
-        <div class="tag" id="tagBase"></div>
+        <input type="file" id="fileBase" class="base-catalog-source" accept=".kml,.kmz" multiple tabindex="-1" aria-hidden="true">
+        <div class="base-catalog-tools">
+          <input type="search" id="baseCatalogSearch" placeholder="ค้นหาชื่อไฟล์ KMZ…" autocomplete="off">
+          <button type="button" id="baseCatalogSelectAll">เลือกที่แสดง</button>
+          <button type="button" id="baseCatalogClear">ล้าง</button>
+        </div>
+        <div id="baseCatalogList" class="base-catalog-list" role="group" aria-label="เลือกไฟล์ฐาน KMZ จาก PEA"></div>
+        <div class="tag" id="tagBase" hidden></div>
       </div>
       <div class="fileBox" id="boxCompare">
         <div class="fileBox-icon" aria-hidden="true">
@@ -1964,10 +1975,22 @@ FILE_GROUPS.forEach(groupKey => {
   const input = GROUP_INPUTS[groupKey];
   const tag = GROUP_TAGS[groupKey];
   const box = GROUP_BOXES[groupKey];
-  input.addEventListener('change', async () => {
-    if (!input.files.length) { tag.textContent = ''; box.classList.remove('hasFile'); return; }
+  input.addEventListener('change', async (event) => {
+    if (!input.files.length) {
+      tag.textContent = '';
+      box.classList.remove('hasFile');
+      if (previews[groupKey]) {
+        try { layerGroup.removeLayer(previews[groupKey].layer); } catch (e) { /* ignore */ }
+        previews[groupKey] = null;
+        searchableLayers = searchableLayers.filter(e => e.routeLabel !== groupKey);
+      }
+      const remainingBounds = FILE_GROUPS.flatMap(k => previews[k] ? previews[k].bounds : []);
+      if (remainingBounds.length && map) map.fitBounds(remainingBounds, { padding: [30, 30] });
+      return;
+    }
     tag.textContent = fileListLabel(input);
     box.classList.add('hasFile');
+    if (event.detail?.skipPreview) return;
     const hasBase = fileBase.files.length > 0;
     const hasCompare = fileCompare.files.length > 0;
     if (hasBase && hasCompare) { await runAnalysis(); } else { await previewGroup(groupKey); }
@@ -2767,6 +2790,7 @@ function clearAll() {
   }
   const cableStatusCnt = document.getElementById('cableStatusFilterCount');
   if (cableStatusCnt) cableStatusCnt.textContent = '';
+  window.dispatchEvent(new CustomEvent('permissionout:cleared'));
 }
 
 document.getElementById('clearBtn').addEventListener('click', clearAll);

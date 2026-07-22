@@ -28,6 +28,16 @@
   let peaRenderTimer = null;
   let peaRenderVersion = 0;
   let peaShouldFocus = false;
+  const baseFileInput = document.getElementById('fileBase');
+  const baseCatalogList = document.getElementById('baseCatalogList');
+  const baseCatalogSearch = document.getElementById('baseCatalogSearch');
+  const baseCatalogStatus = document.getElementById('baseCatalogStatus');
+  const baseCatalogCount = document.getElementById('baseCatalogCount');
+  const baseCatalogSelected = new Set();
+  const baseCatalogCache = new Map();
+  let baseCatalogManifest = null;
+  let baseCatalogTimer = null;
+  let baseCatalogVersion = 0;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -60,6 +70,147 @@
     const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
     const encoded = String(path).split('/').map(encodeURIComponent).join('/');
     return `${base}/storage/v1/object/public/permission-out-data/pea-area/v1/${encoded}`;
+  }
+
+  function uihAssetUrl(path) {
+    const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
+    const encoded = String(path).split('/').map(encodeURIComponent).join('/');
+    return `${base}/storage/v1/object/public/permission-out-data/uih-20072026/v1/${encoded}`;
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+    if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024).toLocaleString('th-TH')} KB`;
+    return `${(bytes / 1024 / 1024).toLocaleString('th-TH', { maximumFractionDigits: 1 })} MB`;
+  }
+
+  function filteredBaseCatalogItems() {
+    if (!baseCatalogManifest) return [];
+    const query = baseCatalogSearch?.value.trim().toLocaleLowerCase('th') || '';
+    return baseCatalogManifest.items.filter(item => !query || `${item.name} ${item.group}`.toLocaleLowerCase('th').includes(query));
+  }
+
+  function updateBaseCatalogSummary(message = '') {
+    if (baseCatalogCount) baseCatalogCount.textContent = baseCatalogSelected.size.toLocaleString('th-TH');
+    if (!baseCatalogStatus) return;
+    const selectedBytes = baseCatalogManifest?.items
+      .filter(item => baseCatalogSelected.has(item.id))
+      .reduce((sum, item) => sum + item.bytes, 0) || 0;
+    baseCatalogStatus.textContent = message || (baseCatalogManifest
+      ? `เลือก ${baseCatalogSelected.size.toLocaleString('th-TH')} จาก ${baseCatalogManifest.fileCount.toLocaleString('th-TH')} ไฟล์${selectedBytes ? ` · ${formatBytes(selectedBytes)}` : ''}`
+      : 'ยังไม่พบรายการไฟล์');
+  }
+
+  function renderBaseCatalog() {
+    if (!baseCatalogList) return;
+    const items = filteredBaseCatalogItems();
+    baseCatalogList.innerHTML = '';
+    if (!items.length) {
+      baseCatalogList.innerHTML = '<div class="base-catalog-empty">ไม่พบไฟล์ที่ตรงกับคำค้นหา</div>';
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    let currentGroup = '';
+    for (const item of items) {
+      if (item.group !== currentGroup) {
+        currentGroup = item.group;
+        const heading = document.createElement('div');
+        heading.className = 'base-catalog-group';
+        heading.textContent = currentGroup;
+        fragment.appendChild(heading);
+      }
+      const label = document.createElement('label');
+      label.className = 'base-catalog-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = item.id;
+      input.checked = baseCatalogSelected.has(item.id);
+      input.addEventListener('change', () => {
+        if (input.checked) baseCatalogSelected.add(item.id); else baseCatalogSelected.delete(item.id);
+        updateBaseCatalogSummary();
+        scheduleBaseCatalogSync();
+      });
+      const name = document.createElement('span'); name.textContent = item.name;
+      const size = document.createElement('em'); size.textContent = formatBytes(item.bytes);
+      label.append(input, name, size);
+      fragment.appendChild(label);
+    }
+    baseCatalogList.appendChild(fragment);
+  }
+
+  function fetchBaseCatalogBlob(item) {
+    if (baseCatalogCache.has(item.path)) return baseCatalogCache.get(item.path);
+    const request = fetch(uihAssetUrl(item.path)).then(response => {
+      if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
+      return response.blob();
+    }).catch(error => {
+      baseCatalogCache.delete(item.path);
+      throw error;
+    });
+    baseCatalogCache.set(item.path, request);
+    return request;
+  }
+
+  async function syncBaseCatalogFiles() {
+    const version = ++baseCatalogVersion;
+    const selectedItems = (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id));
+    const box = document.getElementById('boxBase');
+    box?.classList.toggle('is-loading', selectedItems.length > 0);
+    baseCatalogList?.setAttribute('aria-busy', String(selectedItems.length > 0));
+    try {
+      const transfer = new DataTransfer();
+      if (selectedItems.length) {
+        updateBaseCatalogSummary(`กำลังโหลด ${selectedItems.length.toLocaleString('th-TH')} ไฟล์จาก Supabase…`);
+        const blobs = [];
+        for (let offset = 0; offset < selectedItems.length; offset += 3) {
+          blobs.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchBaseCatalogBlob)));
+          if (version !== baseCatalogVersion) return;
+        }
+        selectedItems.forEach((item, index) => transfer.items.add(new File([blobs[index]], item.name, { type: item.contentType || 'application/vnd.google-earth.kmz' })));
+      }
+      if (version !== baseCatalogVersion) return;
+      baseFileInput.files = transfer.files;
+      baseFileInput.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { skipPreview: true } }));
+      const selectedBytes = selectedItems.reduce((sum, item) => sum + item.bytes, 0);
+      updateBaseCatalogSummary(selectedItems.length
+        ? `${selectedItems.length.toLocaleString('th-TH')} ไฟล์พร้อมวิเคราะห์ · ${formatBytes(selectedBytes)}`
+        : 'ยังไม่ได้เลือกไฟล์ฐาน');
+      if (selectedItems.length) toast(`โหลดไฟล์ฐานจาก PEA แล้ว ${selectedItems.length.toLocaleString('th-TH')} ไฟล์`, 'success');
+    } catch (error) {
+      updateBaseCatalogSummary('โหลดไฟล์จาก Supabase ไม่สำเร็จ');
+      toast(`โหลดไฟล์ฐานไม่สำเร็จ: ${error.message}`, 'error');
+    } finally {
+      if (version === baseCatalogVersion) {
+        box?.classList.remove('is-loading');
+        baseCatalogList?.setAttribute('aria-busy', 'false');
+      }
+    }
+  }
+
+  function scheduleBaseCatalogSync() {
+    clearTimeout(baseCatalogTimer);
+    baseCatalogVersion += 1;
+    baseCatalogTimer = setTimeout(syncBaseCatalogFiles, 320);
+  }
+
+  async function initializeBaseCatalog() {
+    if (!baseCatalogList || !baseFileInput || !cloudEnabled) {
+      updateBaseCatalogSummary(cloudEnabled ? 'ไม่พบส่วนแสดงรายการไฟล์' : 'ต้องเชื่อมต่อ Supabase');
+      return;
+    }
+    try {
+      const response = await fetch(`${uihAssetUrl('manifest.json')}?v=1`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const manifest = await response.json();
+      if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
+      baseCatalogManifest = manifest;
+      renderBaseCatalog();
+      updateBaseCatalogSummary();
+    } catch (error) {
+      baseCatalogList.innerHTML = '<div class="base-catalog-empty">โหลดรายการไฟล์ไม่สำเร็จ</div>';
+      updateBaseCatalogSummary('เชื่อมต่อคลังไฟล์ไม่ได้');
+      toast(`โหลดรายการไฟล์ฐานไม่สำเร็จ: ${error.message}`, 'error');
+    }
   }
 
   function activePeaTypes() {
@@ -494,6 +645,19 @@
   document.getElementById('projectsBtn').addEventListener('click', showProjects);
   document.getElementById('newProjectBtn').addEventListener('click', newProject);
   document.getElementById('accountBtn').addEventListener('click', showAccount);
+  baseCatalogSearch?.addEventListener('input', renderBaseCatalog);
+  document.getElementById('baseCatalogSelectAll')?.addEventListener('click', () => {
+    for (const item of filteredBaseCatalogItems()) baseCatalogSelected.add(item.id);
+    renderBaseCatalog(); updateBaseCatalogSummary(); scheduleBaseCatalogSync();
+  });
+  document.getElementById('baseCatalogClear')?.addEventListener('click', () => {
+    baseCatalogSelected.clear(); renderBaseCatalog(); updateBaseCatalogSummary(); scheduleBaseCatalogSync();
+  });
+  window.addEventListener('permissionout:cleared', () => {
+    clearTimeout(baseCatalogTimer); baseCatalogVersion += 1; baseCatalogSelected.clear();
+    if (baseCatalogSearch) baseCatalogSearch.value = '';
+    renderBaseCatalog(); updateBaseCatalogSummary();
+  });
   peaLayerTrigger?.addEventListener('click', () => {
     const open = peaLayerPanel.hidden;
     peaLayerPanel.hidden = !open;
@@ -541,7 +705,7 @@
         showConfigurationRequired();
       }
     }
-    await initializePeaLayers();
+    await Promise.all([initializePeaLayers(), initializeBaseCatalog()]);
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
