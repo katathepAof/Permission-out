@@ -83,6 +83,7 @@ npx wrangler deploy
 - ไฟล์ KML/KMZ ต้นฉบับจากโฟลเดอร์ `UFM` ถูกแปลงและจัดเก็บใน Supabase Storage ที่ `ufm/v1/`
 - หน้าเว็บแสดงรายการไฟล์เปรียบเทียบเป็น checkbox เลือกพร้อมกันได้หลายชุด และดาวน์โหลด compact gzip เฉพาะตอนกดวิเคราะห์
 - `analysis/*.json.gz` ใช้สำหรับวิเคราะห์บนเว็บอย่างรวดเร็ว ส่วน `exchange/*.geojson.gz` เป็น GeoJSON ตาม RFC 7946 สำหรับส่งต่อหน่วยงานอื่น
+- ตัวโหลดจะแตก metadata ที่ฝังใน `description` ของ UFM เช่น Code, Status, Type, Core, Measured และ Calculated เพื่อแสดงในตาราง/Popup และแนบไปกับ Export
 - `manifest.json` มีจำนวนเส้น ขนาดไฟล์ SHA-256 และ CRS ส่วน `data-dictionary.csv` อธิบายโครงสร้างข้อมูล
 - เตรียมข้อมูลด้วย `npm run data:prepare-ufm` และอัปโหลดด้วย `npm run data:upload-ufm`
 

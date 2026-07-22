@@ -168,14 +168,38 @@
     return '';
   }
 
+  function propertiesWithDescriptionFields(properties) {
+    const merged = { ...(properties || {}) };
+    const put = (key, value) => {
+      const cleanKey = String(key || '').trim();
+      const cleanValue = String(value || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+      if (cleanKey && cleanValue && !(cleanKey in merged)) merged[cleanKey] = cleanValue;
+    };
+    const description = String(merged.description || '');
+    description.split(/\r?\n|<br\s*\/?>/i).forEach(row => {
+      const match = row.replace(/<[^>]*>/g, ' ').match(/^\s*([\wก-๙ .\-/]+?)\s*[:=]\s*(.+?)\s*$/);
+      if (match) put(match[1], match[2]);
+    });
+    if (description.includes('<') && typeof DOMParser !== 'undefined') {
+      try {
+        const document = new DOMParser().parseFromString(description, 'text/html');
+        for (const row of document.querySelectorAll('tr')) {
+          const cells = row.querySelectorAll('td,th');
+          if (cells.length >= 2) put(cells[0].textContent, cells[1].textContent);
+        }
+      } catch (_) { /* malformed HTML descriptions still use the line parser above */ }
+    }
+    return merged;
+  }
+
   function compactLineToApp(line, item) {
-    const properties = line.p || {};
+    const properties = propertiesWithDescriptionFields(line.p || {});
     const name = String(line.n || properties.name || 'ไม่ระบุชื่อ');
     const cableType = propertyValue(properties, [/cable[_\s-]*type/i, /cabletype/i, /ชนิดสาย/i, /ประเภทสาย/i]);
     const rawType = propertyValue(properties, [/^type$/i, /line[_\s-]*type/i, /ชนิด/i, /ประเภท/i]);
     const cableStatus = propertyValue(properties, [/^status$/i, /cable[_\s-]*status/i, /line[_\s-]*status/i, /สถานะ/i]);
     const combined = `${cableType} ${rawType} ${name}`.toUpperCase();
-    const type = /FIG\.?\s*8/.test(combined) ? 'FIG8'
+    const type = /FIG\.?\s*8|F\s*\(\s*8\s*\)/.test(combined) ? 'FIG8'
       : /DROP\s*WIRE/.test(combined) ? 'DROPWIRE'
       : /ADSS/.test(combined) ? 'ADSS'
       : /ARSS/.test(combined) ? 'ARSS'
@@ -191,6 +215,9 @@
       diameter = lookupDiameterByTypeCore(type, core);
       if (diameter !== null) diameterSource = 'table';
     }
+    const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]);
+    const measured = propertyValue(properties, [/^measured$/i, /ระยะ.*วัด/i]);
+    const calculated = propertyValue(properties, [/^calculated$/i, /ระยะ.*คำนวณ/i]);
     return {
       coords: line.c,
       name,
@@ -202,6 +229,7 @@
       cableType,
       rawType,
       cableStatus,
+      sourceMetadata: { code: sourceCode, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item.name
     };

@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="production.css?v=20260723-role-swap">
+<link rel="stylesheet" href="production.css?v=20260723-ufm-metadata">
 <style>
 /* ============================================================
    PREMIUM EXECUTIVE DESIGN SYSTEM
@@ -1328,6 +1328,7 @@ table.report td.num{
           <th>สถานะ</th>
           <th>ความสัมพันธ์</th>
           <th>Type / Core</th>
+          <th>Status จากไฟล์</th>
           <th>Diameter</th>
           <th class="num">ระยะ (กม.)</th>
           <th class="num">เสา (ต้น)</th>
@@ -1881,6 +1882,11 @@ function parseKML(text) {
       const rawType = pickExtField(ext, [/^\s*type\s*$/i, /^\s*ชนิด\s*$/i, /^\s*ประเภท\s*$/i, /line[_\s-]*type/i, /^\s*type[_\s-]*name\s*$/i]);
       // Status ของสายจากไฟล์ต้นทาง (ต่างจากสถานะเปรียบเทียบ New/Same/Remove) — แสดงบนแผนที่ + ตอน Export
       const cableStatus = pickExtField(ext, [/^\s*status\s*$/i, /สถานะ(?:สาย|การใช้งาน)?/i, /cable[_\s-]*status/i, /line[_\s-]*status/i]);
+      const sourceMetadata = {
+        code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || '',
+        measured: pickExtField(ext, [/^\s*measured\s*$/i, /ระยะ.*วัด/i]) || '',
+        calculated: pickExtField(ext, [/^\s*calculated\s*$/i, /ระยะ.*คำนวณ/i]) || ''
+      };
       const extKeys = Object.keys(ext).join(', ');
 
       const tableMatch = lookupFromReferenceTable(pm, name, description);
@@ -1895,14 +1901,14 @@ function parseKML(text) {
       const coordTags = pm.getElementsByTagName('coordinates');
       for (const tag of coordTags) {
         const coords = parseCoordText(tag.textContent);
-        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', extKeys: extKeys || '' });
+        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', sourceMetadata, extKeys: extKeys || '' });
       }
       // รองรับ gx:Track / gx:MultiTrack (พิกัดอยู่ใน <gx:coord>lon lat alt</gx:coord>) — เดิมถูกข้ามทำให้เส้นหาย
       let trackEls = pm.getElementsByTagName('gx:Track');
       if (!trackEls.length) trackEls = pm.getElementsByTagNameNS('*', 'Track');
       for (const track of trackEls) {
         const coords = parseGxCoords(track);
-        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', extKeys: extKeys || '' });
+        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', sourceMetadata, extKeys: extKeys || '' });
       }
     }
   }
@@ -1944,7 +1950,7 @@ function segmentsFromLinesDirect(lines, status) {
     if (line.coords.length < 2) continue;
     const segLen = lineLengthMeters(line.coords);
     totalLength += segLen;
-    segments.push({ coords: line.coords, length: segLen, status, overlapType: 'none', diameter: line.diameter, unit: line.unit, name: line.name, type: line.type, core: line.core, diameterSource: line.diameterSource, sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', extKeys: line.extKeys || '' });
+    segments.push({ coords: line.coords, length: segLen, status, overlapType: 'none', diameter: line.diameter, unit: line.unit, name: line.name, type: line.type, core: line.core, diameterSource: line.diameterSource, sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '' });
   }
   return { segments };
 }
@@ -1982,7 +1988,7 @@ function analyzeDiff(linesBase, linesCompare, threshold, interval) {
             coords: cur.coords, length: segLen, status: cur.status,
             diameter: line.diameter, unit: line.unit, name: line.name,
             type: line.type, core: line.core, diameterSource: line.diameterSource,
-            sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', extKeys: line.extKeys || '',
+            sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '',
             overlapType
           });
         }
@@ -2039,6 +2045,10 @@ function lineInfoPopup(routeLabel, line, lengthMeters) {
   const typeVal = line.rawType || line.type;
   if (typeVal) extra += `<br>Type: ${typeVal}${line.core !== null && line.core !== undefined ? ' / ' + line.core + ' core' : ''}`;
   if (line.cableStatus) extra += `<br>Status: <b style="color:var(--navy-800);">${line.cableStatus}</b>`;
+  const sourceMetadata = line.sourceMetadata || {};
+  if (sourceMetadata.code) extra += `<br>Code: ${xmlEscape(sourceMetadata.code)}`;
+  if (sourceMetadata.measured) extra += `<br>Measured: ${xmlEscape(sourceMetadata.measured)}`;
+  if (sourceMetadata.calculated) extra += `<br>Calculated: ${xmlEscape(sourceMetadata.calculated)}`;
   // ตัวช่วยวินิจฉัย: ถ้าไม่พบทั้ง cable_type และ Type ให้แสดงรายชื่อฟิลด์ที่มีจริงในไฟล์
   if (!line.cableType && !typeVal && line.extKeys) {
     extra += `<br><span style="color:#b8860b;font-size:.82em;">ไม่พบ cable_type/Type — ฟิลด์ที่มีในไฟล์: ${line.extKeys}</span>`;
@@ -2413,7 +2423,14 @@ function buildReportTable() {
     const km = seg.length / 1000;
     const billable = (STATUS_META[seg.status] || STATUS_META.new).billable;
     const defaultDiam = segmentDiameterValue(seg);
-    const typeCoreText = seg.type ? `${seg.type}${seg.core !== null && seg.core !== undefined ? ' / ' + seg.core + ' core' : ''}` : '—';
+    const sourceMetadata = seg.sourceMetadata || {};
+    const sourceType = seg.rawType || seg.type;
+    const typeCoreText = sourceType
+      ? `${xmlEscape(sourceType)}${seg.core !== null && seg.core !== undefined ? ' / ' + seg.core + ' core' : ''}${sourceMetadata.code ? `<div style="font-size:.68rem;color:var(--ink-mute);margin-top:2px;">Code: ${xmlEscape(sourceMetadata.code)}</div>` : ''}`
+      : '—';
+    const sourceStatusText = seg.cableStatus
+      ? `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#e8f7f0;color:#087552;font-weight:600;white-space:nowrap;">${xmlEscape(seg.cableStatus)}</span>${sourceMetadata.measured || sourceMetadata.calculated ? `<div style="font-size:.66rem;color:var(--ink-mute);margin-top:3px;white-space:nowrap;">${sourceMetadata.measured ? `Measured: ${xmlEscape(sourceMetadata.measured)}` : ''}${sourceMetadata.measured && sourceMetadata.calculated ? '<br>' : ''}${sourceMetadata.calculated ? `Calculated: ${xmlEscape(sourceMetadata.calculated)}` : ''}</div>` : ''}`
+      : '—';
     const sourceTag = seg.diameterSource === 'table' ? '<div style="font-size:.7rem;color:var(--emerald);font-weight:500;margin-top:2px;">ตารางอ้างอิง</div>'
                      : seg.diameterSource === 'file' ? '<div style="font-size:.7rem;color:var(--ink-mute);margin-top:2px;">จากไฟล์ KML</div>' : '';
     const startCoord = fmtCoord(seg.coords[0]);
@@ -2428,6 +2445,7 @@ function buildReportTable() {
       `<td>${statusLabelHTML(seg.status)}</td>` +
       `<td>${overlapLabelHTML(seg.overlapType)}</td>` +
       `<td>${typeCoreText}</td>` +
+      `<td>${sourceStatusText}</td>` +
       `<td>${diamCell}</td>` +
       `<td class="num">${km.toFixed(3)}</td>` +
       `<td class="num" id="poles-${i}">—</td>` +
@@ -2933,12 +2951,15 @@ async function exportCSV() {
 
   const detailStartIndex = rows.length - exportSegments.length;
   rows[detailStartIndex - 1].splice(4, 0, 'PEA Area IDs', 'PEA Area Names', 'PEA Office Types', 'PEA Assignment Method');
+  rows[detailStartIndex - 1].push('Source Code', 'Measured', 'Calculated');
   exportSegments.forEach((segment, index) => {
     rows[detailStartIndex + index].splice(4, 0,
       peaAreaExportValue(segment, 'id'),
       peaAreaExportValue(segment, 'name'),
       peaAreaExportValue(segment, 'officeType'),
       peaAreaExportValue(segment, 'assignmentMethod'));
+    const sourceMetadata = segment.sourceMetadata || {};
+    rows[detailStartIndex + index].push(sourceMetadata.code || '', sourceMetadata.measured || '', sourceMetadata.calculated || '');
   });
 
   const subtotal = costActiveTotal;
@@ -3040,6 +3061,12 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="status"><value>${xmlEscape(status.th)}</value></Data>` +
       `<Data name="relationship"><value>${xmlEscape(overlap.th)}</value></Data>` +
       `<Data name="source_file"><value>${xmlEscape(seg.sourceFile || '')}</value></Data>` +
+      `<Data name="source_status"><value>${xmlEscape(seg.cableStatus || '')}</value></Data>` +
+      `<Data name="source_type"><value>${xmlEscape(seg.rawType || seg.type || '')}</value></Data>` +
+      `<Data name="source_core"><value>${xmlEscape(seg.core ?? '')}</value></Data>` +
+      `<Data name="source_code"><value>${xmlEscape(seg.sourceMetadata?.code || '')}</value></Data>` +
+      `<Data name="source_measured"><value>${xmlEscape(seg.sourceMetadata?.measured || '')}</value></Data>` +
+      `<Data name="source_calculated"><value>${xmlEscape(seg.sourceMetadata?.calculated || '')}</value></Data>` +
       `<Data name="length_km"><value>${(seg.length / 1000).toFixed(3)}</value></Data>` +
       `<Data name="diameter_mm"><value>${billing.diameter}</value></Data>` +
       `<Data name="diameter_source"><value>${xmlEscape(segmentDiameterSourceLabel(seg))}</value></Data>` +
@@ -3288,6 +3315,6 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260723-role-swap"></script>
+<script src="production.js?v=20260723-ufm-metadata"></script>
 </body>
 </html>
