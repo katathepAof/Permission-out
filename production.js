@@ -158,7 +158,7 @@
     box?.classList.toggle('is-loading', selectedItems.length > 0);
     baseCatalogList?.setAttribute('aria-busy', String(selectedItems.length > 0));
     try {
-      const transfer = new DataTransfer();
+      const files = [];
       if (selectedItems.length) {
         updateBaseCatalogSummary(`กำลังโหลด ${selectedItems.length.toLocaleString('th-TH')} ไฟล์จาก Supabase…`);
         const blobs = [];
@@ -166,10 +166,10 @@
           blobs.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchBaseCatalogBlob)));
           if (version !== baseCatalogVersion) return;
         }
-        selectedItems.forEach((item, index) => transfer.items.add(new File([blobs[index]], item.name, { type: item.contentType || 'application/vnd.google-earth.kmz' })));
+        selectedItems.forEach((item, index) => files.push(new File([blobs[index]], item.name, { type: item.contentType || 'application/vnd.google-earth.kmz' })));
       }
       if (version !== baseCatalogVersion) return;
-      baseFileInput.files = transfer.files;
+      window.permissionOutBaseFiles = files;
       baseFileInput.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { skipPreview: true } }));
       const selectedBytes = selectedItems.reduce((sum, item) => sum + item.bytes, 0);
       updateBaseCatalogSummary(selectedItems.length
@@ -399,7 +399,7 @@
         surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked)
       },
       sourceFiles: {
-        base: Array.from(document.getElementById('fileBase')?.files || []).map(f => f.name),
+        base: Array.from(window.permissionOutBaseFiles || []).map(f => f.name),
         compare: Array.from(document.getElementById('fileCompare')?.files || []).map(f => f.name)
       },
       result: {

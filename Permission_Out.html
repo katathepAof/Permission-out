@@ -1518,9 +1518,15 @@ const GROUP_BOXES = { BASE: boxBase, COMPARE: boxCompare };
 const GROUP_TAGS = { BASE: tagBase, COMPARE: tagCompare };
 const GROUP_COLORS = { BASE: '#e07b39', COMPARE: '#3a7bd5' };
 const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเทียบ' };
+window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
+function filesForGroup(groupKey) {
+  return groupKey === 'BASE' && Array.isArray(window.permissionOutBaseFiles)
+    ? window.permissionOutBaseFiles
+    : Array.from(GROUP_INPUTS[groupKey].files);
+}
 // รวมชื่อไฟล์ในฝั่งหนึ่งเป็นข้อความสั้นๆ สำหรับ tag
-function fileListLabel(input) {
-  const names = Array.from(input.files).map(f => f.name);
+function fileListLabel(files) {
+  const names = Array.from(files).map(f => f.name);
   if (names.length === 0) return '';
   if (names.length <= 2) return names.join(', ');
   return `${names.length} ไฟล์: ${names.slice(0, 2).join(', ')} …`;
@@ -1976,7 +1982,8 @@ FILE_GROUPS.forEach(groupKey => {
   const tag = GROUP_TAGS[groupKey];
   const box = GROUP_BOXES[groupKey];
   input.addEventListener('change', async (event) => {
-    if (!input.files.length) {
+    const selectedFiles = filesForGroup(groupKey);
+    if (!selectedFiles.length) {
       tag.textContent = '';
       box.classList.remove('hasFile');
       if (previews[groupKey]) {
@@ -1988,11 +1995,11 @@ FILE_GROUPS.forEach(groupKey => {
       if (remainingBounds.length && map) map.fitBounds(remainingBounds, { padding: [30, 30] });
       return;
     }
-    tag.textContent = fileListLabel(input);
+    tag.textContent = fileListLabel(selectedFiles);
     box.classList.add('hasFile');
     if (event.detail?.skipPreview) return;
-    const hasBase = fileBase.files.length > 0;
-    const hasCompare = fileCompare.files.length > 0;
+    const hasBase = filesForGroup('BASE').length > 0;
+    const hasCompare = filesForGroup('COMPARE').length > 0;
     if (hasBase && hasCompare) { await runAnalysis(); } else { await previewGroup(groupKey); }
   });
 });
@@ -2000,8 +2007,7 @@ FILE_GROUPS.forEach(groupKey => {
 // พรีวิวไฟล์ทั้งหมดในฝั่งหนึ่ง (ฐาน หรือ เปรียบเทียบ) รวมเป็นชั้นเดียว สีเดียว
 async function previewGroup(groupKey) {
   const mapStatus = document.getElementById('mapStatus');
-  const input = GROUP_INPUTS[groupKey];
-  const files = Array.from(input.files);
+  const files = filesForGroup(groupKey);
   try {
     if (!map) initMap();
     if (previews[groupKey]) { layerGroup.removeLayer(previews[groupKey].layer); previews[groupKey] = null; }
@@ -2029,7 +2035,7 @@ async function previewGroup(groupKey) {
     const allBounds = FILE_GROUPS.flatMap(k => previews[k] ? previews[k].bounds : []);
     if (allBounds.length) map.fitBounds(allBounds, { padding: [30, 30] });
     const statusParts = FILE_GROUPS.map(k => {
-      const n = GROUP_INPUTS[k].files.length;
+      const n = filesForGroup(k).length;
       return `${GROUP_LABELS[k]} ${n ? n + ' ไฟล์' : '-'}`;
     }).join(' / ');
     mapStatus.textContent = `พรีวิว: ${statusParts} — กด "วิเคราะห์เส้นทาง" เพื่อดูผลเปรียบเทียบ`;
@@ -2425,8 +2431,8 @@ function recomputeAll() {
 
 async function runAnalysis() {
   errBox.style.display = 'none';
-  const hasBase = fileBase.files.length > 0;
-  const hasCompare = fileCompare.files.length > 0;
+  const hasBase = filesForGroup('BASE').length > 0;
+  const hasCompare = filesForGroup('COMPARE').length > 0;
   if (!hasBase && !hasCompare) {
     errBox.textContent = 'กรุณาเลือกไฟล์ KML อย่างน้อย 1 ไฟล์ก่อนวิเคราะห์ (ฝั่งฐาน หรือ ฝั่งเปรียบเทียบ)';
     errBox.style.display = 'block';
@@ -2450,8 +2456,8 @@ async function runAnalysis() {
     const singleFileMode = hasBase !== hasCompare; // มีไฟล์แค่ฝั่งฐานหรือฝั่งเปรียบเทียบเพียงฝั่งเดียว
 
     // อ่านและรวมไฟล์ฐาน (A + B) เป็นชุดเดียว และไฟล์เปรียบเทียบ (C + D) เป็นอีกชุดหนึ่ง
-    const baseFiles = Array.from(fileBase.files);
-    const compareFiles = Array.from(fileCompare.files);
+    const baseFiles = filesForGroup('BASE');
+    const compareFiles = filesForGroup('COMPARE');
     const [baseTexts, compareTexts] = await Promise.all([
       Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
       Promise.all(compareFiles.map(f => readKmlOrKmzText(f)))
@@ -2574,7 +2580,7 @@ function exportCSV() {
   rows.push([]);
   rows.push(['ไฟล์ที่นำเข้า']);
   FILE_GROUPS.forEach(groupKey => {
-    const names = Array.from(GROUP_INPUTS[groupKey].files).map(f => f.name);
+    const names = filesForGroup(groupKey).map(f => f.name);
     rows.push([`ฝั่ง${GROUP_LABELS[groupKey]}`, names.length ? names.join(', ') : '-']);
   });
   rows.push([]);
@@ -2741,6 +2747,7 @@ document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
 
 function clearAll() {
   // Reset file inputs
+  window.permissionOutBaseFiles = [];
   FILE_GROUPS.forEach(groupKey => {
     GROUP_INPUTS[groupKey].value = '';
     GROUP_TAGS[groupKey].textContent = '';
