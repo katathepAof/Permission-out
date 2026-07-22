@@ -8,6 +8,13 @@ await mkdir(dist, { recursive: true });
 
 const assets = ['production.css', 'production.js', 'manifest.webmanifest', 'sw.js', 'logo.svg', '_headers'];
 for (const file of assets) await cp(resolve(root, file), resolve(dist, file));
+const vendor = resolve(dist, 'vendor');
+await mkdir(vendor, { recursive: true });
+await cp(resolve(root, 'node_modules/leaflet/dist/leaflet.css'), resolve(vendor, 'leaflet.css'));
+await cp(resolve(root, 'node_modules/leaflet/dist/leaflet.js'), resolve(vendor, 'leaflet.js'));
+await cp(resolve(root, 'node_modules/leaflet/dist/images'), resolve(vendor, 'images'), { recursive: true });
+await cp(resolve(root, 'node_modules/jszip/dist/jszip.min.js'), resolve(vendor, 'jszip.min.js'));
+await cp(resolve(root, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'), resolve(vendor, 'supabase.js'));
 
 let html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 await writeFile(resolve(dist, 'index.html'), html, 'utf8');

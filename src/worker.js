@@ -1,5 +1,19 @@
 const APP_VERSION = '2.0.0';
 
+function appConfig(env) {
+  return {
+    supabaseUrl: env.SUPABASE_URL || '',
+    supabaseAnonKey: env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || '',
+    appName: 'Permission Out',
+    autosave: true,
+    requireSupabase: true
+  };
+}
+
+function configAssignment(env) {
+  return `window.APP_CONFIG = ${JSON.stringify(appConfig(env))};`;
+}
+
 function noStoreHeaders(contentType) {
   return {
     'Content-Type': contentType,
@@ -13,14 +27,7 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/bootstrap.js') {
-      const config = {
-        supabaseUrl: env.SUPABASE_URL || '',
-        supabaseAnonKey: env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || '',
-        appName: 'Permission Out',
-        autosave: true,
-        requireSupabase: true
-      };
-      return new Response(`window.APP_CONFIG = ${JSON.stringify(config)};\n`, {
+      return new Response(`${configAssignment(env)}\n`, {
         headers: noStoreHeaders('text/javascript; charset=utf-8')
       });
     }
@@ -39,6 +46,14 @@ export default {
       });
     }
 
-    return env.ASSETS.fetch(request);
+    const assetResponse = await env.ASSETS.fetch(request);
+    if ((url.pathname === '/' || url.pathname === '/index.html') && assetResponse.headers.get('Content-Type')?.includes('text/html')) {
+      const html = await assetResponse.text();
+      const injected = html.replace('<script src="bootstrap.js"></script>', `<script>${configAssignment(env)}</script>`);
+      const headers = new Headers(assetResponse.headers);
+      headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return new Response(injected, { status: assetResponse.status, statusText: assetResponse.statusText, headers });
+    }
+    return assetResponse;
   }
 };

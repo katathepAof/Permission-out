@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="production.css">
 <style>
 /* ============================================================
@@ -1411,8 +1411,8 @@ table.report td.num{
 
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/jszip.min.js"></script>
 <script>
 /* ===================== Fast geometry helpers (no external geo library) ===================== */
 
@@ -2968,7 +2968,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTable(); recomputeAll(); });
 </script>
 <script src="bootstrap.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="vendor/supabase.js"></script>
 <script src="production.js"></script>
 </body>
 </html>

@@ -13,6 +13,7 @@
 - ระบบบัญชี Supabase Auth, โครงการส่วนตัว, Cloud Sync และประวัติการวิเคราะห์
 - Supabase-required ใน Production: Cloudflare Worker สร้าง runtime config จาก Variables and Secrets และหน้าแอปจะแจ้งเตือนหากตั้งค่าไม่ครบ
 - PWA/offline shell, responsive UI, print layout และ security headers
+- Bundle Supabase JS, Leaflet และ JSZip ภายใน deployment ไม่พึ่งพา third-party JavaScript CDN
 
 ## ตั้งค่า Supabase
 
