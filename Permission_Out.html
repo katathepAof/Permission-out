@@ -1062,17 +1062,26 @@ table.report td.num{
         <div class="tag" id="tagBase" hidden></div>
       </div>
       <div class="fileBox" id="boxCompare">
-        <div class="fileBox-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
+        <div class="base-catalog-head">
+          <div class="fileBox-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 7h11l-3-3"/><path d="M19 7l-3 3"/><path d="M16 17H5l3 3"/><path d="M5 17l3-3"/>
+            </svg>
+          </div>
+          <div>
+            <strong>ไฟล์เปรียบเทียบจาก UFM</strong>
+            <small id="compareCatalogStatus">กำลังโหลดรายการจาก Supabase…</small>
+          </div>
+          <span id="compareCatalogCount" class="base-catalog-count">0</span>
         </div>
-        <label for="fileCompare">ไฟล์เปรียบเทียบ (เลือกได้หลายไฟล์)</label>
-        <input type="file" id="fileCompare" accept=".kml,.kmz" multiple>
-        <label for="fileCompare" class="fileBtn">เลือกไฟล์</label>
-        <div class="tag" id="tagCompare"></div>
+        <input type="file" id="fileCompare" class="base-catalog-source" accept=".kml,.kmz" multiple tabindex="-1" aria-hidden="true">
+        <div class="base-catalog-tools">
+          <input type="search" id="compareCatalogSearch" placeholder="ค้นหาชื่อไฟล์ UFM…" autocomplete="off">
+          <button type="button" id="compareCatalogSelectAll">เลือกที่แสดง</button>
+          <button type="button" id="compareCatalogClear">ล้าง</button>
+        </div>
+        <div id="compareCatalogList" class="base-catalog-list" role="group" aria-label="เลือกไฟล์เปรียบเทียบจาก UFM"></div>
+        <div class="tag" id="tagCompare" hidden></div>
       </div>
     </div>
 
@@ -1525,6 +1534,7 @@ const GROUP_COLORS = { BASE: '#e07b39', COMPARE: '#3a7bd5' };
 const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเทียบ' };
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
 window.permissionOutBaseDatasetIds = window.permissionOutBaseDatasetIds || [];
+window.permissionOutCompareDatasetIds = window.permissionOutCompareDatasetIds || [];
 function filesForGroup(groupKey) {
   return groupKey === 'BASE' && Array.isArray(window.permissionOutBaseFiles)
     ? window.permissionOutBaseFiles
@@ -1533,12 +1543,21 @@ function filesForGroup(groupKey) {
 function selectedBaseDatasetCount() {
   return Array.isArray(window.permissionOutBaseDatasetIds) ? window.permissionOutBaseDatasetIds.length : 0;
 }
+function selectedCompareDatasetCount() {
+  return Array.isArray(window.permissionOutCompareDatasetIds) ? window.permissionOutCompareDatasetIds.length : 0;
+}
 function hasBaseSources() {
   return filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0;
+}
+function hasCompareSources() {
+  return filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0;
 }
 function sourceNamesForGroup(groupKey) {
   if (groupKey === 'BASE' && Array.isArray(window.permissionOutBaseDatasetNames) && window.permissionOutBaseDatasetNames.length) {
     return window.permissionOutBaseDatasetNames;
+  }
+  if (groupKey === 'COMPARE' && Array.isArray(window.permissionOutCompareDatasetNames) && window.permissionOutCompareDatasetNames.length) {
+    return window.permissionOutCompareDatasetNames;
   }
   return filesForGroup(groupKey).map(file => file.name);
 }
@@ -2017,7 +2036,7 @@ FILE_GROUPS.forEach(groupKey => {
     box.classList.add('hasFile');
     if (event.detail?.skipPreview) return;
     const hasBase = hasBaseSources();
-    const hasCompare = filesForGroup('COMPARE').length > 0;
+    const hasCompare = hasCompareSources();
     if (hasBase && hasCompare) { await runAnalysis(); } else { await previewGroup(groupKey); }
   });
 });
@@ -2053,7 +2072,9 @@ async function previewGroup(groupKey) {
     const allBounds = FILE_GROUPS.flatMap(k => previews[k] ? previews[k].bounds : []);
     if (allBounds.length) map.fitBounds(allBounds, { padding: [30, 30] });
     const statusParts = FILE_GROUPS.map(k => {
-      const n = k === 'BASE' ? (filesForGroup(k).length + selectedBaseDatasetCount()) : filesForGroup(k).length;
+      const n = k === 'BASE'
+        ? (filesForGroup(k).length + selectedBaseDatasetCount())
+        : (filesForGroup(k).length + selectedCompareDatasetCount());
       return `${GROUP_LABELS[k]} ${n ? n + ' ไฟล์' : '-'}`;
     }).join(' / ');
     mapStatus.textContent = `พรีวิว: ${statusParts} — กด "วิเคราะห์เส้นทาง" เพื่อดูผลเปรียบเทียบ`;
@@ -2624,7 +2645,7 @@ function recomputeAll() {
 async function runAnalysis() {
   errBox.style.display = 'none';
   const hasBase = hasBaseSources();
-  const hasCompare = filesForGroup('COMPARE').length > 0;
+  const hasCompare = hasCompareSources();
   if (!hasBase && !hasCompare) {
     errBox.textContent = 'กรุณาเลือกไฟล์ KML อย่างน้อย 1 ไฟล์ก่อนวิเคราะห์ (ฝั่งฐาน หรือ ฝั่งเปรียบเทียบ)';
     errBox.style.display = 'block';
@@ -2650,16 +2671,19 @@ async function runAnalysis() {
     // อ่านและรวมไฟล์ฐาน (A + B) เป็นชุดเดียว และไฟล์เปรียบเทียบ (C + D) เป็นอีกชุดหนึ่ง
     const baseFiles = filesForGroup('BASE');
     const compareFiles = filesForGroup('COMPARE');
-    const [baseTexts, compareTexts, optimizedBaseLines] = await Promise.all([
+    const [baseTexts, compareTexts, optimizedBaseLines, optimizedCompareLines] = await Promise.all([
       Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
       Promise.all(compareFiles.map(f => readKmlOrKmzText(f))),
       selectedBaseDatasetCount() && typeof window.permissionOutLoadBaseLines === 'function'
         ? window.permissionOutLoadBaseLines()
+        : Promise.resolve([]),
+      selectedCompareDatasetCount() && typeof window.permissionOutLoadCompareLines === 'function'
+        ? window.permissionOutLoadCompareLines()
         : Promise.resolve([])
     ]);
 
     let linesA = optimizedBaseLines.concat(baseTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = baseFiles[i] ? baseFiles[i].name : ''; return l; })));    // ฐาน: Supabase datasets + local files
-    let linesB = compareTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = compareFiles[i] ? compareFiles[i].name : ''; return l; })); // เปรียบเทียบ: C + D
+    let linesB = optimizedCompareLines.concat(compareTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = compareFiles[i] ? compareFiles[i].name : ''; return l; }))); // เปรียบเทียบ: Supabase UFM + local files
 
     const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้จริงจากไฟล์ฐาน (ก่อนตัดซ้ำ)
     const rawCountB = linesB.length;
@@ -2945,6 +2969,8 @@ function clearAll() {
   window.permissionOutBaseFiles = [];
   window.permissionOutBaseDatasetIds = [];
   window.permissionOutBaseDatasetNames = [];
+  window.permissionOutCompareDatasetIds = [];
+  window.permissionOutCompareDatasetNames = [];
   FILE_GROUPS.forEach(groupKey => {
     GROUP_INPUTS[groupKey].value = '';
     GROUP_TAGS[groupKey].textContent = '';

@@ -36,6 +36,13 @@
   const baseCatalogSelected = new Set();
   const baseAnalysisCache = new Map();
   let baseCatalogManifest = null;
+  const compareCatalogList = document.getElementById('compareCatalogList');
+  const compareCatalogSearch = document.getElementById('compareCatalogSearch');
+  const compareCatalogStatus = document.getElementById('compareCatalogStatus');
+  const compareCatalogCount = document.getElementById('compareCatalogCount');
+  const compareCatalogSelected = new Set();
+  const compareAnalysisCache = new Map();
+  let compareCatalogManifest = null;
 
   const modalRoot = document.createElement('div');
   modalRoot.className = 'app-backdrop';
@@ -74,6 +81,12 @@
     const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
     const encoded = String(path).split('/').map(encodeURIComponent).join('/');
     return `${base}/storage/v1/object/public/permission-out-data/uih-20072026/v1/${encoded}`;
+  }
+
+  function ufmAssetUrl(path) {
+    const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
+    const encoded = String(path).split('/').map(encodeURIComponent).join('/');
+    return `${base}/storage/v1/object/public/permission-out-data/ufm/v1/${encoded}`;
   }
 
   function filteredBaseCatalogItems() {
@@ -239,6 +252,122 @@
       baseCatalogList.innerHTML = '<div class="base-catalog-empty">โหลดรายการไฟล์ไม่สำเร็จ</div>';
       updateBaseCatalogSummary('เชื่อมต่อคลังไฟล์ไม่ได้');
       toast(`โหลดรายการไฟล์ฐานไม่สำเร็จ: ${error.message}`, 'error');
+    }
+  }
+
+  function filteredCompareCatalogItems() {
+    if (!compareCatalogManifest) return [];
+    const query = compareCatalogSearch?.value.trim().toLocaleLowerCase('th') || '';
+    return compareCatalogManifest.items.filter(item => !query || `${item.name} ${item.group || ''}`.toLocaleLowerCase('th').includes(query));
+  }
+
+  function updateCompareCatalogSummary(message = '') {
+    if (compareCatalogCount) compareCatalogCount.textContent = compareCatalogSelected.size.toLocaleString('th-TH');
+    if (!compareCatalogStatus) return;
+    const selectedLines = compareCatalogManifest?.items
+      .filter(item => compareCatalogSelected.has(item.id))
+      .reduce((sum, item) => sum + (item.lineCount || item.featureCount || 0), 0) || 0;
+    compareCatalogStatus.textContent = message || (compareCatalogManifest
+      ? `เลือก ${compareCatalogSelected.size.toLocaleString('th-TH')} จาก ${compareCatalogManifest.fileCount.toLocaleString('th-TH')} ชุดข้อมูล${selectedLines ? ` · ${selectedLines.toLocaleString('th-TH')} เส้น` : ''}`
+      : 'ยังไม่พบรายการไฟล์');
+  }
+
+  function syncCompareSelection() {
+    window.permissionOutCompareDatasetIds = Array.from(compareCatalogSelected);
+    window.permissionOutCompareDatasetNames = (compareCatalogManifest?.items || [])
+      .filter(item => compareCatalogSelected.has(item.id)).map(item => item.name);
+  }
+
+  function renderCompareCatalog() {
+    if (!compareCatalogList) return;
+    const items = filteredCompareCatalogItems();
+    compareCatalogList.innerHTML = '';
+    if (!items.length) {
+      compareCatalogList.innerHTML = '<div class="base-catalog-empty">ไม่พบไฟล์ที่ตรงกับคำค้นหา</div>';
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const item of items) {
+      const label = document.createElement('label');
+      label.className = 'base-catalog-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = item.id;
+      input.checked = compareCatalogSelected.has(item.id);
+      input.addEventListener('change', () => {
+        if (input.checked) compareCatalogSelected.add(item.id); else compareCatalogSelected.delete(item.id);
+        syncCompareSelection();
+        updateCompareCatalogSummary();
+      });
+      const name = document.createElement('span'); name.textContent = item.name;
+      const size = document.createElement('em'); size.textContent = `${(item.lineCount || item.featureCount || 0).toLocaleString('th-TH')} เส้น`;
+      label.append(input, name, size);
+      fragment.appendChild(label);
+    }
+    compareCatalogList.appendChild(fragment);
+  }
+
+  function fetchCompareAnalysis(item) {
+    if (compareAnalysisCache.has(item.analysisPath)) return compareAnalysisCache.get(item.analysisPath);
+    const request = fetch(ufmAssetUrl(item.analysisPath)).then(async response => {
+      if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
+      if (!response.body || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์ไม่รองรับการอ่านข้อมูล gzip แบบสตรีม');
+      const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+      return new Response(stream).json();
+    }).catch(error => {
+      compareAnalysisCache.delete(item.analysisPath);
+      throw error;
+    });
+    compareAnalysisCache.set(item.analysisPath, request);
+    return request;
+  }
+
+  async function loadSelectedCompareLines() {
+    const selectedItems = (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id));
+    const box = document.getElementById('boxCompare');
+    box?.classList.toggle('is-loading', selectedItems.length > 0);
+    compareCatalogList?.setAttribute('aria-busy', String(selectedItems.length > 0));
+    try {
+      if (!selectedItems.length) return [];
+      updateCompareCatalogSummary(`กำลังอ่าน ${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูลแบบ optimized…`);
+      const payloads = [];
+      for (let offset = 0; offset < selectedItems.length; offset += 3) {
+        payloads.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchCompareAnalysis)));
+      }
+      const lines = payloads.flatMap((payload, index) => (payload.lines || []).map(line => compactLineToApp(line, selectedItems[index])));
+      updateCompareCatalogSummary(`${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูล · พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
+      return lines;
+    } catch (error) {
+      updateCompareCatalogSummary('อ่านข้อมูล optimized ไม่สำเร็จ');
+      toast(`อ่านข้อมูลเปรียบเทียบไม่สำเร็จ: ${error.message}`, 'error');
+      throw error;
+    } finally {
+      box?.classList.remove('is-loading');
+      compareCatalogList?.setAttribute('aria-busy', 'false');
+    }
+  }
+
+  window.permissionOutCompareDatasetIds = [];
+  window.permissionOutCompareDatasetNames = [];
+  window.permissionOutLoadCompareLines = loadSelectedCompareLines;
+
+  async function initializeCompareCatalog() {
+    if (!compareCatalogList || !cloudEnabled) {
+      updateCompareCatalogSummary(cloudEnabled ? 'ไม่พบส่วนแสดงรายการไฟล์' : 'ต้องเชื่อมต่อ Supabase');
+      return;
+    }
+    try {
+      const response = await fetch(`${ufmAssetUrl('manifest.json')}?v=1`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const manifest = await response.json();
+      if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
+      compareCatalogManifest = manifest;
+      renderCompareCatalog();
+      updateCompareCatalogSummary();
+    } catch (error) {
+      compareCatalogList.innerHTML = '<div class="base-catalog-empty">โหลดรายการไฟล์ไม่สำเร็จ</div>';
+      updateCompareCatalogSummary('เชื่อมต่อคลังไฟล์ไม่ได้');
+      toast(`โหลดรายการ UFM ไม่สำเร็จ: ${error.message}`, 'error');
     }
   }
 
@@ -429,7 +558,7 @@
       },
       sourceFiles: {
         base: (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name),
-        compare: Array.from(document.getElementById('fileCompare')?.files || []).map(f => f.name)
+        compare: (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id)).map(item => item.name)
       },
       result: {
         totalA: state?.totalA || 0, totalB: state?.totalB || 0,
@@ -675,6 +804,7 @@
   document.getElementById('newProjectBtn').addEventListener('click', newProject);
   document.getElementById('accountBtn').addEventListener('click', showAccount);
   baseCatalogSearch?.addEventListener('input', renderBaseCatalog);
+  compareCatalogSearch?.addEventListener('input', renderCompareCatalog);
   document.getElementById('baseCatalogSelectAll')?.addEventListener('click', () => {
     for (const item of filteredBaseCatalogItems()) baseCatalogSelected.add(item.id);
     window.permissionOutBaseDatasetIds = Array.from(baseCatalogSelected);
@@ -685,10 +815,20 @@
     baseCatalogSelected.clear(); window.permissionOutBaseDatasetIds = []; window.permissionOutBaseDatasetNames = [];
     renderBaseCatalog(); updateBaseCatalogSummary();
   });
+  document.getElementById('compareCatalogSelectAll')?.addEventListener('click', () => {
+    for (const item of filteredCompareCatalogItems()) compareCatalogSelected.add(item.id);
+    syncCompareSelection(); renderCompareCatalog(); updateCompareCatalogSummary();
+  });
+  document.getElementById('compareCatalogClear')?.addEventListener('click', () => {
+    compareCatalogSelected.clear(); syncCompareSelection(); renderCompareCatalog(); updateCompareCatalogSummary();
+  });
   window.addEventListener('permissionout:cleared', () => {
     baseCatalogSelected.clear(); window.permissionOutBaseDatasetIds = []; window.permissionOutBaseDatasetNames = [];
     if (baseCatalogSearch) baseCatalogSearch.value = '';
     renderBaseCatalog(); updateBaseCatalogSummary();
+    compareCatalogSelected.clear(); syncCompareSelection();
+    if (compareCatalogSearch) compareCatalogSearch.value = '';
+    renderCompareCatalog(); updateCompareCatalogSummary();
   });
   peaLayerTrigger?.addEventListener('click', () => {
     const open = peaLayerPanel.hidden;
@@ -737,7 +877,7 @@
         showConfigurationRequired();
       }
     }
-    await Promise.all([initializePeaLayers(), initializeBaseCatalog()]);
+    await Promise.all([initializePeaLayers(), initializeBaseCatalog(), initializeCompareCatalog()]);
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

@@ -77,6 +77,14 @@ npx wrangler deploy
 - PostGIS schema, GiST spatial index และ API แบบแบ่งหน้าอยู่ใน `supabase/migrations/20260722190000_uih_postgis.sql`
 - หลัง apply migration ให้รัน `npm run data:import-uih-postgis` เพื่อนำ geometry เข้าตารางที่ค้นหาเชิงพื้นที่ได้
 
+## UFM comparison data
+
+- ไฟล์ KML/KMZ ต้นฉบับจากโฟลเดอร์ `UFM` ถูกแปลงและจัดเก็บใน Supabase Storage ที่ `ufm/v1/`
+- หน้าเว็บแสดงรายการไฟล์เปรียบเทียบเป็น checkbox เลือกพร้อมกันได้หลายชุด และดาวน์โหลด compact gzip เฉพาะตอนกดวิเคราะห์
+- `analysis/*.json.gz` ใช้สำหรับวิเคราะห์บนเว็บอย่างรวดเร็ว ส่วน `exchange/*.geojson.gz` เป็น GeoJSON ตาม RFC 7946 สำหรับส่งต่อหน่วยงานอื่น
+- `manifest.json` มีจำนวนเส้น ขนาดไฟล์ SHA-256 และ CRS ส่วน `data-dictionary.csv` อธิบายโครงสร้างข้อมูล
+- เตรียมข้อมูลด้วย `npm run data:prepare-ufm` และอัปโหลดด้วย `npm run data:upload-ufm`
+
 ## Checklist ก่อนเปิดใช้งานจริง
 
 - เปิด Email confirmation และกำหนด SMTP ขององค์กรใน Supabase
