@@ -1506,6 +1506,7 @@ let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, seg
 const LARGE_RESULT_THRESHOLD = 1500;
 const REPORT_ROW_LIMIT = 300;
 let aggregateResultMode = false;
+let aggregateSelectionLayer = null;
 let provinceBuildToken = 0;
 
 const fileBase = document.getElementById('fileBase');
@@ -2077,7 +2078,11 @@ function segmentStatusPopup(seg, idx) {
   const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm')?.value)) || 29;
   const poles = Math.ceil(km * polesPerKm);
   const diamInput = document.querySelector(`.diamInput[data-idx="${idx}"]`);
-  const diam = diamInput ? (parseFloat(diamInput.value) || 0) : DEFAULT_DIAMETER_MM;
+  const diam = diamInput
+    ? (parseFloat(diamInput.value) || 0)
+    : (seg._diameterOverride !== undefined
+      ? seg._diameterOverride
+      : ((seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) ? seg.diameter : DEFAULT_DIAMETER_MM));
   const cost = diam * poles * rateB;
   const costLine = rateB > 0
     ? `<br><b style="color:var(--navy-800);">ค่าบริการ:</b> ${poles} ต้น × ${diam} มม. × ${rateB} บาท = <b style="color:var(--gold-deep);">${fmtNum(cost)} บาท</b>`
@@ -2090,7 +2095,17 @@ function drawResults(resB) {
   aggregateResultMode = resB.segments.length > LARGE_RESULT_THRESHOLD;
   const bounds = L.latLngBounds();
   if (aggregateResultMode) {
+    searchableLayers = resB.segments.map((seg, index) => {
+      const m = STATUS_META[seg.status] || STATUS_META.new;
+      return {
+        name: seg.name,
+        routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`,
+        segment: seg,
+        segmentIndex: index
+      };
+    });
     renderAggregateResults(resB.segments, true);
+    map.on('click', handleAggregateMapClick);
     return;
   }
   resB.segments.forEach((seg, idx) => {
@@ -2118,7 +2133,7 @@ function drawResults(resB) {
 function renderAggregateResults(segments, fitBounds = false) {
   if (!aggregateResultMode || !layerGroup) return;
   layerGroup.clearLayers();
-  searchableLayers = [];
+  aggregateSelectionLayer = null;
   const grouped = { new: [], same: [], remove: [] };
   const bounds = L.latLngBounds();
   segments.forEach(seg => {
@@ -2141,6 +2156,85 @@ function renderAggregateResults(segments, fitBounds = false) {
     }).addTo(layerGroup);
   });
   if (fitBounds && bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+}
+
+function aggregateSegmentIsVisible(seg, filters) {
+  const status = STATUS_META[seg.status] ? seg.status : 'new';
+  return filters.statuses[status] && segmentMatchesReportFilters(
+    seg,
+    filters.provinces,
+    filters.overlaps,
+    filters.cableStatuses
+  );
+}
+
+function currentAggregateFilters() {
+  return {
+    statuses: getActiveStatuses(),
+    provinces: getSelectedProvinces(),
+    overlaps: getActiveOverlaps(),
+    cableStatuses: getSelectedCableStatuses()
+  };
+}
+
+function aggregateHitBounds(seg) {
+  if (seg._hitBounds) return seg._hitBounds;
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  seg.coords.forEach(([lon, lat]) => {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  });
+  seg._hitBounds = [minLon, minLat, maxLon, maxLat];
+  return seg._hitBounds;
+}
+
+function findAggregateSegmentAt(latlng) {
+  const point = map.latLngToContainerPoint(latlng);
+  const edge = map.containerPointToLatLng(L.point(point.x + 14, point.y));
+  const tolerance = Math.max(8, map.distance(latlng, edge));
+  const padLat = tolerance / 111320;
+  const padLon = padLat / Math.max(0.2, Math.cos(latlng.lat * Math.PI / 180));
+  const pt = [latlng.lng, latlng.lat];
+  const filters = currentAggregateFilters();
+  let best = null;
+  let bestDistance = tolerance;
+  state.segmentsB.forEach((seg, index) => {
+    if (!aggregateSegmentIsVisible(seg, filters)) return;
+    const [minLon, minLat, maxLon, maxLat] = aggregateHitBounds(seg);
+    if (pt[0] < minLon - padLon || pt[0] > maxLon + padLon || pt[1] < minLat - padLat || pt[1] > maxLat + padLat) return;
+    for (let i = 0; i < seg.coords.length - 1; i++) {
+      const distance = pointToSegmentMeters(pt, seg.coords[i], seg.coords[i + 1]);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { seg, index };
+      }
+    }
+  });
+  return best;
+}
+
+function showAggregateSegment(seg, index, popupLatLng = null) {
+  if (!map || !layerGroup || !seg) return;
+  if (aggregateSelectionLayer && layerGroup.hasLayer(aggregateSelectionLayer)) {
+    layerGroup.removeLayer(aggregateSelectionLayer);
+  }
+  const meta = STATUS_META[seg.status] || STATUS_META.new;
+  const latlngs = toLatLngs(seg.coords);
+  aggregateSelectionLayer = L.polyline(latlngs, {
+    color: meta.color,
+    weight: 9,
+    opacity: 1,
+    interactive: false
+  }).addTo(layerGroup).bindPopup(() => segmentStatusPopup(seg, index));
+  const popupPoint = popupLatLng || L.latLngBounds(latlngs).getCenter();
+  aggregateSelectionLayer.openPopup(popupPoint);
+}
+
+function handleAggregateMapClick(event) {
+  const found = findAggregateSegmentAt(event.latlng);
+  if (found) showAggregateSegment(found.seg, found.index, event.latlng);
 }
 
 /* ===================== Province lookup (offline boundaries) ===================== */
@@ -2290,7 +2384,8 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
   const segmentBounds = seg._mapBounds || toLatLngs(seg.coords);
   if (!segmentBounds.length) return;
   map.fitBounds(segmentBounds, { padding: [60, 60], maxZoom: 18 });
-  try { seg._mapLayer && seg._mapLayer.openPopup(); } catch (err) { /* layer no longer on map — bounds already zoomed, ignore */ }
+  if (aggregateResultMode) showAggregateSegment(seg, seg._index);
+  else try { seg._mapLayer && seg._mapLayer.openPopup(); } catch (err) { /* layer no longer on map — bounds already zoomed, ignore */ }
 });
 
 // เติมรายชื่อจังหวัดจากผลวิเคราะห์ลงใน dropdown
@@ -2915,9 +3010,11 @@ function hideSearchResults() {
 }
 
 function goToSearchResult(item) {
-  map.fitBounds(item.bounds, { padding: [60, 60], maxZoom: 18 });
+  const bounds = item.bounds || (item.segment ? toLatLngs(item.segment.coords) : []);
+  if (bounds.length) map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
+  if (item.segment) showAggregateSegment(item.segment, item.segmentIndex);
   try {
-    if (map.hasLayer(item.layer) || (layerGroup && layerGroup.hasLayer(item.layer))) {
+    if (item.layer && (map.hasLayer(item.layer) || (layerGroup && layerGroup.hasLayer(item.layer)))) {
       item.layer.openPopup();
     }
   } catch (e) { /* layer no longer attached (e.g. after re-analysis) — bounds already zoomed, safe to ignore */ }
