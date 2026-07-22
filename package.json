@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:local": "node scripts/build-local.mjs",
-    "check": "node --check production.js && node scripts/validate.mjs",
+    "check": "node --check production.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs",
     "preview": "node scripts/serve.mjs"
   },
   "engines": {

@@ -11,7 +11,7 @@
 - คำนวณเสา, diameter, อัตราค่าพาดสาย, surcharge และยอดรวมแบบ real-time
 - Export CSV, KML และ KMZ ตามตัวกรอง
 - ระบบบัญชี Supabase Auth, โครงการส่วนตัว, Cloud Sync และประวัติการวิเคราะห์
-- Supabase-required ใน Production: Cloudflare build จะหยุดทันทีหากไม่ได้กำหนด URL/Key ป้องกันการเปิดระบบโดยไม่มี Cloud Sync
+- Supabase-required ใน Production: Cloudflare Worker สร้าง runtime config จาก Variables and Secrets และหน้าแอปจะแจ้งเตือนหากตั้งค่าไม่ครบ
 - PWA/offline shell, responsive UI, print layout และ security headers
 
 ## ตั้งค่า Supabase
@@ -30,7 +30,7 @@ npm run check
 npm run build
 ```
 
-ผลลัพธ์อยู่ใน `dist/` การ build ในเครื่องโดยไม่มี environment variables ใช้ตรวจ UI ได้ แต่ Cloudflare Pages build จะบังคับให้มี Supabase configuration
+ผลลัพธ์อยู่ใน `dist/` ส่วน `src/worker.js` จะอ่าน Supabase configuration ตอน runtime จึงไม่ต้องเปิดเผยค่าให้ build process
 
 ## Deploy บน Cloudflare Workers Static Assets
 
@@ -42,12 +42,12 @@ npm run build
 | Deploy command | `npx wrangler deploy` |
 | Node version | 20 หรือใหม่กว่า |
 
-เพิ่ม Environment variables ใน Workers Build Settings:
+เพิ่ม Environment variables ที่ **Worker → Settings → Variables and Secrets** (runtime variables ไม่ใช่ Build variables):
 
 - `SUPABASE_URL` = Project URL
 - `SUPABASE_PUBLISHABLE_KEY` = Publishable key (รองรับ `SUPABASE_ANON_KEY` เป็น fallback)
 
-ไฟล์ build จะสร้าง `app-config.js` จาก environment variables โดยอัตโนมัติ และจะหยุด build หากไม่ได้กำหนดค่าทั้งสองตัว กุญแจดังกล่าวเป็น public client key และการป้องกันข้อมูลทำโดย Row Level Security ในฐานข้อมูล
+Worker จะสร้าง `/app-config.js` แบบ `no-store` จาก environment variables ตอน runtime และมี `/api/health` สำหรับตรวจสถานะโดยไม่เปิดเผยค่า credentials กุญแจดังกล่าวเป็น public client key และการป้องกันข้อมูลทำโดย Row Level Security ในฐานข้อมูล
 
 สามารถ deploy ผ่าน Wrangler ได้หลัง login:
 
@@ -62,6 +62,7 @@ npx wrangler deploy
 - `production.js` / `production.css` — workspace, auth, projects, autosave และ UI production
 - `supabase/schema.sql` — ตาราง, indexes, triggers, grants และ RLS policies
 - `scripts/build.mjs` — สร้าง static bundle และ inject public Supabase config
+- `src/worker.js` — runtime config, health endpoint และ static-assets fallback
 - `_headers` — CSP และ security headers สำหรับ Cloudflare
 - `sw.js` — offline application shell
 

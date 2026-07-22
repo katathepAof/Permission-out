@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'app-config.js', 'supabase/schema.sql', 'wrangler.toml'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'app-config.js', 'src/worker.js', 'supabase/schema.sql', 'wrangler.toml'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 for (const id of ['projectTitle', 'saveProjectBtn', 'analyzeBtn', 'reportBody', 'map']) {
