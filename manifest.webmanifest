@@ -1,0 +1,13 @@
+{
+  "name": "Permission Out — Fiber Intelligence",
+  "short_name": "Permission Out",
+  "description": "วิเคราะห์เส้นทางเคเบิลไฟเบอร์และประเมินค่าบริการพาดสาย",
+  "lang": "th",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#0a1832",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

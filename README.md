@@ -1,0 +1,77 @@
+# Permission Out
+
+เว็บแอประดับ production สำหรับเปรียบเทียบเส้นทางเคเบิลจาก KML/KMZ วิเคราะห์ New / Same / Remove คำนวณจำนวนเสาและค่าบริการรายปี แสดงผลบนแผนที่ และจัดเก็บโครงการผ่าน Supabase
+
+## ความสามารถหลัก
+
+- นำเข้า KML/KMZ หลายไฟล์ แยกชุดฐานและชุดเปรียบเทียบ
+- วิเคราะห์ระยะใกล้เคียงด้วย threshold/interval และตัดเส้นซ้ำแบบเลือกได้
+- แผนที่ Leaflet, ค้นหาชื่อเส้นทางหรือพิกัด, ระบุจังหวัดแบบออฟไลน์
+- ตัวกรองจังหวัด สถานะสาย และระดับการทับซ้อน
+- คำนวณเสา, diameter, อัตราค่าพาดสาย, surcharge และยอดรวมแบบ real-time
+- Export CSV, KML และ KMZ ตามตัวกรอง
+- ระบบบัญชี Supabase Auth, โครงการส่วนตัว, Cloud Sync และประวัติการวิเคราะห์
+- Local-first: หากยังไม่ตั้งค่า Supabase จะบันทึกในเบราว์เซอร์และยังวิเคราะห์ได้ตามปกติ
+- PWA/offline shell, responsive UI, print layout และ security headers
+
+## ตั้งค่า Supabase
+
+1. สร้าง Supabase project แล้วเปิด **SQL Editor**
+2. รันไฟล์ [`supabase/schema.sql`](supabase/schema.sql) ทั้งไฟล์
+3. ใน **Authentication → URL Configuration** กำหนด Site URL เป็นโดเมน Cloudflare Pages และเพิ่ม localhost/preview URLs ที่ต้องใช้
+4. ใช้ Project URL และ Publishable key (หรือ legacy anon key) เท่านั้น ห้ามนำ `service_role` key มาใส่ฝั่งเว็บ
+
+## ทดสอบและ Build
+
+ต้องใช้ Node.js 20 ขึ้นไป และไม่มี package dependency ที่ต้องติดตั้ง
+
+```bash
+npm run check
+npm run build
+```
+
+ผลลัพธ์อยู่ใน `dist/` หากไม่ได้กำหนด environment variables ระบบจะ build เป็น Local mode
+
+## Deploy บน Cloudflare Pages
+
+เชื่อม repository กับ Cloudflare Pages แล้วตั้งค่า:
+
+| ค่า | กำหนดเป็น |
+|---|---|
+| Framework preset | None |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Node version | 20 หรือใหม่กว่า |
+
+เพิ่ม Environment variables ทั้ง Production และ Preview:
+
+- `SUPABASE_URL` = Project URL
+- `SUPABASE_PUBLISHABLE_KEY` = Publishable key (รองรับ `SUPABASE_ANON_KEY` เป็น fallback)
+
+ไฟล์ build จะสร้าง `app-config.js` จาก environment variables โดยอัตโนมัติ กุญแจดังกล่าวเป็น public client key และการป้องกันข้อมูลทำโดย Row Level Security ในฐานข้อมูล
+
+สามารถ deploy ผ่าน Wrangler ได้หลัง login:
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name permission-out
+```
+
+## โครงสร้างสำคัญ
+
+- `Permission_Out.html` — แกนวิเคราะห์และหน้าหลัก
+- `production.js` / `production.css` — workspace, auth, projects, autosave และ UI production
+- `supabase/schema.sql` — ตาราง, indexes, triggers, grants และ RLS policies
+- `scripts/build.mjs` — สร้าง static bundle และ inject public Supabase config
+- `_headers` — CSP และ security headers สำหรับ Cloudflare
+- `sw.js` — offline application shell
+
+## Checklist ก่อนเปิดใช้งานจริง
+
+- เปิด Email confirmation และกำหนด SMTP ขององค์กรใน Supabase
+- ตรวจ URL redirect ของ Production/Preview
+- ทดสอบ RLS ด้วยผู้ใช้สองบัญชีให้แน่ใจว่าไม่เห็นโครงการข้ามบัญชี
+- เปิด Cloudflare Web Analytics/Logpush ตามนโยบายองค์กร
+- กำหนด retention และ backup/PITR ของ Supabase ตาม SLA
+- หากไฟล์เส้นทางมีข้อมูลอ่อนไหว ให้คงการประมวลผลฝั่ง client ตามค่าเริ่มต้น และทบทวนนโยบายการเก็บ snapshot ก่อนเปิด Cloud Sync
+
