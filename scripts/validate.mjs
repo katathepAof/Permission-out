@@ -14,6 +14,9 @@ if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('bill
   throw new Error('Shared UI/export billing logic is missing');
 }
 if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
+if (!html.includes('costAllImported') || !html.includes('ทุกเส้นที่ Import (ตัวกรองมีผลเฉพาะรายละเอียดที่แสดง)')) {
+  throw new Error('All-imported-segment billing is missing');
+}
 const csvSection = html.slice(html.indexOf('function exportCSV()'), html.indexOf('function selectedSegmentsForExport()'));
 if (csvSection.includes('document.querySelector(`.diamInput')) {
   throw new Error('CSV export must not depend on rendered report rows');

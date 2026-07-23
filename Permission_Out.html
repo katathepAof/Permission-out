@@ -1299,7 +1299,7 @@ table.report td.num{
     <span style="font-size:.72rem; color:var(--ink-mute);">เลือกได้มากกว่าหนึ่งจังหวัด</span>
   </div>
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
-    <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">แสดง / คิดค่าบริการ:</span>
+    <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรองการแสดงผล:</span>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="new" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#1e5ba8;"></span> New</label>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="same" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0e9f6e;"></span> Same</label>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="remove" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#8a94a6;"></span> Remove</label>
@@ -1681,7 +1681,7 @@ const DEFAULT_DIAMETER_MM = 6.5;
 // สถานะของช่วงเส้นทางจากการเปรียบเทียบฐาน (A+B) กับเปรียบเทียบ (C+D) — ป้ายไทย + อังกฤษ
 //  new    = มีในฐาน ไม่มีในเปรียบเทียบ (คิดค่าบริการ)
 //  remove = มีในเปรียบเทียบ ไม่มีในฐาน (คิดค่าบริการ)
-//  same   = มีทั้งในฐานและเปรียบเทียบ (เหมือนกัน) — แสดงบนแผนที่ แต่ไม่คิดค่าบริการ
+//  same   = มีทั้งในฐานและเปรียบเทียบ (เหมือนกัน) — แสดงและคิดค่าบริการเช่นเดียวกับทุกเส้นที่ Import
 const STATUS_META = {
   new:    { th: 'เดินสายใหม่', en: 'NEW',    color: '#1e5ba8', bg: 'rgba(30,91,168,.12)',  billable: true  },
   remove: { th: 'ถอดออก',      en: 'REMOVE', color: '#8a94a6', bg: 'rgba(138,148,166,.14)', billable: true  },
@@ -2651,7 +2651,7 @@ function applyProvinceFilter(fitMapToSelection = false) {
   recomputeAll();
 }
 
-// เมื่อเปลี่ยนหมวดสถานะ: คิดค่าบริการใหม่ (เฉพาะหมวดที่เลือก) แล้วอัปเดตแผนที่/ตาราง
+// เมื่อเปลี่ยนหมวดสถานะ: กรองเฉพาะแผนที่/ตาราง ยอดค่าบริการยังรวมทุกเส้นที่ Import
 function onStatusFilterChange() {
   applyProvinceFilter();
 }
@@ -2703,7 +2703,6 @@ function getActiveOverlaps() {
 function recomputeAll() {
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
   const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm').value)) || 29;
-  const active = getActiveStatuses();
   const selectedProvinces = getSelectedProvinces();
   const activeOverlaps = getActiveOverlaps();
   const selectedCableStatuses = getSelectedCableStatuses();
@@ -2711,7 +2710,7 @@ function recomputeAll() {
   let totalPoles = 0;
   const cost = { new: 0, same: 0, remove: 0 };
   const km = { new: 0, same: 0, remove: 0 };
-  let costActive = 0;
+  let costAllImported = 0;
   state.segmentsB.forEach((seg, i) => {
     const row = seg._reportRow;
     const polesEl = row ? row.querySelector('[id^="poles-"]') : null;
@@ -2721,38 +2720,41 @@ function recomputeAll() {
     const segKm = billing.km;
     const poles = billing.poles;
     const segCost = billing.cost;
+    // Billing totals always include every imported/analyzed segment. Report
+    // filters only control what is visible; they never remove a line from fees.
+    cost[st] += segCost;
+    km[st] += segKm;
+    costAllImported += segCost;
+    totalPoles += poles;
     const inReportScope = segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses);
     if (!inReportScope) {
       if (polesEl) polesEl.textContent = '—';
       if (costEl) costEl.textContent = '—';
       return;
     }
-    cost[st] += segCost; km[st] += segKm;
-    if (active[st]) { costActive += segCost; totalPoles += poles; }
-    // แสดงค่าในแถว: ถ้าหมวดไม่ถูกเลือก ให้เป็น — (ไม่นำมารวม)
-    if (polesEl) polesEl.textContent = active[st] ? poles : '—';
-    if (costEl) costEl.textContent = active[st] ? fmtNum(segCost) : '—';
+    if (polesEl) polesEl.textContent = poles;
+    if (costEl) costEl.textContent = fmtNum(segCost);
   });
 
   const totalPolesEl = document.getElementById('statTotalPoles');
   if (totalPolesEl) totalPolesEl.textContent = totalPoles.toLocaleString('th-TH');
 
-  const kmActive = (active.new ? km.new : 0) + (active.same ? km.same : 0) + (active.remove ? km.remove : 0);
-  const subtotal = costActive;
+  const kmAllImported = km.new + km.same + km.remove;
+  const subtotal = costAllImported;
   const surchargePct = parseFloat(document.getElementById('surchargePct').value) || 0;
   const surcharge = subtotal * (surchargePct / 100);
   const total = subtotal + surcharge;
 
   const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   const setOpacity = (id, on) => { const el = document.getElementById(id); if (el) el.style.opacity = on ? '1' : '0.4'; };
-  setTxt('costNewVal', fmtNum(cost.new)); setTxt('distNewKm', km.new.toFixed(3)); setOpacity('rowCostNew', active.new);
-  setTxt('costSameVal', fmtNum(cost.same)); setTxt('distSameKm', km.same.toFixed(3)); setOpacity('rowCostSame', active.same);
-  setTxt('costRemoveVal', fmtNum(cost.remove)); setTxt('distRemoveKm', km.remove.toFixed(3)); setOpacity('rowCostRemove', active.remove);
+  setTxt('costNewVal', fmtNum(cost.new)); setTxt('distNewKm', km.new.toFixed(3)); setOpacity('rowCostNew', true);
+  setTxt('costSameVal', fmtNum(cost.same)); setTxt('distSameKm', km.same.toFixed(3)); setOpacity('rowCostSame', true);
+  setTxt('costRemoveVal', fmtNum(cost.remove)); setTxt('distRemoveKm', km.remove.toFixed(3)); setOpacity('rowCostRemove', true);
 
-  setTxt('distNonB', kmActive.toFixed(3));
+  setTxt('distNonB', kmAllImported.toFixed(3));
   setTxt('statNonB', fmtKm(km.new * 1000));
   setTxt('statOverlap', fmtKm(km.remove * 1000));
-  setTxt('costB', fmtNum(costActive));
+  setTxt('costB', fmtNum(costAllImported));
   document.getElementById('costSubtotal').textContent = fmtNum(subtotal);
   document.getElementById('costSurcharge').textContent = fmtNum(surcharge);
   document.getElementById('costTotal').textContent = fmtNum(total) + ' บาท';
@@ -2870,7 +2872,7 @@ async function runAnalysis() {
       ? `แสดงผลแบบรวมเส้นความเร็วสูง ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง · คำนวณและ Export ครบทั้งหมด`
       : (singleFileMode
         ? 'แสดงเส้นทางทั้งหมดจากไฟล์ที่นำเข้า — คลิกเส้นเพื่อดูข้อมูล'
-        : 'น้ำเงิน = New · เขียว = Same · เทา = Remove — เลือกหมวดที่จะแสดง/คิดค่าได้ในการ์ดรายงาน');
+        : 'น้ำเงิน = New · เขียว = Same · เทา = Remove — ตัวเลือกหมวดใช้กรองการแสดงผลเท่านั้น ค่าบริการรวมทุกเส้น');
     populateProvinceFilter();
     populateCableStatusFilter();
     applyProvinceFilter();
@@ -2878,7 +2880,7 @@ async function runAnalysis() {
     document.getElementById('results').style.display = 'block';
     document.getElementById('reportCard').style.display = 'block';
     costStatus.textContent = state.segmentsB.length > 0
-      ? `คำนวณค่าพาดสายจากทั้งหมด ${state.segmentsB.length} ช่วง (New + Remove) — แก้อัตรา/Diameter แล้วคำนวณใหม่ให้อัตโนมัติ`
+      ? `คำนวณค่าพาดสายครบทุกเส้นที่ Import รวม ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง (New + Same + Remove) — ตัวกรองมีผลเฉพาะการแสดงผล`
       : 'วิเคราะห์เสร็จแล้ว — ไม่พบช่วงเส้นทาง จึงไม่มีค่าบริการให้คำนวณ';
     window.dispatchEvent(new CustomEvent('permissionout:analysis-complete', { detail: { elapsedMs, segmentCount: state.segmentsB.length } }));
   } catch (e) {
@@ -2962,7 +2964,8 @@ async function exportCSV() {
   rows.push(['Remove — มีในเปรียบเทียบ ไม่มีในฐาน (กม.)', (exportSegments.filter(s => s.status === 'remove').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
   rows.push(['New — มีในฐาน ไม่มีในเปรียบเทียบ (กม.)', (exportSegments.filter(s => s.status === 'new').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
   rows.push(['Same — เหมือนกันทั้งสองฝั่ง (กม.)', (exportSegments.filter(s => s.status === 'same').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
-  rows.push(['จำนวนเสารวม (ต้น)', exportSegments.reduce((sum, seg) => sum + billingForSegment(seg, rateB, polesPerKm).poles, 0)]);
+  rows.push(['จำนวนเส้นที่คิดค่าบริการ (ทุกเส้นที่ Import)', state.segmentsB.length]);
+  rows.push(['จำนวนเสารวมที่คิดค่าบริการ (ต้น)', state.segmentsB.reduce((sum, seg) => sum + billingForSegment(seg, rateB, polesPerKm).poles, 0)]);
   const overlappingSegments = exportSegments.filter(seg => ['partial', 'full'].includes(seg.overlapType));
   rows.push(['จำนวนช่วงที่มีเส้นทับกัน (ช่วง)', overlappingSegments.length]);
   if (state.removedA > 0 || state.removedB > 0) {
@@ -2983,11 +2986,10 @@ async function exportCSV() {
   rows.push([]);
   rows.push([]);
   rows.push(['รายละเอียดช่วง (New = ฐาน A+B, Remove = เปรียบเทียบ C+D, Same = เหมือนกัน) พร้อมสถานะและความสัมพันธ์เส้นทาง']);
-  rows.push(['หมวดที่เลือกคิดค่าบริการ', ['new', 'same', 'remove'].filter(k => activeCsv[k]).map(k => STATUS_META[k].en).join(' + ') || '(ไม่เลือก)']);
+  rows.push(['ขอบเขตการคิดค่าบริการ', 'ทุกเส้นที่ Import (ตัวกรองมีผลเฉพาะรายละเอียดที่แสดง)']);
   rows.push(['ลำดับ', 'ชื่อไฟล์', 'ชื่อ Placemark', 'จังหวัด', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)']);
 
   const costByStatus = { new: 0, same: 0, remove: 0 };
-  let costActiveTotal = 0;
   exportSegments.forEach((seg, i) => {
     const st = STATUS_META[seg.status] ? seg.status : 'new';
     const m = STATUS_META[st];
@@ -3004,7 +3006,6 @@ async function exportCSV() {
     const cost = billing.cost;
     costByStatus[st] += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
-    costActiveTotal += cost;
     rows.push([i + 1, srcFile, placemarkDisplayText(seg), province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
   });
 
@@ -3021,7 +3022,16 @@ async function exportCSV() {
     rows[detailStartIndex + index].push(sourceMetadata.code || '', sourceMetadata.measured || '', sourceMetadata.calculated || '');
   });
 
-  const subtotal = costActiveTotal;
+  // The fee summary is independent from export/report filters: every imported
+  // segment is billed, while exportSegments only controls detail visibility.
+  costByStatus.new = 0; costByStatus.same = 0; costByStatus.remove = 0;
+  let subtotal = 0;
+  state.segmentsB.forEach(segment => {
+    const status = STATUS_META[segment.status] ? segment.status : 'new';
+    const itemCost = billingForSegment(segment, rateB, polesPerKm).cost;
+    costByStatus[status] += itemCost;
+    subtotal += itemCost;
+  });
   const surchargePct = parseFloat(document.getElementById('surchargePct').value) || 0;
   const surcharge = subtotal * (surchargePct / 100);
   const exportedTotal = subtotal + surcharge;
@@ -3029,10 +3039,10 @@ async function exportCSV() {
   const reconciliationDifference = exportedTotal - screenTotal;
   rows.push([]);
   rows.push(['สรุปค่าบริการ']);
-  rows.push(['ค่าพาดสาย – New (บาท)', costByStatus.new.toFixed(2), activeCsv.new ? 'รวมในยอด' : 'ไม่รวม']);
-  rows.push(['ค่าพาดสาย – Same (บาท)', costByStatus.same.toFixed(2), activeCsv.same ? 'รวมในยอด' : 'ไม่รวม']);
-  rows.push(['ค่าพาดสาย – Remove (บาท)', costByStatus.remove.toFixed(2), activeCsv.remove ? 'รวมในยอด' : 'ไม่รวม']);
-  rows.push(['รวมค่าบริการ (ก่อนส่วนเพิ่ม) เฉพาะหมวดที่เลือก (บาท)', subtotal.toFixed(2)]);
+  rows.push(['ค่าพาดสาย – New (บาท)', costByStatus.new.toFixed(2), 'รวมทุกเส้น']);
+  rows.push(['ค่าพาดสาย – Same (บาท)', costByStatus.same.toFixed(2), 'รวมทุกเส้น']);
+  rows.push(['ค่าพาดสาย – Remove (บาท)', costByStatus.remove.toFixed(2), 'รวมทุกเส้น']);
+  rows.push(['รวมค่าบริการทุกเส้นที่ Import (ก่อนส่วนเพิ่ม) (บาท)', subtotal.toFixed(2)]);
   rows.push([`ส่วนเพิ่ม ${surchargePct}% (บาท)`, surcharge.toFixed(2)]);
   rows.push(['รวมค่าบริการทั้งหมด (รวมส่วนเพิ่ม) (บาท)', exportedTotal.toFixed(2)]);
   rows.push(['ยอดรวมที่แสดงบนหน้าเว็บ ณ เวลา Export (บาท)', screenTotal.toFixed(2)]);
