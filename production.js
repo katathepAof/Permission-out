@@ -192,9 +192,20 @@
     return merged;
   }
 
+  function routeIdentifier(properties) {
+    const named = propertyValue(properties, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*(?:name|id|code)|line[_\s-]*(?:id|code)|name|code|id)\s*$/i, /ชื่อ.*(?:เส้น|สาย|สถานที่)/i]);
+    if (named) return named;
+    for (const value of Object.values(properties || {})) {
+      const tokens = String(value).match(/\b[A-Z0-9-]{8,}\b/gi) || [];
+      const identifier = tokens.find(token => /[A-Z]/i.test(token) && /\d/.test(token));
+      if (identifier) return identifier;
+    }
+    return '';
+  }
+
   function compactLineToApp(line, item) {
     const properties = propertiesWithDescriptionFields(line.p || {});
-    const name = String(line.n || properties.name || 'ไม่ระบุชื่อ');
+    const name = String(line.n || routeIdentifier(properties) || 'ไม่ระบุชื่อ');
     const cableType = propertyValue(properties, [/cable[_\s-]*type/i, /cabletype/i, /ชนิดสาย/i, /ประเภทสาย/i]);
     const rawType = propertyValue(properties, [/^type$/i, /line[_\s-]*type/i, /ชนิด/i, /ประเภท/i]);
     const cableStatus = propertyValue(properties, [/^status$/i, /cable[_\s-]*status/i, /line[_\s-]*status/i, /สถานะ/i]);

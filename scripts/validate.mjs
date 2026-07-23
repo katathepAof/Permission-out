@@ -22,7 +22,7 @@ if (!csvSection.includes('ผลต่างระหว่างหน้าเ
 if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExport(exportSegments)')) throw new Error('CSV PEA area export is missing');
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes('sourceRolesAreSwapped() ? ufmLines : peaLines') || !html.includes('applyProvinceFilter(true)')) throw new Error('Source-role swap or province map focus is missing');
-if (!html.includes('<th>Status จากไฟล์</th>') || !html.includes('source_measured') || !production.includes('propertiesWithDescriptionFields')) throw new Error('UFM source metadata display/export is missing');
+if (!html.includes('<th>Status จากไฟล์</th>') || !html.includes('source_measured') || !production.includes('propertiesWithDescriptionFields') || !production.includes('function routeIdentifier(properties)')) throw new Error('UFM source metadata or Placemark identifier resolution is missing');
 if (!production.includes('permissionOutResolvePeaAreas') || !production.includes("client.rpc('get_active_billing_formula'")) throw new Error('PEA spatial resolver or central billing formula loader is missing');
 if (!html.includes('<script src="bootstrap.js"></script>')) throw new Error('Runtime bootstrap script is missing');
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match => match[1]).filter(Boolean);
