@@ -1769,6 +1769,18 @@ function pickExtField(ext, regexes) {
   return null;
 }
 
+function placemarkIdentifierFromData(pm, ext, description) {
+  const namedValue = pickExtField(ext, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*(?:name|id|code)|name|code|id|line[_\s-]*(?:id|code))\s*$/i]);
+  if (namedValue) return namedValue;
+  const values = [...Object.values(ext), description || '', pm.getAttribute('id') || ''];
+  for (const value of values) {
+    const tokens = String(value).match(/\b[A-Z0-9-]{8,}\b/gi) || [];
+    const identifier = tokens.find(token => /[A-Z]/i.test(token) && /\d/.test(token));
+    if (identifier) return identifier;
+  }
+  return '';
+}
+
 // Look for explicit Type/Core fields in ExtendedData first, then fall back to scanning name/description text.
 function lookupFromReferenceTable(pm, name, description) {
   let typeVal = null, coreVal = null;
@@ -1871,12 +1883,12 @@ function parseKML(text) {
   } else {
     for (const pm of placemarks) {
       const ext = extractExtData(pm);
+      const description = getText(pm.getElementsByTagName('description')[0]) || '';
       // Read only the Placemark's own <name>, not a nested Style/Schema name.
       // Some supplier files store the route identifier (for example 33TFZZ002387231)
       // in ExtendedData instead, so use that as a visible fallback.
       const directName = Array.from(pm.children || []).find(child => child.localName === 'name');
-      const name = getText(directName) || pickExtField(ext, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*name|name|code)\s*$/i, /ชื่อ.*(?:เส้น|สาย|สถานที่)/i]) || '(ไม่ระบุชื่อ)';
-      const description = getText(pm.getElementsByTagName('description')[0]) || '';
+      const name = getText(directName) || placemarkIdentifierFromData(pm, ext, description) || '(ไม่ระบุชื่อ)';
       let diameterInfo = extractDiameter(pm, name, description);
       let source = diameterInfo.value !== null ? 'file' : null;
       let type = null, core = null;
@@ -2119,6 +2131,7 @@ async function previewGroup(groupKey) {
       const len = lineLengthMeters(l.coords);
       const polyline = L.polyline(ll, { color, weight: 4, opacity: 0.85 })
         .bindPopup(lineInfoPopup(label, l, len))
+        .bindTooltip(l.name || '(ไม่ระบุชื่อ)', { sticky: true })
         .addTo(group);
       bounds.push(...ll);
       searchableLayers.push({ name: l.name, routeLabel: groupKey, layer: polyline, bounds: ll });
@@ -2191,6 +2204,7 @@ function drawResults(resB) {
       dashArray: isRemove ? '6,7' : null
     })
       .bindPopup(() => segmentStatusPopup(seg, idx))
+      .bindTooltip(seg.name || '(ไม่ระบุชื่อ)', { sticky: true })
       .addTo(layerGroup);
     ll.forEach(point => bounds.extend(point));
     seg._mapLayer = polyline; // let the report table (card 4) jump to this segment on click
