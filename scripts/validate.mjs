@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 const production = await readFile(resolve(root, 'production.js'), 'utf8');
@@ -13,6 +13,7 @@ if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis
 if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('billingForSegment(seg, rateB, polesPerKm)')) {
   throw new Error('Shared UI/export billing logic is missing');
 }
+if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
 const csvSection = html.slice(html.indexOf('function exportCSV()'), html.indexOf('function selectedSegmentsForExport()'));
 if (csvSection.includes('document.querySelector(`.diamInput')) {
   throw new Error('CSV export must not depend on rendered report rows');

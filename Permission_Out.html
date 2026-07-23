@@ -1885,7 +1885,8 @@ function parseKML(text) {
       const sourceMetadata = {
         code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || '',
         measured: pickExtField(ext, [/^\s*measured\s*$/i, /ระยะ.*วัด/i]) || '',
-        calculated: pickExtField(ext, [/^\s*calculated\s*$/i, /ระยะ.*คำนวณ/i]) || ''
+        calculated: pickExtField(ext, [/^\s*calculated\s*$/i, /ระยะ.*คำนวณ/i]) || '',
+        poleCount: pickExtField(ext, [/^\s*(?:poles?|pole[_\s-]*count|number[_\s-]*of[_\s-]*poles?|no\.?[_\s-]*(?:of[_\s-]*)?poles?|qty[_\s-]*poles?)\s*$/i, /(?:จำนวน|เลข).*เสา/i, /เสา.*(?:จำนวน|ต้น)/i]) || ''
       };
       const extKeys = Object.keys(ext).join(', ');
 
@@ -2391,11 +2392,21 @@ function segmentDiameterSourceLabel(seg) {
   return 'ค่าเริ่มต้น';
 }
 
+function existingPoleCountForSegment(seg) {
+  const raw = seg.poleCount ?? seg.sourceMetadata?.poleCount;
+  if (raw === null || raw === undefined || String(raw).trim() === '') return null;
+  const normalized = String(raw).replace(/,/g, '').trim();
+  if (!/^\d+(?:\.0+)?$/.test(normalized)) return null;
+  const poles = Number(normalized);
+  return Number.isSafeInteger(poles) && poles >= 0 ? poles : null;
+}
+
 function billingForSegment(seg, rateB, polesPerKm) {
   const km = seg.length / 1000;
-  const poles = Math.ceil(km * polesPerKm);
+  const existingPoles = existingPoleCountForSegment(seg);
+  const poles = existingPoles ?? Math.ceil(km * polesPerKm);
   const diameter = segmentDiameterValue(seg);
-  return { km, poles, diameter, cost: diameter * poles * rateB };
+  return { km, poles, diameter, poleSource: existingPoles === null ? 'คำนวณจากระยะทาง' : 'ข้อมูลต้นทาง', cost: diameter * poles * rateB };
 }
 
 function fmtCoord(coord) {
@@ -2916,7 +2927,7 @@ async function exportCSV() {
   rows.push(['Remove — มีในเปรียบเทียบ ไม่มีในฐาน (กม.)', (exportSegments.filter(s => s.status === 'remove').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
   rows.push(['New — มีในฐาน ไม่มีในเปรียบเทียบ (กม.)', (exportSegments.filter(s => s.status === 'new').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
   rows.push(['Same — เหมือนกันทั้งสองฝั่ง (กม.)', (exportSegments.filter(s => s.status === 'same').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
-  rows.push(['จำนวนเสารวม (ต้น)', exportSegments.reduce((sum, seg) => sum + Math.ceil((seg.length / 1000) * polesPerKm), 0)]);
+  rows.push(['จำนวนเสารวม (ต้น)', exportSegments.reduce((sum, seg) => sum + billingForSegment(seg, rateB, polesPerKm).poles, 0)]);
   if (state.removedA > 0 || state.removedB > 0) {
     rows.push(['เส้นทางซ้ำที่ตัดออกในไฟล์ฐาน A/B (เส้น)', state.removedA]);
     rows.push(['เส้นทางซ้ำที่ตัดออกในไฟล์เปรียบเทียบ C/D (เส้น)', state.removedB]);
