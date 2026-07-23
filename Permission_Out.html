@@ -1770,15 +1770,13 @@ function pickExtField(ext, regexes) {
 }
 
 function placemarkIdentifierFromData(pm, ext, description) {
-  const namedValue = pickExtField(ext, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*(?:name|id|code)|name|code|id|line[_\s-]*(?:id|code))\s*$/i]);
-  if (namedValue) return namedValue;
   const values = [...Object.values(ext), description || '', pm.getAttribute('id') || ''];
   for (const value of values) {
-    const tokens = String(value).match(/\b[A-Z0-9-]{8,}\b/gi) || [];
-    const identifier = tokens.find(token => /[A-Z]/i.test(token) && /\d/.test(token));
+    const tokens = String(value).match(/\b\d{2}[A-Z]{2,}[A-Z0-9-]{4,}\b/gi) || [];
+    const identifier = tokens[0];
     if (identifier) return identifier;
   }
-  return '';
+  return pickExtField(ext, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*(?:name|id|code)|name|code|id|line[_\s-]*(?:id|code))\s*$/i]);
 }
 
 // Look for explicit Type/Core fields in ExtendedData first, then fall back to scanning name/description text.
@@ -1888,7 +1886,7 @@ function parseKML(text) {
       // Some supplier files store the route identifier (for example 33TFZZ002387231)
       // in ExtendedData instead, so use that as a visible fallback.
       const directName = Array.from(pm.children || []).find(child => child.localName === 'name');
-      const name = getText(directName) || placemarkIdentifierFromData(pm, ext, description) || '(ไม่ระบุชื่อ)';
+      const name = placemarkIdentifierFromData(pm, ext, description) || getText(directName) || '(ไม่ระบุชื่อ)';
       let diameterInfo = extractDiameter(pm, name, description);
       let source = diameterInfo.value !== null ? 'file' : null;
       let type = null, core = null;
@@ -2063,6 +2061,7 @@ function lineInfoPopup(routeLabel, line, lengthMeters) {
   if (typeVal) extra += `<br>Type: ${typeVal}${line.core !== null && line.core !== undefined ? ' / ' + line.core + ' core' : ''}`;
   if (line.cableStatus) extra += `<br>Status: <b style="color:var(--navy-800);">${line.cableStatus}</b>`;
   const sourceMetadata = line.sourceMetadata || {};
+  if (sourceMetadata.originalName && sourceMetadata.originalName !== name) extra += `<br>ชื่อจากข้อมูล: ${xmlEscape(sourceMetadata.originalName)}`;
   if (sourceMetadata.code) extra += `<br>Code: ${xmlEscape(sourceMetadata.code)}`;
   if (sourceMetadata.measured) extra += `<br>Measured: ${xmlEscape(sourceMetadata.measured)}`;
   if (sourceMetadata.calculated) extra += `<br>Calculated: ${xmlEscape(sourceMetadata.calculated)}`;

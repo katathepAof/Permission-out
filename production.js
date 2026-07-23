@@ -193,19 +193,21 @@
   }
 
   function routeIdentifier(properties) {
-    const named = propertyValue(properties, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*(?:name|id|code)|line[_\s-]*(?:id|code)|name|code|id)\s*$/i, /ชื่อ.*(?:เส้น|สาย|สถานที่)/i]);
-    if (named) return named;
+    // Prefer identifier-shaped values even when the ordinary `name` field holds
+    // a human-readable description such as a cable type or route description.
     for (const value of Object.values(properties || {})) {
-      const tokens = String(value).match(/\b[A-Z0-9-]{8,}\b/gi) || [];
-      const identifier = tokens.find(token => /[A-Z]/i.test(token) && /\d/.test(token));
+      const tokens = String(value).match(/\b\d{2}[A-Z]{2,}[A-Z0-9-]{4,}\b/gi) || [];
+      const identifier = tokens[0];
       if (identifier) return identifier;
     }
-    return '';
+    return propertyValue(properties, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*(?:name|id|code)|line[_\s-]*(?:id|code)|name|code|id)\s*$/i, /ชื่อ.*(?:เส้น|สาย|สถานที่)/i]);
   }
 
   function compactLineToApp(line, item) {
     const properties = propertiesWithDescriptionFields(line.p || {});
-    const name = String(line.n || routeIdentifier(properties) || 'ไม่ระบุชื่อ');
+    const originalName = String(line.n || properties.name || '');
+    const identifier = routeIdentifier(properties);
+    const name = String(identifier || originalName || 'ไม่ระบุชื่อ');
     const cableType = propertyValue(properties, [/cable[_\s-]*type/i, /cabletype/i, /ชนิดสาย/i, /ประเภทสาย/i]);
     const rawType = propertyValue(properties, [/^type$/i, /line[_\s-]*type/i, /ชนิด/i, /ประเภท/i]);
     const cableStatus = propertyValue(properties, [/^status$/i, /cable[_\s-]*status/i, /line[_\s-]*status/i, /สถานะ/i]);
@@ -226,7 +228,7 @@
       diameter = lookupDiameterByTypeCore(type, core);
       if (diameter !== null) diameterSource = 'table';
     }
-    const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]);
+    const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier;
     const measured = propertyValue(properties, [/^measured$/i, /ระยะ.*วัด/i]);
     const calculated = propertyValue(properties, [/^calculated$/i, /ระยะ.*คำนวณ/i]);
     return {
@@ -240,7 +242,7 @@
       cableType,
       rawType,
       cableStatus,
-      sourceMetadata: { code: sourceCode, measured, calculated },
+      sourceMetadata: { code: sourceCode, originalName, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item.name
     };
