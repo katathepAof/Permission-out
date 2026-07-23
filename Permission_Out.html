@@ -1870,14 +1870,18 @@ function parseKML(text) {
     }
   } else {
     for (const pm of placemarks) {
-      const name = getText(pm.getElementsByTagName('name')[0]) || '(ไม่ระบุชื่อ)';
+      const ext = extractExtData(pm);
+      // Read only the Placemark's own <name>, not a nested Style/Schema name.
+      // Some supplier files store the route identifier (for example 33TFZZ002387231)
+      // in ExtendedData instead, so use that as a visible fallback.
+      const directName = Array.from(pm.children || []).find(child => child.localName === 'name');
+      const name = getText(directName) || pickExtField(ext, [/^\s*(?:placemark[_\s-]*name|route[_\s-]*name|name|code)\s*$/i, /ชื่อ.*(?:เส้น|สาย|สถานที่)/i]) || '(ไม่ระบุชื่อ)';
       const description = getText(pm.getElementsByTagName('description')[0]) || '';
       let diameterInfo = extractDiameter(pm, name, description);
       let source = diameterInfo.value !== null ? 'file' : null;
       let type = null, core = null;
 
       // ค่า raw จาก ExtendedData/description: cable_type และ Type (แสดงบนแผนที่ + ตอน Export)
-      const ext = extractExtData(pm);
       const cableType = pickExtField(ext, [/cable[_\s-]*type/i, /ชนิดสาย/i, /ประเภทสาย/i, /cabletype/i]);
       const rawType = pickExtField(ext, [/^\s*type\s*$/i, /^\s*ชนิด\s*$/i, /^\s*ประเภท\s*$/i, /line[_\s-]*type/i, /^\s*type[_\s-]*name\s*$/i]);
       // Status ของสายจากไฟล์ต้นทาง (ต่างจากสถานะเปรียบเทียบ New/Same/Remove) — แสดงบนแผนที่ + ตอน Export
@@ -2928,9 +2932,22 @@ async function exportCSV() {
   rows.push(['New — มีในฐาน ไม่มีในเปรียบเทียบ (กม.)', (exportSegments.filter(s => s.status === 'new').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
   rows.push(['Same — เหมือนกันทั้งสองฝั่ง (กม.)', (exportSegments.filter(s => s.status === 'same').reduce((sum, seg) => sum + seg.length, 0) / 1000).toFixed(3)]);
   rows.push(['จำนวนเสารวม (ต้น)', exportSegments.reduce((sum, seg) => sum + billingForSegment(seg, rateB, polesPerKm).poles, 0)]);
+  const overlappingSegments = exportSegments.filter(seg => ['partial', 'full'].includes(seg.overlapType));
+  rows.push(['จำนวนช่วงที่มีเส้นทับกัน (ช่วง)', overlappingSegments.length]);
   if (state.removedA > 0 || state.removedB > 0) {
     rows.push(['เส้นทางซ้ำที่ตัดออกในไฟล์ฐาน A/B (เส้น)', state.removedA]);
     rows.push(['เส้นทางซ้ำที่ตัดออกในไฟล์เปรียบเทียบ C/D (เส้น)', state.removedB]);
+  }
+  rows.push([]);
+  rows.push(['รายละเอียดเส้นที่ทับกัน']);
+  rows.push(['ลำดับ', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
+  if (overlappingSegments.length === 0) {
+    rows.push(['-', 'ไม่พบเส้นที่ทับกันตามตัวกรองที่เลือก']);
+  } else {
+    overlappingSegments.forEach((seg, index) => {
+      const st = STATUS_META[seg.status] || STATUS_META.new;
+      rows.push([index + 1, seg.name || '(ไม่ระบุชื่อ)', seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
+    });
   }
   rows.push([]);
   rows.push([]);
@@ -3078,6 +3095,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="source_code"><value>${xmlEscape(seg.sourceMetadata?.code || '')}</value></Data>` +
       `<Data name="source_measured"><value>${xmlEscape(seg.sourceMetadata?.measured || '')}</value></Data>` +
       `<Data name="source_calculated"><value>${xmlEscape(seg.sourceMetadata?.calculated || '')}</value></Data>` +
+      `<Data name="overlap_type"><value>${xmlEscape(overlap.th)}</value></Data>` +
       `<Data name="length_km"><value>${(seg.length / 1000).toFixed(3)}</value></Data>` +
       `<Data name="diameter_mm"><value>${billing.diameter}</value></Data>` +
       `<Data name="diameter_source"><value>${xmlEscape(segmentDiameterSourceLabel(seg))}</value></Data>` +
@@ -3089,6 +3107,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
   const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
     `<Data name="segment_count"><value>${segments.length}</value></Data>` +
+    `<Data name="overlapping_segment_count"><value>${segments.filter(seg => ['partial', 'full'].includes(seg.overlapType)).length}</value></Data>` +
     `<Data name="calculation_formula"><value>${xmlEscape(`${formula.code} v${formula.version}`)}</value></Data>` +
     `<Data name="poles_per_km"><value>${polesPerKm}</value></Data>` +
     `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
