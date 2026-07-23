@@ -1323,7 +1323,7 @@ table.report td.num{
     <table class="report">
       <thead>
         <tr>
-          <th>ชื่อ Placemark</th>
+          <th>รหัส / ชื่อ Placemark</th>
           <th>จังหวัด</th>
           <th>สถานะ</th>
           <th>ความสัมพันธ์</th>
@@ -1886,7 +1886,10 @@ function parseKML(text) {
       // Some supplier files store the route identifier (for example 33TFZZ002387231)
       // in ExtendedData instead, so use that as a visible fallback.
       const directName = Array.from(pm.children || []).find(child => child.localName === 'name');
-      const name = placemarkIdentifierFromData(pm, ext, description) || getText(directName) || '(ไม่ระบุชื่อ)';
+      const originalName = getText(directName) || '';
+      const identifierCandidate = placemarkIdentifierFromData(pm, ext, description) || '';
+      const identifier = /^\d{2}[A-Z]{2,}[A-Z0-9-]{4,}$/i.test(identifierCandidate) ? identifierCandidate : '';
+      const name = identifier || originalName || identifierCandidate || '(ไม่ระบุชื่อ)';
       let diameterInfo = extractDiameter(pm, name, description);
       let source = diameterInfo.value !== null ? 'file' : null;
       let type = null, core = null;
@@ -1897,7 +1900,8 @@ function parseKML(text) {
       // Status ของสายจากไฟล์ต้นทาง (ต่างจากสถานะเปรียบเทียบ New/Same/Remove) — แสดงบนแผนที่ + ตอน Export
       const cableStatus = pickExtField(ext, [/^\s*status\s*$/i, /สถานะ(?:สาย|การใช้งาน)?/i, /cable[_\s-]*status/i, /line[_\s-]*status/i]);
       const sourceMetadata = {
-        code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || '',
+        code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier,
+        originalName,
         measured: pickExtField(ext, [/^\s*measured\s*$/i, /ระยะ.*วัด/i]) || '',
         calculated: pickExtField(ext, [/^\s*calculated\s*$/i, /ระยะ.*คำนวณ/i]) || '',
         poleCount: pickExtField(ext, [/^\s*(?:poles?|pole[_\s-]*count|number[_\s-]*of[_\s-]*poles?|no\.?[_\s-]*(?:of[_\s-]*)?poles?|qty[_\s-]*poles?)\s*$/i, /(?:จำนวน|เลข).*เสา/i, /เสา.*(?:จำนวน|ต้น)/i]) || ''
@@ -2049,9 +2053,25 @@ function initMap() {
 
 function toLatLngs(coords) { return coords.map(c => [c[1], c[0]]); }
 
+function placemarkCode(line) {
+  return String(line?.sourceMetadata?.code || '').trim();
+}
+function placemarkName(line) {
+  const code = placemarkCode(line);
+  const originalName = String(line?.sourceMetadata?.originalName || '').trim();
+  const currentName = String(line?.name || '').trim();
+  return originalName || (currentName && currentName !== code ? currentName : '') || '(ไม่ระบุชื่อ)';
+}
+function placemarkDisplayText(line) {
+  const code = placemarkCode(line);
+  const name = placemarkName(line);
+  return code ? `${code} | ${name}` : name;
+}
+
 function lineInfoPopup(routeLabel, line, lengthMeters) {
   const km = (lengthMeters / 1000).toFixed(3);
-  const diameter = line.diameter, unit = line.unit, name = line.name;
+  const diameter = line.diameter, unit = line.unit;
+  const code = placemarkCode(line), name = placemarkName(line);
   const diamText = (diameter !== null && diameter !== undefined) ? diameter + (unit ? ' ' + unit : '') : 'ไม่พบข้อมูล';
   const sourceText = line.diameterSource === 'table' ? ' <span style="color:#0e7c5a;font-weight:600;">(จากตารางอ้างอิง)</span>'
                     : line.diameterSource === 'file' ? ' <span style="color:#7a8499;">(จากไฟล์ KML)</span>' : '';
@@ -2061,8 +2081,6 @@ function lineInfoPopup(routeLabel, line, lengthMeters) {
   if (typeVal) extra += `<br>Type: ${typeVal}${line.core !== null && line.core !== undefined ? ' / ' + line.core + ' core' : ''}`;
   if (line.cableStatus) extra += `<br>Status: <b style="color:var(--navy-800);">${line.cableStatus}</b>`;
   const sourceMetadata = line.sourceMetadata || {};
-  if (sourceMetadata.originalName && sourceMetadata.originalName !== name) extra += `<br>ชื่อจากข้อมูล: ${xmlEscape(sourceMetadata.originalName)}`;
-  if (sourceMetadata.code) extra += `<br>Code: ${xmlEscape(sourceMetadata.code)}`;
   if (sourceMetadata.measured) extra += `<br>Measured: ${xmlEscape(sourceMetadata.measured)}`;
   if (sourceMetadata.calculated) extra += `<br>Calculated: ${xmlEscape(sourceMetadata.calculated)}`;
   // ตัวช่วยวินิจฉัย: ถ้าไม่พบทั้ง cable_type และ Type ให้แสดงรายชื่อฟิลด์ที่มีจริงในไฟล์
@@ -2075,7 +2093,7 @@ function lineInfoPopup(routeLabel, line, lengthMeters) {
     const endCoord = fmtCoord(line.coords[line.coords.length - 1]);
     coordText = `<br>พิกัดต้นทาง: ${startCoord}<br>พิกัดปลายทาง: ${endCoord}`;
   }
-  return `<b>เส้นทาง ${routeLabel}</b><br>ชื่อ: ${name || '(ไม่ระบุชื่อ)'}${extra}<br>Diameter: ${diamText}${sourceText}<br>ระยะทาง: ${km} กม.${coordText}`;
+  return `<b>เส้นทาง ${routeLabel}</b>${code ? `<br>รหัส: <b>${xmlEscape(code)}</b>` : ''}<br>ชื่อ: ${xmlEscape(name)}${extra}<br>Diameter: ${diamText}${sourceText}<br>ระยะทาง: ${km} กม.${coordText}`;
 }
 
 let previews = { BASE: null, COMPARE: null };
@@ -2130,10 +2148,10 @@ async function previewGroup(groupKey) {
       const len = lineLengthMeters(l.coords);
       const polyline = L.polyline(ll, { color, weight: 4, opacity: 0.85 })
         .bindPopup(lineInfoPopup(label, l, len))
-        .bindTooltip(l.name || '(ไม่ระบุชื่อ)', { sticky: true })
+        .bindTooltip(placemarkDisplayText(l), { sticky: true })
         .addTo(group);
       bounds.push(...ll);
-      searchableLayers.push({ name: l.name, routeLabel: groupKey, layer: polyline, bounds: ll });
+      searchableLayers.push({ name: placemarkDisplayText(l), routeLabel: groupKey, layer: polyline, bounds: ll });
     });
     group.addTo(layerGroup);
     previews[groupKey] = { layer: group, bounds };
@@ -2182,7 +2200,7 @@ function drawResults(resB) {
     searchableLayers = resB.segments.map((seg, index) => {
       const m = STATUS_META[seg.status] || STATUS_META.new;
       return {
-        name: seg.name,
+        name: placemarkDisplayText(seg),
         routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`,
         segment: seg,
         segmentIndex: index
@@ -2203,12 +2221,12 @@ function drawResults(resB) {
       dashArray: isRemove ? '6,7' : null
     })
       .bindPopup(() => segmentStatusPopup(seg, idx))
-      .bindTooltip(seg.name || '(ไม่ระบุชื่อ)', { sticky: true })
+      .bindTooltip(placemarkDisplayText(seg), { sticky: true })
       .addTo(layerGroup);
     ll.forEach(point => bounds.extend(point));
     seg._mapLayer = polyline; // let the report table (card 4) jump to this segment on click
     seg._mapBounds = ll;
-    searchableLayers.push({ name: seg.name, routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`, layer: polyline, bounds: ll });
+    searchableLayers.push({ name: placemarkDisplayText(seg), routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`, layer: polyline, bounds: ll });
   });
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
 }
@@ -2468,7 +2486,7 @@ function buildReportTable() {
       ? `<input type="number" class="diamInput" data-idx="${i}" value="${defaultDiam}" min="0" step="any" style="width:62px; padding:5px 7px; font-size:.78rem; border:1px solid var(--border-strong); border-radius:6px; text-align:right; font-family:'IBM Plex Mono',monospace;"> <span style="color:var(--ink-mute); font-size:.72rem;">${seg.unit ? seg.unit : ''}</span>${sourceTag}`
       : `<span style="color:var(--ink-mute);">—</span>`;
     return `<tr class="reportRow" data-idx="${i}"${!billable ? ' style="opacity:0.62;"' : ''}>` +
-      `<td title="${seg.name}">${seg.name}</td>` +
+      `<td title="${xmlEscape(placemarkDisplayText(seg))}">${placemarkCode(seg) ? `<b>${xmlEscape(placemarkCode(seg))}</b><div style="font-size:.72rem;color:var(--ink-mute);margin-top:2px;">${xmlEscape(placemarkName(seg))}</div>` : xmlEscape(placemarkName(seg))}</td>` +
       `<td style="white-space:nowrap;">${province}</td>` +
       `<td>${statusLabelHTML(seg.status)}</td>` +
       `<td>${overlapLabelHTML(seg.overlapType)}</td>` +
@@ -2959,7 +2977,7 @@ async function exportCSV() {
   } else {
     overlappingSegments.forEach((seg, index) => {
       const st = STATUS_META[seg.status] || STATUS_META.new;
-      rows.push([index + 1, seg.name || '(ไม่ระบุชื่อ)', seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
+      rows.push([index + 1, placemarkDisplayText(seg), seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
     });
   }
   rows.push([]);
@@ -2987,7 +3005,7 @@ async function exportCSV() {
     costByStatus[st] += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
     costActiveTotal += cost;
-    rows.push([i + 1, srcFile, seg.name, province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
+    rows.push([i + 1, srcFile, placemarkDisplayText(seg), province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
   });
 
   const detailStartIndex = rows.length - exportSegments.length;
@@ -3093,7 +3111,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
     const overlap = OVERLAP_META[seg.overlapType] || OVERLAP_META.none;
     const billing = billingRows[index];
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
-    return `<Placemark><name>${xmlEscape(seg.name || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${seg.status || 'new'}</styleUrl><ExtendedData>` +
+    return `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${seg.status || 'new'}</styleUrl><ExtendedData>` +
       `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
@@ -3106,6 +3124,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="source_type"><value>${xmlEscape(seg.rawType || seg.type || '')}</value></Data>` +
       `<Data name="source_core"><value>${xmlEscape(seg.core ?? '')}</value></Data>` +
       `<Data name="source_code"><value>${xmlEscape(seg.sourceMetadata?.code || '')}</value></Data>` +
+      `<Data name="source_original_name"><value>${xmlEscape(placemarkName(seg))}</value></Data>` +
       `<Data name="source_measured"><value>${xmlEscape(seg.sourceMetadata?.measured || '')}</value></Data>` +
       `<Data name="source_calculated"><value>${xmlEscape(seg.sourceMetadata?.calculated || '')}</value></Data>` +
       `<Data name="overlap_type"><value>${xmlEscape(overlap.th)}</value></Data>` +
