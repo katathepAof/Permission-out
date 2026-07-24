@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v7';
-const CORE = ['/', '/production.css?v=20260723-ufm-metadata', '/production.js?v=20260723-ufm-metadata', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v12-data-versioning';
+const CORE = ['/', '/production.css?v=20260723-modules', '/production.js?v=20260723-modules', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

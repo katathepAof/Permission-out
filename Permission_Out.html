@@ -12,7 +12,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/leaflet.css">
-<link rel="stylesheet" href="production.css?v=20260723-ufm-metadata">
+<link rel="stylesheet" href="production.css?v=20260723-modules">
+<link rel="stylesheet" href="admin-users.css?v=20260723-auth-admin">
+<link rel="stylesheet" href="admin-data.css?v=20260723-data-versioning">
 <style>
 /* ============================================================
    PREMIUM EXECUTIVE DESIGN SYSTEM
@@ -562,6 +564,7 @@ button.ghost:hover{
 .stat.gray2{--stat-color:#a8b5d0;}
 .stat.green{--stat-color:#4ade80;}
 .stat.blue{--stat-color:#60a5fa;}
+.stat.purple{--stat-color:#8b5cf6;}
 .stat.gold{--stat-color:var(--gold-bright);}
 .stat.live{--stat-color:#4ade80; border-color:rgba(74,222,128,.35);}
 .liveDot{
@@ -1000,22 +1003,35 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
+<link rel="stylesheet" href="ux-refresh.css?v=20260723-ux-refresh">
 </head>
 <body>
 
-<div class="app-shellbar" aria-label="แถบจัดการโครงการ">
+<div class="app-shellbar" aria-label="แถบจัดการระบบ">
   <div class="shellbar-inner">
-    <div class="shellbar-brand"><span class="brand-mark">PO</span><span><b>Permission Out</b><small>Fiber Intelligence</small></span></div>
-    <div class="project-title-wrap">
-      <label for="projectTitle">ชื่อโครงการ</label>
-      <input id="projectTitle" type="text" maxlength="120" value="โครงการวิเคราะห์เส้นทางใหม่" autocomplete="off">
-      <span id="saveState" class="save-state">พร้อมใช้งาน</span>
+    <div class="shellbar-brand" aria-label="Permission Out">
+      <span class="brand-mark">PO</span>
+      <span class="brand-copy"><b>Permission Out</b><small>Route Intelligence</small></span>
     </div>
-    <nav class="shellbar-actions" aria-label="เมนูหลัก">
-      <button type="button" class="shell-btn" id="newProjectBtn">งานใหม่</button>
-      <button type="button" class="shell-btn" id="projectsBtn">โครงการ</button>
-      <button type="button" class="shell-btn shell-btn-primary" id="saveProjectBtn">บันทึก</button>
-      <button type="button" class="user-btn" id="accountBtn" aria-label="บัญชีผู้ใช้"><span id="userInitial">G</span><span id="accountLabel">Guest</span></button>
+    <nav class="module-switcher" aria-label="โมดูลระบบ">
+      <button type="button" class="module-tab is-active" aria-current="page">
+        <span>MOD 1</span><strong>วิเคราะห์ PEA / UFM</strong>
+      </button>
+      <button type="button" class="module-tab" disabled title="อยู่ระหว่างพัฒนา">
+        <span>MOD 2</span><strong>เร็วๆ นี้</strong>
+      </button>
+    </nav>
+    <div class="dataset-health" aria-label="สถานะคลังข้อมูล">
+      <span class="dataset-health-label">คลังข้อมูล</span>
+      <span class="dataset-health-chip is-pea"><i aria-hidden="true"></i>PEA <strong id="peaDatasetStatus">กำลังโหลด</strong></span>
+      <span class="dataset-health-chip is-ufm"><i aria-hidden="true"></i>UFM <strong id="ufmDatasetStatus">กำลังโหลด</strong></span>
+    </div>
+    <nav class="shellbar-actions" aria-label="บัญชีผู้ใช้">
+      <button type="button" class="user-btn" id="accountBtn" aria-label="เปิดบัญชีผู้ใช้" title="บัญชีและการจัดการผู้ใช้">
+        <span id="userInitial" class="user-avatar">G</span>
+        <span class="user-copy"><strong id="accountLabel">เข้าสู่ระบบ</strong><small id="accountMeta">ยังไม่เข้าสู่ระบบ</small></span>
+        <span class="user-chevron" aria-hidden="true">⌄</span>
+      </button>
     </nav>
   </div>
 </div>
@@ -1137,7 +1153,7 @@ table.report td.num{
           <div class="val" id="statTotalB">—</div>
           <div class="lbl">ระยะรวมเปรียบเทียบ C+D <span class="unit">กม.</span></div>
         </div>
-        <div class="stat green">
+        <div class="stat purple">
           <div class="val" id="statOverlap">—</div>
           <div class="lbl">Remove — มีในเปรียบเทียบ ไม่มีในฐาน <span class="unit">กม.</span></div>
         </div>
@@ -1274,7 +1290,7 @@ table.report td.num{
       <span><span class="swatch" style="background:#3a7bd5;"></span> B · พรีวิวก่อนวิเคราะห์</span>
       <span><span class="swatch" style="background:#1e5ba8;"></span> New · มีในฐาน ไม่มีในเปรียบเทียบ</span>
       <span><span class="swatch" style="background:#0e9f6e;"></span> Same · เหมือนกันทั้งสองฝั่ง</span>
-      <span><span class="swatch" style="background:#8a94a6;"></span> Remove · มีในเปรียบเทียบ ไม่มีในฐาน</span>
+      <span><span class="swatch" style="background:#7c3aed;"></span> Remove · มีในเปรียบเทียบ ไม่มีในฐาน</span>
     </div>
   </div>
 
@@ -1302,7 +1318,7 @@ table.report td.num{
     <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรองการแสดงผล / ค่าบริการ:</span>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="new" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#1e5ba8;"></span> New</label>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="same" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0e9f6e;"></span> Same</label>
-    <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="remove" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#8a94a6;"></span> Remove</label>
+    <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="remove" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#7c3aed;"></span> Remove</label>
   </div>
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
     <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">ความสัมพันธ์เส้นทาง:</span>
@@ -1684,7 +1700,7 @@ const DEFAULT_DIAMETER_MM = 6.5;
 //  same   = มีทั้งในฐานและเปรียบเทียบ (เหมือนกัน) — แสดงและคิดค่าบริการเช่นเดียวกับทุกเส้นที่ Import
 const STATUS_META = {
   new:    { th: 'เดินสายใหม่', en: 'NEW',    color: '#1e5ba8', bg: 'rgba(30,91,168,.12)',  billable: true  },
-  remove: { th: 'ถอดออก',      en: 'REMOVE', color: '#8a94a6', bg: 'rgba(138,148,166,.14)', billable: true  },
+  remove: { th: 'ถอดออก',      en: 'REMOVE', color: '#7c3aed', bg: 'rgba(124,58,237,.12)', billable: true  },
   same:   { th: 'เหมือนกัน',   en: 'SAME',   color: '#0e9f6e', bg: 'rgba(14,159,110,.12)',  billable: true }
 };
 function statusLabelHTML(status) {
@@ -2872,7 +2888,7 @@ async function runAnalysis() {
       ? `แสดงผลแบบรวมเส้นความเร็วสูง ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง · คำนวณและ Export ครบทั้งหมด`
       : (singleFileMode
         ? 'แสดงเส้นทางทั้งหมดจากไฟล์ที่นำเข้า — คลิกเส้นเพื่อดูข้อมูล'
-        : 'น้ำเงิน = New · เขียว = Same · เทา = Remove — ตัวกรองในการ์ดรายงานจะปรับค่าบริการตามเส้นที่แสดง');
+        : 'น้ำเงิน = New · เขียว = Same · ม่วง = Remove — ตัวกรองในการ์ดรายงานจะปรับค่าบริการตามเส้นที่แสดง');
     populateProvinceFilter();
     populateCableStatusFilter();
     applyProvinceFilter();
@@ -3380,6 +3396,9 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260723-ufm-metadata"></script>
+<script src="production.js?v=20260723-modules"></script>
+<script src="admin-users.js?v=20260723-auth-admin"></script>
+<script src="admin-data.js?v=20260723-data-versioning"></script>
+<script src="ux-refresh.js?v=20260723-ux-refresh"></script>
 </body>
 </html>

@@ -14,7 +14,7 @@
     "data:prepare-ufm": "node scripts/prepare-ufm-data.mjs",
     "data:upload-ufm": "node scripts/upload-ufm-data.mjs",
     "data:import-uih-postgis": "node scripts/import-uih-postgis.mjs",
-    "check": "node --check production.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs",
+    "check": "node --check production.js && node --check admin-users.js && node --check admin-data.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs",
     "preview": "node scripts/serve.mjs"
   },
   "engines": {

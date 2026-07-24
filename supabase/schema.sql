@@ -7,6 +7,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
   organization text,
+  role text not null default 'user' check (role in ('admin', 'user')),
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -42,7 +44,6 @@ alter table public.analysis_runs enable row level security;
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
 drop policy if exists "profiles_update_own" on public.profiles;
-create policy "profiles_update_own" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
 drop policy if exists "projects_select_own" on public.projects;
 create policy "projects_select_own" on public.projects for select using (auth.uid() = owner_id);
@@ -79,8 +80,14 @@ for each row execute function public.set_updated_at();
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
-  insert into public.profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1)))
+  insert into public.profiles (id, display_name, organization, role, is_active)
+  values (
+    new.id,
+    coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), split_part(new.email, '@', 1)),
+    nullif(new.raw_user_meta_data ->> 'organization', ''),
+    'user',
+    true
+  )
   on conflict (id) do nothing;
   return new;
 end;
@@ -93,7 +100,8 @@ for each row execute function public.handle_new_user();
 revoke all on public.profiles, public.projects, public.analysis_runs from anon;
 grant select, insert, update, delete on public.projects to authenticated;
 grant select, insert, delete on public.analysis_runs to authenticated;
-grant select, update on public.profiles to authenticated;
+revoke insert, update, delete on public.profiles from authenticated;
+grant select on public.profiles to authenticated;
 
 -- Queryable UIH geometry and public read APIs are defined in:
 -- supabase/migrations/20260722190000_uih_postgis.sql

@@ -10,7 +10,10 @@
   const LOCAL_KEY = 'permission-out.projects.v2';
   const titleInput = document.getElementById('projectTitle');
   const saveState = document.getElementById('saveState');
+  const peaDatasetStatus = document.getElementById('peaDatasetStatus');
+  const ufmDatasetStatus = document.getElementById('ufmDatasetStatus');
   let currentUser = null;
+  let currentProfile = null;
   let currentProjectId = null;
   let dirty = false;
   let autoSaveTimer = null;
@@ -64,6 +67,7 @@
   modalRoot.className = 'app-backdrop';
   modalRoot.innerHTML = '<div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="appModalTitle"><div class="modal-head"><div><h2 id="appModalTitle"></h2><p id="appModalSubtitle"></p></div><button class="modal-close" type="button" aria-label="ปิด">×</button></div><div class="modal-body" id="appModalBody"></div></div>';
   document.body.appendChild(modalRoot);
+  let modalLocked = false;
   const toastStack = document.createElement('div');
   toastStack.className = 'toast-stack';
   document.body.appendChild(toastStack);
@@ -77,8 +81,17 @@
   }
 
   function setSaveState(text, kind = '') {
+    if (!saveState) return;
     saveState.textContent = text;
     saveState.className = `save-state ${kind ? `is-${kind}` : ''}`.trim();
+  }
+
+  function setDatasetHealth(element, text, state = '') {
+    if (!element) return;
+    element.textContent = text;
+    const chip = element.closest('.dataset-health-chip');
+    chip?.classList.toggle('is-ready', state === 'ready');
+    chip?.classList.toggle('is-error', state === 'error');
   }
 
   function escapeHtml(value) {
@@ -103,6 +116,56 @@
     const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
     const encoded = String(path).split('/').map(encodeURIComponent).join('/');
     return `${base}/storage/v1/object/public/permission-out-data/ufm/v1/${encoded}`;
+  }
+
+  async function authenticatedJson(path) {
+    if (!client) throw new Error('ต้องเชื่อมต่อ Supabase');
+    const { data } = await client.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
+    const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error?.message || `HTTP ${response.status}`);
+    return payload;
+  }
+
+  async function managedCatalog(source) {
+    try {
+      const payload = await authenticatedJson(`/api/data/catalog?source=${encodeURIComponent(source)}`);
+      return Array.isArray(payload.items) ? payload.items : [];
+    } catch (_) {
+      // Existing immutable Storage manifests remain the safe fallback until the
+      // dataset-versioning migration is applied and an Admin publishes a version.
+      return [];
+    }
+  }
+
+  function mergeManagedCatalog(manifest, managedItems) {
+    if (!managedItems.length) return manifest;
+    const canonical = value => String(value || '').normalize('NFKC').trim().toLocaleLowerCase('en-US');
+    const replacementNames = new Set(managedItems.map(item => canonical(item.canonicalName || item.name)));
+    const legacyItems = (manifest.items || []).filter(item => {
+      const candidates = [item.sourceName, item.name, item.sourceRelative].map(canonical);
+      return !candidates.some(name => replacementNames.has(name));
+    });
+    const items = [...legacyItems, ...managedItems];
+    return {
+      ...manifest,
+      items,
+      fileCount: items.length,
+      totalLineCount: items.reduce((sum, item) => sum + Number(item.lineCount || item.featureCount || 0), 0)
+    };
+  }
+
+  async function fetchManagedAnalysis(item) {
+    const lines = [];
+    let offset = 0;
+    do {
+      const payload = await authenticatedJson(`/api/data/datasets/${encodeURIComponent(item.id)}/features?offset=${offset}&limit=500`);
+      lines.push(...(payload.lines || []));
+      offset = payload.nextOffset;
+    } while (offset !== null && offset !== undefined);
+    return { lines };
   }
 
   function filteredBaseCatalogItems() {
@@ -249,17 +312,18 @@
   }
 
   function fetchBaseAnalysis(item) {
-    if (baseAnalysisCache.has(item.analysisPath)) return baseAnalysisCache.get(item.analysisPath);
-    const request = fetch(uihAssetUrl(item.analysisPath)).then(async response => {
+    const cacheKey = item.managed ? `managed:${item.id}:v${item.versionNo || 0}` : item.analysisPath;
+    if (baseAnalysisCache.has(cacheKey)) return baseAnalysisCache.get(cacheKey);
+    const request = item.managed ? fetchManagedAnalysis(item) : fetch(uihAssetUrl(item.analysisPath)).then(async response => {
       if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
       if (!response.body || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์ไม่รองรับการอ่านข้อมูล gzip แบบสตรีม');
       const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
       return new Response(stream).json();
     }).catch(error => {
-      baseAnalysisCache.delete(item.analysisPath);
+      baseAnalysisCache.delete(cacheKey);
       throw error;
     });
-    baseAnalysisCache.set(item.analysisPath, request);
+    baseAnalysisCache.set(cacheKey, request);
     return request;
   }
 
@@ -295,19 +359,24 @@
   async function initializeBaseCatalog() {
     if (!baseCatalogList || !baseFileInput || !cloudEnabled) {
       updateBaseCatalogSummary(cloudEnabled ? 'ไม่พบส่วนแสดงรายการไฟล์' : 'ต้องเชื่อมต่อ Supabase');
+      setDatasetHealth(peaDatasetStatus, cloudEnabled ? 'ไม่พร้อม' : 'ออฟไลน์', 'error');
       return;
     }
     try {
+      setDatasetHealth(peaDatasetStatus, 'กำลังโหลด');
       const response = await fetch(`${uihAssetUrl('manifest.json')}?v=1`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const manifest = await response.json();
+      let manifest = await response.json();
       if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
+      manifest = mergeManagedCatalog(manifest, await managedCatalog('pea'));
       baseCatalogManifest = manifest;
       renderBaseCatalog();
       updateBaseCatalogSummary();
+      setDatasetHealth(peaDatasetStatus, `${manifest.fileCount.toLocaleString('th-TH')} ชุด`, 'ready');
     } catch (error) {
       baseCatalogList.innerHTML = '<div class="base-catalog-empty">โหลดรายการไฟล์ไม่สำเร็จ</div>';
       updateBaseCatalogSummary('เชื่อมต่อคลังไฟล์ไม่ได้');
+      setDatasetHealth(peaDatasetStatus, 'เชื่อมต่อไม่ได้', 'error');
       toast(`โหลดรายการไฟล์ฐานไม่สำเร็จ: ${error.message}`, 'error');
     }
   }
@@ -365,17 +434,18 @@
   }
 
   function fetchCompareAnalysis(item) {
-    if (compareAnalysisCache.has(item.analysisPath)) return compareAnalysisCache.get(item.analysisPath);
-    const request = fetch(ufmAssetUrl(item.analysisPath)).then(async response => {
+    const cacheKey = item.managed ? `managed:${item.id}:v${item.versionNo || 0}` : item.analysisPath;
+    if (compareAnalysisCache.has(cacheKey)) return compareAnalysisCache.get(cacheKey);
+    const request = item.managed ? fetchManagedAnalysis(item) : fetch(ufmAssetUrl(item.analysisPath)).then(async response => {
       if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
       if (!response.body || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์ไม่รองรับการอ่านข้อมูล gzip แบบสตรีม');
       const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
       return new Response(stream).json();
     }).catch(error => {
-      compareAnalysisCache.delete(item.analysisPath);
+      compareAnalysisCache.delete(cacheKey);
       throw error;
     });
-    compareAnalysisCache.set(item.analysisPath, request);
+    compareAnalysisCache.set(cacheKey, request);
     return request;
   }
 
@@ -411,19 +481,24 @@
   async function initializeCompareCatalog() {
     if (!compareCatalogList || !cloudEnabled) {
       updateCompareCatalogSummary(cloudEnabled ? 'ไม่พบส่วนแสดงรายการไฟล์' : 'ต้องเชื่อมต่อ Supabase');
+      setDatasetHealth(ufmDatasetStatus, cloudEnabled ? 'ไม่พร้อม' : 'ออฟไลน์', 'error');
       return;
     }
     try {
+      setDatasetHealth(ufmDatasetStatus, 'กำลังโหลด');
       const response = await fetch(`${ufmAssetUrl('manifest.json')}?v=1`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const manifest = await response.json();
+      let manifest = await response.json();
       if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
+      manifest = mergeManagedCatalog(manifest, await managedCatalog('ufm'));
       compareCatalogManifest = manifest;
       renderCompareCatalog();
       updateCompareCatalogSummary();
+      setDatasetHealth(ufmDatasetStatus, `${manifest.fileCount.toLocaleString('th-TH')} ชุด`, 'ready');
     } catch (error) {
       compareCatalogList.innerHTML = '<div class="base-catalog-empty">โหลดรายการไฟล์ไม่สำเร็จ</div>';
       updateCompareCatalogSummary('เชื่อมต่อคลังไฟล์ไม่ได้');
+      setDatasetHealth(ufmDatasetStatus, 'เชื่อมต่อไม่ได้', 'error');
       toast(`โหลดรายการ UFM ไม่สำเร็จ: ${error.message}`, 'error');
     }
   }
@@ -696,7 +771,8 @@
     }
   }
 
-  function openModal(title, subtitle, content, wide = false) {
+  function openModal(title, subtitle, content, wide = false, locked = false) {
+    modalLocked = Boolean(locked);
     document.getElementById('appModalTitle').textContent = title;
     document.getElementById('appModalSubtitle').textContent = subtitle || '';
     const body = document.getElementById('appModalBody');
@@ -704,22 +780,22 @@
     if (typeof content === 'string') body.innerHTML = content;
     else if (content) body.appendChild(content);
     modalRoot.querySelector('.app-modal').classList.toggle('app-modal-wide', wide);
+    modalRoot.classList.toggle('is-locked', modalLocked);
     modalRoot.classList.add('is-open');
     setTimeout(() => body.querySelector('input,button')?.focus(), 20);
   }
 
-  function closeModal() { modalRoot.classList.remove('is-open'); }
-  modalRoot.querySelector('.modal-close').addEventListener('click', closeModal);
+  function closeModal(force = false) {
+    if (modalLocked && !force) return;
+    modalLocked = false;
+    modalRoot.classList.remove('is-open', 'is-locked');
+  }
+  modalRoot.querySelector('.modal-close').addEventListener('click', () => closeModal());
   modalRoot.addEventListener('mousedown', e => { if (e.target === modalRoot) closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
   function markDirty() {
     dirty = true;
-    setSaveState('ยังไม่บันทึก', 'dirty');
-    if (cfg.autosave && (currentProjectId || currentUser)) {
-      clearTimeout(autoSaveTimer);
-      autoSaveTimer = setTimeout(() => saveProject(true), 1800);
-    }
   }
 
   function numeric(id, fallback = 0) {
@@ -832,7 +908,7 @@
       if (!silent) toast('กรุณาวิเคราะห์เส้นทางก่อนบันทึก', 'error');
       return;
     }
-    const name = titleInput.value.trim() || 'โครงการไม่มีชื่อ';
+    const name = titleInput?.value.trim() || 'MOD 1';
     setSaveState('กำลังบันทึก…', 'saving');
     try {
       const data = snapshot();
@@ -887,7 +963,7 @@
       } else project = localProjects().find(item => item.id === id);
       if (!project) throw new Error('ไม่พบโครงการ');
       restoreSnapshot(project.snapshot);
-      titleInput.value = project.name;
+      if (titleInput) titleInput.value = project.name;
       currentProjectId = project.id;
       dirty = false; setSaveState('บันทึกแล้ว', 'saved'); closeModal();
       toast('เปิดโครงการแล้ว', 'success');
@@ -923,46 +999,161 @@
     catch (error) { document.getElementById('appModalBody').innerHTML = `<div class="project-empty">โหลดข้อมูลไม่สำเร็จ<br><small>${error.message}</small></div>`; }
   }
 
-  function showAuth(initialMode = 'signin') {
-    let mode = initialMode;
-    const content = document.createElement('div');
-    content.innerHTML = '<div class="auth-note">ลงชื่อเข้าใช้เพื่อซิงก์โครงการกับ Supabase อย่างปลอดภัย หากยังไม่เชื่อมต่อ Supabase แอปจะทำงานแบบ Local บนอุปกรณ์นี้</div><div class="auth-tabs"><button class="auth-tab" data-mode="signin">เข้าสู่ระบบ</button><button class="auth-tab" data-mode="signup">สร้างบัญชี</button></div><form id="authForm"><div class="modal-field"><label for="authEmail">อีเมล</label><input id="authEmail" type="email" autocomplete="email" required placeholder="name@company.com"></div><div class="modal-field"><label for="authPassword">รหัสผ่าน</label><input id="authPassword" type="password" autocomplete="current-password" required minlength="8" placeholder="อย่างน้อย 8 ตัวอักษร"></div><button class="modal-primary" id="authSubmit" type="submit"></button><button class="modal-link" id="resetPassword" type="button">ลืมรหัสผ่าน</button></form>';
-    const renderMode = () => {
-      content.querySelectorAll('.auth-tab').forEach(tab => tab.classList.toggle('is-active', tab.dataset.mode === mode));
-      content.querySelector('#authSubmit').textContent = mode === 'signup' ? 'สร้างบัญชี' : 'เข้าสู่ระบบ';
-      content.querySelector('#authPassword').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+  async function loadCurrentProfile(user = currentUser) {
+    if (!client || !user) {
+      currentProfile = null;
+      return null;
+    }
+    let result = await client
+      .from('profiles')
+      .select('id,display_name,organization,role,is_active')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (result.error && (result.error.code === '42703' || /role|is_active/i.test(result.error.message || ''))) {
+      result = await client
+        .from('profiles')
+        .select('id,display_name,organization')
+        .eq('id', user.id)
+        .maybeSingle();
+    }
+    if (result.error) throw result.error;
+    const data = result.data || {};
+    const metadata = user.app_metadata || {};
+    const role = metadata.permission_out_role || data.role || 'user';
+    const isActive = metadata.permission_out_active === undefined
+      ? data.is_active !== false
+      : metadata.permission_out_active !== false;
+    if (!isActive) throw new Error('บัญชีนี้ถูกระงับการใช้งาน');
+    currentProfile = {
+      id: user.id,
+      display_name: data.display_name || user.user_metadata?.display_name || '',
+      organization: data.organization || user.user_metadata?.organization || '',
+      role: role === 'admin' ? 'admin' : 'user',
+      is_active: true
     };
-    content.querySelectorAll('.auth-tab').forEach(tab => tab.addEventListener('click', () => { mode = tab.dataset.mode; renderMode(); }));
-    content.querySelector('#authForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      if (!client) { toast('กรุณากำหนด Supabase URL และ Key ใน app-config.js ก่อน', 'error'); return; }
+    return currentProfile;
+  }
+
+  async function applySession(session, { showGate = true } = {}) {
+    currentUser = session?.user || null;
+    currentProfile = null;
+    currentProjectId = null;
+    if (currentUser) {
+      try {
+        await loadCurrentProfile(currentUser);
+      } catch (error) {
+        await client.auth.signOut({ scope: 'local' });
+        currentUser = null;
+        currentProfile = null;
+        updateAccountUI();
+        setSaveState('ไม่สามารถเข้าสู่ระบบได้', 'dirty');
+        if (showGate) showAuth(error.message);
+        return false;
+      }
+    }
+    updateAccountUI();
+    setSaveState(currentUser ? 'Cloud พร้อมใช้งาน' : 'กรุณาเข้าสู่ระบบ', currentUser ? 'saved' : 'dirty');
+    if (!currentUser && showGate && cloudRequired) showAuth();
+    return Boolean(currentUser);
+  }
+
+  function authErrorMessage(error) {
+    const message = String(error?.message || '');
+    if (/invalid login credentials/i.test(message)) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+    if (/email not confirmed/i.test(message)) return 'อีเมลยังไม่ได้รับการยืนยัน';
+    if (/user is banned/i.test(message)) return 'บัญชีนี้ถูกระงับการใช้งาน';
+    if (/rate limit/i.test(message)) return 'ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่';
+    return message || 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่';
+  }
+
+  function showAuth(initialError = '') {
+    const content = document.createElement('div');
+    content.className = 'login-panel';
+    content.innerHTML = `
+      <div class="login-brand" aria-hidden="true">PO</div>
+      <div class="auth-note">เข้าสู่ระบบด้วยบัญชีที่ผู้ดูแลสร้างให้ เพื่อใช้งานและบันทึกโครงการบน Supabase อย่างปลอดภัย</div>
+      <form id="authForm" novalidate>
+        <div class="modal-field">
+          <label for="authEmail">อีเมล</label>
+          <input id="authEmail" type="email" autocomplete="username" required maxlength="254" placeholder="name@company.com">
+        </div>
+        <div class="modal-field">
+          <label for="authPassword">รหัสผ่าน</label>
+          <div class="password-field">
+            <input id="authPassword" type="password" autocomplete="current-password" required minlength="8" maxlength="128" placeholder="กรอกรหัสผ่าน">
+            <button type="button" id="toggleAuthPassword" aria-label="แสดงรหัสผ่าน">แสดง</button>
+          </div>
+        </div>
+        <div class="auth-inline-error" id="authError" role="alert">${escapeHtml(initialError)}</div>
+        <button class="modal-primary" id="authSubmit" type="submit">เข้าสู่ระบบ</button>
+        <button class="modal-link" id="resetPassword" type="button">ลืมรหัสผ่าน</button>
+      </form>
+      <p class="login-help">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบของหน่วยงาน</p>`;
+    const errorBox = content.querySelector('#authError');
+    content.querySelector('#toggleAuthPassword').addEventListener('click', event => {
+      const password = content.querySelector('#authPassword');
+      const visible = password.type === 'text';
+      password.type = visible ? 'password' : 'text';
+      event.currentTarget.textContent = visible ? 'แสดง' : 'ซ่อน';
+      event.currentTarget.setAttribute('aria-label', visible ? 'แสดงรหัสผ่าน' : 'ซ่อนรหัสผ่าน');
+    });
+    content.querySelector('#authForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!client) return;
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
       const email = content.querySelector('#authEmail').value.trim();
       const password = content.querySelector('#authPassword').value;
-      const button = content.querySelector('#authSubmit'); button.disabled = true; button.textContent = 'กำลังดำเนินการ…';
-      const response = mode === 'signup' ? await client.auth.signUp({ email, password }) : await client.auth.signInWithPassword({ email, password });
-      button.disabled = false; renderMode();
-      if (response.error) toast(response.error.message, 'error');
-      else { toast(mode === 'signup' ? 'สร้างบัญชีแล้ว กรุณาตรวจสอบอีเมลยืนยัน' : 'เข้าสู่ระบบสำเร็จ', 'success'); closeModal(); }
+      const button = content.querySelector('#authSubmit');
+      button.disabled = true;
+      button.textContent = 'กำลังเข้าสู่ระบบ…';
+      errorBox.textContent = '';
+      const response = await client.auth.signInWithPassword({ email, password });
+      if (response.error) {
+        errorBox.textContent = authErrorMessage(response.error);
+        button.disabled = false;
+        button.textContent = 'เข้าสู่ระบบ';
+        return;
+      }
+      const accepted = await applySession(response.data.session, { showGate: false });
+      button.disabled = false;
+      button.textContent = 'เข้าสู่ระบบ';
+      if (!accepted) {
+        errorBox.textContent = 'บัญชีนี้ไม่มีสิทธิ์เข้าใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
+        return;
+      }
+      closeModal(true);
+      toast('เข้าสู่ระบบสำเร็จ', 'success');
     });
     content.querySelector('#resetPassword').addEventListener('click', async () => {
-      if (!client) { toast('ยังไม่ได้เชื่อมต่อ Supabase', 'error'); return; }
       const email = content.querySelector('#authEmail').value.trim();
-      if (!email) { toast('กรุณากรอกอีเมลก่อน', 'error'); return; }
+      if (!email) {
+        errorBox.textContent = 'กรุณากรอกอีเมลก่อนขอลิงก์ตั้งรหัสผ่านใหม่';
+        content.querySelector('#authEmail').focus();
+        return;
+      }
       const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
-      toast(error ? error.message : 'ส่งลิงก์ตั้งรหัสผ่านใหม่แล้ว', error ? 'error' : 'success');
+      if (error) errorBox.textContent = authErrorMessage(error);
+      else toast('ส่งลิงก์ตั้งรหัสผ่านใหม่แล้ว กรุณาตรวจสอบอีเมล', 'success');
     });
-    renderMode(); openModal('บัญชีผู้ใช้', 'Permission Out Cloud Workspace', content);
+    openModal('เข้าสู่ระบบ Permission Out', 'ระบบวิเคราะห์เส้นทางสำหรับผู้ได้รับอนุญาต', content, false, cloudRequired);
   }
 
   function updateAccountUI() {
     const label = document.getElementById('accountLabel');
+    const meta = document.getElementById('accountMeta');
     const initial = document.getElementById('userInitial');
+    const accountButton = document.getElementById('accountBtn');
     if (currentUser) {
-      label.textContent = currentUser.email?.split('@')[0] || 'Account';
+      label.textContent = currentProfile?.display_name || currentUser.email?.split('@')[0] || 'Account';
+      if (meta) meta.textContent = currentProfile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
       initial.textContent = (currentUser.email?.[0] || 'U').toUpperCase();
+      accountButton?.setAttribute('aria-label', `เปิดบัญชีผู้ใช้ ${label.textContent}`);
     } else {
       label.textContent = cloudEnabled ? 'เข้าสู่ระบบ' : 'Local';
+      if (meta) meta.textContent = cloudEnabled ? 'ยังไม่เข้าสู่ระบบ' : 'โหมด Local';
       initial.textContent = cloudEnabled ? 'G' : 'L';
+      accountButton?.setAttribute('aria-label', cloudEnabled ? 'เข้าสู่ระบบ' : 'เปิดข้อมูลโหมด Local');
     }
   }
 
@@ -978,27 +1169,67 @@
     const content = document.createElement('div'); content.className = 'account-card';
     const avatar = document.createElement('div'); avatar.className = 'account-avatar'; avatar.textContent = (currentUser.email?.[0] || 'U').toUpperCase();
     const name = document.createElement('h3'); name.textContent = currentUser.email;
-    const info = document.createElement('p'); info.innerHTML = '<span class="connection-pill">เชื่อมต่อ Supabase แล้ว</span>';
+    const info = document.createElement('p');
+    const roleLabel = currentProfile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
+    info.innerHTML = `<span class="connection-pill">เชื่อมต่อ Supabase แล้ว</span><br><span class="account-role">${roleLabel}${currentProfile?.organization ? ` · ${escapeHtml(currentProfile.organization)}` : ''}</span>`;
+    const actions = document.createElement('div'); actions.className = 'account-actions';
+    if (currentProfile?.role === 'admin') {
+      const manageData = document.createElement('button');
+      manageData.className = 'modal-primary';
+      manageData.type = 'button';
+      manageData.textContent = 'จัดการข้อมูล PEA / UFM';
+      manageData.addEventListener('click', () => window.permissionOutOpenAdminData?.());
+      const manageUsers = document.createElement('button');
+      manageUsers.className = 'modal-primary';
+      manageUsers.type = 'button';
+      manageUsers.textContent = 'จัดการผู้ใช้';
+      manageUsers.addEventListener('click', () => window.permissionOutOpenAdminUsers?.());
+      actions.append(manageData, manageUsers);
+    }
     const signout = document.createElement('button'); signout.className = 'danger-btn'; signout.textContent = 'ออกจากระบบ';
-    signout.addEventListener('click', async () => { await client.auth.signOut(); closeModal(); toast('ออกจากระบบแล้ว'); });
-    content.append(avatar, name, info, signout); openModal('บัญชีผู้ใช้', 'จัดการเซสชันและการซิงก์ข้อมูล', content);
+    signout.addEventListener('click', async () => {
+      await client.auth.signOut();
+      closeModal(true);
+      toast('ออกจากระบบแล้ว');
+      showAuth();
+    });
+    actions.appendChild(signout);
+    content.append(avatar, name, info, actions);
+    openModal('บัญชีผู้ใช้', 'จัดการเซสชันและสิทธิ์การใช้งาน', content);
   }
+
+  window.permissionOutAdminContext = {
+    client,
+    getCurrentUser: () => currentUser,
+    getCurrentProfile: () => currentProfile,
+    openModal,
+    closeModal,
+    toast,
+    escapeHtml
+  };
 
   function newProject() {
     if (dirty && !confirm('มีการเปลี่ยนแปลงที่ยังไม่บันทึก ต้องการเริ่มงานใหม่หรือไม่?')) return;
     clearAll(); currentProjectId = null; dirty = false;
-    titleInput.value = `โครงการ ${new Date().toLocaleDateString('th-TH')}`;
+    if (titleInput) titleInput.value = `MOD 1 ${new Date().toLocaleDateString('th-TH')}`;
     setSaveState('พร้อมใช้งาน'); toast('สร้างพื้นที่งานใหม่แล้ว');
   }
 
-  titleInput.addEventListener('input', markDirty);
+  titleInput?.addEventListener('input', markDirty);
   ['threshold','interval','polesPerKm','rateB','surchargePct','dedupeToggle'].forEach(id => document.getElementById(id)?.addEventListener('change', markDirty));
-  document.getElementById('saveProjectBtn').addEventListener('click', () => saveProject(false));
-  document.getElementById('projectsBtn').addEventListener('click', showProjects);
-  document.getElementById('newProjectBtn').addEventListener('click', newProject);
+  const debounceUi = (callback, delay = 140) => {
+    let timer = 0;
+    return (...args) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => callback(...args), delay);
+    };
+  };
+  document.getElementById('saveProjectBtn')?.addEventListener('click', () => saveProject(false));
+  document.getElementById('projectsBtn')?.addEventListener('click', showProjects);
+  document.getElementById('newProjectBtn')?.addEventListener('click', newProject);
   document.getElementById('accountBtn').addEventListener('click', showAccount);
-  baseCatalogSearch?.addEventListener('input', renderBaseCatalog);
-  compareCatalogSearch?.addEventListener('input', renderCompareCatalog);
+  baseCatalogSearch?.addEventListener('input', debounceUi(renderBaseCatalog));
+  compareCatalogSearch?.addEventListener('input', debounceUi(renderCompareCatalog));
   document.getElementById('baseCatalogSelectAll')?.addEventListener('click', () => {
     for (const item of filteredBaseCatalogItems()) baseCatalogSelected.add(item.id);
     window.permissionOutBaseDatasetIds = Array.from(baseCatalogSelected);
@@ -1030,7 +1261,7 @@
     peaLayerTrigger.setAttribute('aria-expanded', String(open));
     if (open) peaLayerSearch?.focus();
   });
-  peaLayerSearch?.addEventListener('input', renderPeaOptions);
+  peaLayerSearch?.addEventListener('input', debounceUi(renderPeaOptions));
   document.getElementById('peaLayerClear')?.addEventListener('click', () => {
     peaLayerSearch.value = ''; renderPeaOptions(); peaLayerSearch.focus();
   });
@@ -1051,27 +1282,30 @@
     peaOverlayLayer = null;
     if (peaSelected.size) schedulePeaMapUpdate();
   });
-  window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมบันทึกโครงการ', 'success'); });
+  window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมตรวจสอบและส่งออกข้อมูล', 'success'); });
   window.addEventListener('online', () => toast('กลับมาออนไลน์แล้ว', 'success'));
-  window.addEventListener('offline', () => toast('ออฟไลน์ — แอปยังวิเคราะห์และบันทึกในเครื่องได้'));
-  window.addEventListener('beforeunload', e => { if (dirty && !cfg.autosave) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('offline', () => toast('ออฟไลน์ — ต้องเชื่อมต่ออีกครั้งเพื่ออ่านชุดข้อมูลจาก Supabase'));
 
   async function initialize() {
     if (client) {
       const { data } = await client.auth.getSession();
-      currentUser = data.session?.user || null; updateAccountUI();
-      client.auth.onAuthStateChange((_event, session) => { currentUser = session?.user || null; currentProjectId = null; updateAccountUI(); });
-      setSaveState(currentUser ? 'Cloud พร้อมใช้งาน' : 'พร้อมใช้งาน');
+      await applySession(data.session, { showGate: false });
+      client.auth.onAuthStateChange((_event, session) => {
+        window.setTimeout(() => applySession(session, { showGate: true }).catch(error => {
+          toast(authErrorMessage(error), 'error');
+        }), 0);
+      });
     } else {
       updateAccountUI(); setSaveState('Local mode');
       if (cloudRequired && location.protocol !== 'file:') {
         setSaveState('ต้องตั้งค่า Supabase', 'dirty');
-        document.getElementById('saveProjectBtn').disabled = true;
-        document.getElementById('projectsBtn').disabled = true;
+        if (document.getElementById('saveProjectBtn')) document.getElementById('saveProjectBtn').disabled = true;
+        if (document.getElementById('projectsBtn')) document.getElementById('projectsBtn').disabled = true;
         showConfigurationRequired();
       }
     }
     await Promise.all([initializePeaLayers(), initializeBaseCatalog(), initializeCompareCatalog(), initializeBillingFormula()]);
+    if (client && !currentUser && cloudRequired) showAuth();
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

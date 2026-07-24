@@ -1,0 +1,74 @@
+.app-backdrop.is-locked .modal-close{display:none}
+.login-panel{max-width:410px;margin:0 auto}
+.login-brand{display:grid;place-items:center;width:54px;height:54px;margin:0 auto 16px;border-radius:16px;background:linear-gradient(135deg,#f1d76f,#bd8e12);color:#0b1c36;font-weight:800;box-shadow:0 10px 28px rgba(188,142,18,.24)}
+.login-panel .auth-note{margin-bottom:18px;text-align:center}
+.password-field{position:relative}
+.password-field input{width:100%;padding-right:72px}
+.password-field button{position:absolute;top:4px;right:4px;bottom:4px;min-width:58px;border:0;border-radius:7px;background:#eef3f8;color:#28517d;font-weight:700;cursor:pointer}
+.password-field button:hover{background:#e2ebf5}
+.auth-inline-error{min-height:22px;margin:-2px 0 8px;color:#a33830;font-size:.76rem;line-height:1.45}
+.login-help{margin:16px 0 0;text-align:center;color:#748198;font-size:.74rem}
+.account-role{display:inline-block;margin-top:8px;color:#5f6d82;font-size:.78rem}
+.account-actions{display:grid;gap:9px}
+.account-actions .danger-btn,.account-actions .modal-primary{width:100%;min-height:42px}
+
+.admin-users{min-width:0}
+.admin-users-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.admin-users-search{min-width:0}
+.admin-users-search input{width:100%;height:44px;border:1px solid #d4deeb;border-radius:10px;padding:0 13px;font:400 .86rem 'IBM Plex Sans Thai',sans-serif;color:#193554}
+.admin-users-search input:focus{border-color:#315f91;outline:3px solid rgba(49,95,145,.14)}
+.admin-add-user{width:auto;min-width:126px;padding:0 16px}
+.admin-users-summary{display:flex;gap:18px;margin:14px 0 8px;color:#68778e;font-size:.75rem}
+.admin-users-list{overflow:hidden;border:1px solid #e0e6ef;border-radius:12px;background:#fff}
+.admin-user-row{display:grid;grid-template-columns:38px minmax(220px,1fr) minmax(150px,.55fr) auto;gap:12px;align-items:center;padding:13px 14px;border-bottom:1px solid #e9edf3}
+.admin-user-row:last-child{border-bottom:0}
+.admin-user-row:hover{background:#f9fbfd}
+.admin-user-avatar{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:#e9f0f8;color:#1e4d7d;font-size:.82rem;font-weight:800}
+.admin-user-identity{display:flex;min-width:0;flex-direction:column;gap:3px}
+.admin-user-name-line{display:flex;min-width:0;align-items:center;gap:6px;flex-wrap:wrap}
+.admin-user-name-line strong{min-width:0;overflow:hidden;text-overflow:ellipsis;color:#173453;font-size:.84rem;white-space:nowrap}
+.admin-user-email,.admin-user-organization{min-width:0;overflow:hidden;text-overflow:ellipsis;color:#68778e;font-size:.7rem;white-space:nowrap}
+.admin-role-badge,.admin-status-badge{display:inline-flex;align-items:center;min-height:22px;padding:2px 7px;border-radius:999px;font-size:.63rem;font-weight:700}
+.admin-role-badge.is-admin{background:#fff1c7;color:#745700}
+.admin-role-badge.is-user{background:#eaf2fb;color:#275680}
+.admin-status-badge.is-active{background:#e8f7f1;color:#087254}
+.admin-status-badge.is-inactive{background:#f4e9e8;color:#943e37}
+.admin-user-activity{display:flex;min-width:0;flex-direction:column;gap:3px;color:#7c899b;font-size:.66rem}
+.admin-user-activity strong{overflow:hidden;text-overflow:ellipsis;color:#43536a;font-size:.7rem;font-weight:600;white-space:nowrap}
+.admin-user-actions{display:flex;gap:6px}
+.admin-action-button,.admin-back-button{min-height:36px;border:1px solid #d3deeb;border-radius:8px;background:#fff;color:#315477;padding:0 11px;font:700 .7rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer}
+.admin-action-button:hover,.admin-back-button:hover{border-color:#8da9c5;background:#f2f7fc}
+.admin-action-button.is-danger{border-color:#ecc9c5;color:#a23e36}
+.admin-action-button.is-danger:hover{background:#fff2f0}
+.admin-action-button:disabled{opacity:.45;cursor:not-allowed}
+.admin-users-empty,.admin-users-loading,.admin-users-error{display:flex;min-height:190px;align-items:center;justify-content:center;flex-direction:column;gap:8px;padding:30px;text-align:center;color:#728097}
+.admin-users-empty strong,.admin-users-error strong{color:#244667;font-size:.95rem}
+.admin-users-empty span,.admin-users-error span{font-size:.78rem}
+.admin-users-error .modal-primary{width:auto;margin-top:10px;padding:0 20px}
+
+.admin-user-editor{min-width:0}
+.admin-back-button{margin-bottom:16px}
+.admin-user-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px}
+.admin-user-form .modal-field{min-width:0}
+.admin-user-form select{width:100%;height:43px;border:1px solid #dbe1eb;border-radius:9px;background:#fff;padding:0 12px;font:400 .88rem 'IBM Plex Sans Thai',sans-serif;color:#213d5d}
+.admin-user-form select:focus{border-color:#ba941f;outline:3px solid #f7edc9}
+.admin-user-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:16px;border-top:1px solid #e6ebf2}
+.admin-user-form-actions .modal-primary{width:auto;min-width:150px;padding:0 18px}
+
+@media(max-width:760px){
+  .admin-users-toolbar{grid-template-columns:1fr}
+  .admin-add-user{width:100%;min-height:44px}
+  .admin-users-summary{justify-content:space-between}
+  .admin-user-row{grid-template-columns:38px minmax(0,1fr) auto;align-items:start}
+  .admin-user-activity{grid-column:2/4}
+  .admin-user-actions{grid-column:2/4}
+  .admin-user-actions .admin-action-button{min-width:82px;min-height:44px}
+  .admin-user-form-grid{grid-template-columns:1fr}
+  .admin-user-form-actions{display:grid;grid-template-columns:1fr}
+  .admin-user-form-actions .modal-primary,.admin-user-form-actions .admin-action-button{width:100%;min-height:44px}
+  .auth-inline-error,.login-help,.account-role,.admin-users-summary,.admin-user-name-line strong,.admin-user-email,.admin-user-organization,.admin-user-activity,.admin-user-activity strong,.admin-action-button,.admin-back-button{font-size:.875rem}
+}
+
+@media(forced-colors:active){
+  .admin-role-badge,.admin-status-badge,.admin-user-avatar,.login-brand{border:1px solid CanvasText}
+}

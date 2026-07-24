@@ -1,0 +1,1141 @@
+:root{
+  --ux-space-1:4px;
+  --ux-space-2:8px;
+  --ux-space-3:12px;
+  --ux-space-4:16px;
+  --ux-space-5:20px;
+  --ux-space-6:24px;
+  --ux-space-8:32px;
+  --ux-control:44px;
+  --ux-text:#172033;
+  --ux-text-soft:#526078;
+  --ux-text-muted:#68758b;
+  --ux-surface:#fff;
+  --ux-surface-soft:#f6f8fc;
+  --ux-border:#d8e0eb;
+  --ux-primary:#173f70;
+  --ux-primary-strong:#0d2a4e;
+  --ux-accent:#c59a20;
+  --ux-success:#087552;
+  --ux-danger:#a7372e;
+  --ux-focus:#d7a91f;
+  --ux-shadow:0 12px 32px rgba(9,31,62,.09);
+  --ux-z-sticky:1100;
+  --ux-z-drawer:2200;
+  --ux-z-toast:3000;
+}
+
+.sr-only{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  padding:0!important;
+  margin:-1px!important;
+  overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;
+  border:0!important;
+}
+
+.skip-link{
+  position:fixed;
+  display:flex;
+  z-index:calc(var(--ux-z-toast) + 1);
+  inset-block-start:8px;
+  inset-inline-start:12px;
+  transform:translateY(-160%);
+  padding:10px 14px;
+  border-radius:8px;
+  background:var(--ux-primary-strong);
+  color:#fff;
+  font-weight:700;
+  min-height:44px;
+  align-items:center;
+  transition:transform .18s ease-out;
+}
+.skip-link:focus{transform:translateY(0);}
+
+body.ux-enhanced{
+  color:var(--ux-text);
+  background:#f3f6fa;
+}
+
+body.ux-enhanced .container{
+  max-width:1720px;
+  padding:var(--ux-space-5) var(--ux-space-6) 64px;
+}
+
+body.ux-enhanced .layout{
+  grid-template-columns:minmax(340px,370px) minmax(0,1fr);
+  gap:var(--ux-space-5);
+}
+
+body.ux-enhanced .leftCol,
+body.ux-enhanced .rightCol{min-width:0;}
+
+body.ux-enhanced .rightCol{position:static;}
+
+body.ux-enhanced .card{
+  border-color:var(--ux-border);
+  border-radius:16px;
+  box-shadow:0 3px 14px rgba(13,42,78,.055);
+}
+
+body.ux-enhanced .card:hover{
+  transform:none;
+  box-shadow:0 3px 14px rgba(13,42,78,.055);
+}
+
+body.ux-enhanced .leftCol{
+  display:flex;
+  flex-direction:column;
+  gap:var(--ux-space-4);
+}
+
+body.ux-enhanced .leftCol .card{
+  padding:var(--ux-space-5);
+}
+
+body.ux-enhanced .leftCol .card-title{
+  margin-block-end:var(--ux-space-4);
+  color:var(--ux-primary-strong);
+  font-size:1rem;
+}
+
+body.ux-enhanced .leftCol .step{
+  width:28px;
+  height:28px;
+  min-width:28px;
+  font-size:.78rem;
+}
+
+body.ux-enhanced .card-title .liveBadge,
+body.ux-enhanced .execSummary .liveBadge{display:none;}
+
+.workflow-nav{
+  position:sticky;
+  z-index:var(--ux-z-sticky);
+  top:calc(var(--shell-h) + 10px);
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin-block-end:var(--ux-space-4);
+  padding:6px;
+  border:1px solid var(--ux-border);
+  border-radius:14px;
+  background:rgba(255,255,255,.94);
+  box-shadow:0 8px 26px rgba(9,31,62,.08);
+  backdrop-filter:blur(12px);
+}
+
+.workflow-step{
+  min-height:42px;
+  display:flex;
+  flex:1;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:var(--ux-text-soft);
+  padding:8px 12px;
+  font:600 .78rem 'IBM Plex Sans Thai','Segoe UI',sans-serif;
+  cursor:pointer;
+  transition:background .18s ease-out,color .18s ease-out;
+}
+
+.workflow-step-index{
+  display:grid;
+  place-items:center;
+  width:24px;
+  height:24px;
+  border:1px solid #cbd6e4;
+  border-radius:50%;
+  background:#fff;
+  color:var(--ux-primary);
+  font:700 .68rem 'IBM Plex Mono',monospace;
+}
+
+.workflow-step:hover{background:#f2f6fb;color:var(--ux-primary);}
+.workflow-step.is-current{background:#eaf1fa;color:var(--ux-primary-strong);}
+.workflow-step.is-current .workflow-step-index{border-color:var(--ux-primary);background:var(--ux-primary);color:#fff;}
+.workflow-step.is-complete .workflow-step-index{border-color:var(--ux-success);background:#e7f6f0;color:var(--ux-success);}
+.workflow-step:disabled{cursor:not-allowed;opacity:.48;}
+
+.setup-intro{
+  margin:-4px 0 var(--ux-space-4);
+  color:var(--ux-text-soft);
+  font-size:.78rem;
+  line-height:1.55;
+}
+
+.dataset-selection-summary{
+  display:grid;
+  gap:var(--ux-space-3);
+  padding:var(--ux-space-4);
+  border:1px solid var(--ux-border);
+  border-radius:14px;
+  background:var(--ux-surface-soft);
+}
+
+.dataset-summary-row{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:var(--ux-space-3);
+}
+
+.dataset-summary-role{
+  min-width:94px;
+  color:var(--ux-primary-strong);
+  font-weight:700;
+  font-size:.76rem;
+}
+
+.dataset-summary-copy{
+  min-width:0;
+  overflow:hidden;
+  color:var(--ux-text-soft);
+  font-size:.75rem;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.dataset-summary-count{
+  min-width:32px;
+  padding:4px 9px;
+  border-radius:999px;
+  background:var(--ux-primary);
+  color:#fff;
+  font:700 .68rem 'IBM Plex Mono',monospace;
+  text-align:center;
+}
+
+.dataset-open-button{
+  min-height:var(--ux-control);
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  margin-block-start:2px;
+  border:1px solid #b8c7da;
+  border-radius:10px;
+  background:#fff;
+  color:var(--ux-primary);
+  font:700 .82rem 'IBM Plex Sans Thai','Segoe UI',sans-serif;
+  cursor:pointer;
+}
+.dataset-open-button:hover{border-color:var(--ux-accent);background:#fffcf3;}
+
+.source-role-switch{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  align-items:stretch!important;
+  gap:10px!important;
+  margin-block:var(--ux-space-3)!important;
+  padding:10px 12px!important;
+  background:#fff!important;
+}
+.source-role-switch>div{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  justify-items:center;
+  width:100%;
+  gap:8px!important;
+}
+.source-role-pill{
+  justify-content:center;
+  width:100%;
+  min-width:0;
+  padding-inline:7px!important;
+}
+.source-role-switch button{
+  width:100%;
+  min-width:0;
+  min-height:44px!important;
+  font-size:.72rem!important;
+}
+
+.analysis-readiness{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  margin-block:var(--ux-space-3);
+  padding:11px 12px;
+  border:1px solid #dbe4ef;
+  border-radius:10px;
+  background:#f7f9fc;
+  color:var(--ux-text-soft);
+  font-size:.75rem;
+  line-height:1.5;
+}
+.analysis-readiness-dot{
+  flex:0 0 auto;
+  width:9px;
+  height:9px;
+  margin-block-start:5px;
+  border-radius:50%;
+  background:#8a96a8;
+}
+.analysis-readiness.is-ready{border-color:#b9dfd2;background:#f0faf6;color:#245c4b;}
+.analysis-readiness.is-ready .analysis-readiness-dot{background:var(--ux-success);}
+
+.advanced-settings{
+  margin-block:var(--ux-space-3);
+  border-block:1px solid #e4e9f1;
+}
+.advanced-settings summary{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:var(--ux-primary);
+  font-size:.78rem;
+  font-weight:700;
+  cursor:pointer;
+  list-style:none;
+}
+.advanced-settings summary::-webkit-details-marker{display:none;}
+.advanced-settings summary::after{content:'⌄';font-size:1rem;transition:transform .18s ease-out;}
+.advanced-settings[open] summary::after{transform:rotate(180deg);}
+.advanced-settings-copy{font-weight:400;color:var(--ux-text-muted);}
+.advanced-settings-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:var(--ux-space-3);
+  padding:0 0 var(--ux-space-4);
+}
+
+body.ux-enhanced .advanced-settings .field{
+  min-width:0;
+  align-items:stretch;
+}
+body.ux-enhanced .advanced-settings .field input[type="number"]{
+  width:100%;
+  min-height:var(--ux-control);
+  padding:9px 11px;
+  font-size:.9rem;
+}
+body.ux-enhanced .advanced-settings .field label{
+  color:var(--ux-text-soft);
+  font-size:.76rem;
+}
+body.ux-enhanced .advanced-settings .field:has(#dedupeToggle) label{
+  min-height:44px;
+  white-space:normal!important;
+}
+body.ux-enhanced #dedupeToggle{width:20px;height:20px;flex:0 0 auto;}
+
+.analysis-actions{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:var(--ux-space-2)!important;
+  margin-block-start:var(--ux-space-3)!important;
+}
+body.ux-enhanced .analysis-actions .primary,
+body.ux-enhanced .analysis-actions .secondary{
+  min-height:var(--ux-control);
+  font-size:.84rem;
+}
+
+body.ux-enhanced #loading{
+  min-height:44px;
+  align-items:center;
+  margin-block-start:var(--ux-space-3);
+}
+
+/* Billing: clear reading order — calculation, total, then export. */
+body.ux-enhanced #billingCard{
+  padding:18px!important;
+  scroll-margin-top:132px;
+}
+body.ux-enhanced #billingCard .billing-card-header{
+  display:block!important;
+  margin:0 0 12px!important;
+  padding:0!important;
+}
+body.ux-enhanced #billingCard .card-title{
+  margin:0!important;
+  font-size:1rem!important;
+  line-height:1.35;
+}
+body.ux-enhanced #billingCard .liveBadge{display:none!important;}
+.billing-card-intro{
+  max-width:48ch;
+  margin:7px 0 0;
+  color:var(--ux-text-soft);
+  font-size:.76rem;
+  line-height:1.55;
+}
+body.ux-enhanced #billingCard #costStatus{
+  margin:0 0 16px!important;
+  padding:10px 12px!important;
+  border:1px solid #dce5f0;
+  border-radius:10px;
+  background:#f6f9fc;
+  color:var(--ux-text-soft);
+  font-size:.74rem!important;
+  line-height:1.5;
+}
+.billing-section-label{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:10px;
+  margin:0 0 8px;
+}
+.billing-section-label strong{
+  color:var(--ux-primary-strong);
+  font-size:.82rem;
+}
+.billing-section-label span{
+  color:var(--ux-text-muted);
+  font-size:.67rem;
+  text-align:end;
+}
+body.ux-enhanced #billingCard .costList{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  overflow:hidden;
+  border:1px solid var(--ux-border);
+  border-radius:12px;
+  background:#fff;
+}
+body.ux-enhanced #billingCard .costRow{
+  min-height:42px;
+  margin:0!important;
+  padding:10px 12px!important;
+  border:0!important;
+  border-block-end:1px solid #e9eef5!important;
+  border-radius:0!important;
+  background:#fff;
+  box-shadow:none!important;
+}
+body.ux-enhanced #billingCard .costRow:hover{background:#f9fbfd;}
+body.ux-enhanced #billingCard .costRow-label{
+  min-width:0;
+  color:var(--ux-text-soft)!important;
+  font-size:.75rem!important;
+  line-height:1.45;
+}
+body.ux-enhanced #billingCard .costRow-value{
+  flex:0 0 auto;
+  color:var(--ux-primary-strong);
+  font-size:.78rem!important;
+  font-weight:700;
+  white-space:nowrap;
+}
+body.ux-enhanced #billingCard .billing-rate-row{
+  padding:12px!important;
+  background:#f7faff;
+}
+body.ux-enhanced #billingCard .billing-rate-row:hover{background:#f7faff;}
+body.ux-enhanced #billingCard .billing-rate-row .costRow-top{
+  align-items:center;
+  gap:10px;
+}
+body.ux-enhanced #billingCard .billing-rate-row .costRow-label{
+  color:var(--ux-primary-strong)!important;
+  font-size:.8rem!important;
+  font-weight:700;
+}
+body.ux-enhanced #billingCard .billing-rate-row .costRow-value{
+  font-size:.86rem!important;
+}
+body.ux-enhanced #billingCard .costRow-meta{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-block-start:8px;
+  color:var(--ux-text-muted);
+  font-size:.7rem!important;
+  line-height:1.45;
+}
+body.ux-enhanced #billingCard .costRow-meta input,
+body.ux-enhanced #billingCard .billing-surcharge-row input{
+  width:68px!important;
+  min-height:36px;
+  padding:5px 8px!important;
+  border:1px solid #cbd7e6;
+  border-radius:8px;
+  background:#fff;
+  color:var(--ux-primary-strong);
+  font-size:.82rem!important;
+  font-weight:700;
+  text-align:center;
+}
+body.ux-enhanced #billingCard .costRow-meta input:focus,
+body.ux-enhanced #billingCard .billing-surcharge-row input:focus{
+  border-color:var(--ux-primary);
+  outline:3px solid rgba(30,79,128,.14);
+}
+body.ux-enhanced #billingCard .billing-status-row{
+  position:relative;
+  padding-inline-start:30px!important;
+}
+body.ux-enhanced #billingCard .billing-status-row::before{
+  content:'';
+  position:absolute;
+  inset-inline-start:12px;
+  top:50%;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  transform:translateY(-50%);
+}
+body.ux-enhanced #billingCard .billing-status-row.is-new::before{background:#1e5ba8;}
+body.ux-enhanced #billingCard .billing-status-row.is-same::before{background:#0e9f6e;}
+body.ux-enhanced #billingCard .billing-status-row.is-remove::before{background:#7c3aed;}
+body.ux-enhanced #billingCard .billing-subtotal-row{
+  margin-block-start:5px!important;
+  border-block-start:1px solid #dbe4ef!important;
+}
+body.ux-enhanced #billingCard .billing-subtotal-row .costRow-label,
+body.ux-enhanced #billingCard .billing-surcharge-row .costRow-label{
+  color:var(--ux-text)!important;
+  font-weight:600;
+}
+body.ux-enhanced #billingCard .billing-legacy-total{display:none!important;}
+body.ux-enhanced #billingCard .totalBanner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin:14px 0 0;
+  padding:14px 15px!important;
+  border:1px solid #244f80;
+  border-radius:12px;
+  background:linear-gradient(135deg,#102f55,#173f6d);
+  box-shadow:0 8px 20px rgba(16,47,85,.15);
+}
+body.ux-enhanced #billingCard .totalBanner::before{display:none;}
+body.ux-enhanced #billingCard .totalBanner-lbl{
+  max-width:16ch;
+  color:#d8e5f4;
+  font-size:.72rem!important;
+  font-weight:600;
+  line-height:1.4;
+}
+body.ux-enhanced #billingCard .totalBanner-val{
+  display:flex;
+  align-items:baseline;
+  justify-content:flex-end;
+  min-width:0;
+  color:#fff;
+  font-size:1.08rem!important;
+  line-height:1.2;
+  white-space:nowrap;
+}
+body.ux-enhanced #billingCard .totalBanner-val .currency{
+  color:#f5d66d;
+  font-size:.72rem!important;
+}
+.billing-export-panel{
+  margin-block-start:18px;
+  padding-block-start:15px;
+  border-block-start:1px solid #e3e9f1;
+}
+.billing-export-copy{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.billing-export-copy strong{
+  color:var(--ux-primary-strong);
+  font-size:.82rem;
+}
+.billing-export-copy span{
+  color:var(--ux-text-muted);
+  font-size:.68rem;
+  line-height:1.45;
+}
+.billing-export-actions{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+  margin-block-start:10px;
+}
+body.ux-enhanced #billingCard .billing-export-actions .ghost{
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  margin:0;
+  padding:7px 6px;
+  border-color:#cbd7e6;
+  color:var(--ux-primary);
+  font-size:.7rem!important;
+  font-weight:700;
+  white-space:nowrap;
+}
+body.ux-enhanced #billingCard .billing-export-actions .ghost:hover{
+  border-color:var(--ux-primary);
+  background:#edf4fb;
+}
+body.ux-enhanced #billingCard #exportCsvBtn{
+  border-color:#a98a1e;
+  background:#fffaf0;
+  color:#725800;
+}
+
+.dataset-drawer-backdrop{
+  position:fixed;
+  z-index:var(--ux-z-drawer);
+  inset:0;
+  display:none;
+  justify-content:flex-end;
+  background:rgba(4,15,34,.55);
+  backdrop-filter:blur(4px);
+}
+.dataset-drawer-backdrop.is-open{display:flex;}
+.dataset-drawer{
+  width:min(760px,94vw);
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  background:var(--ux-surface);
+  box-shadow:-24px 0 70px rgba(3,14,32,.24);
+  animation:ux-drawer-in .22s ease-out;
+}
+@keyframes ux-drawer-in{from{opacity:.7;transform:translateX(26px)}to{opacity:1;transform:none}}
+.dataset-drawer-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:var(--ux-space-4);
+  padding:var(--ux-space-6);
+  border-block-end:1px solid var(--ux-border);
+}
+.dataset-drawer-header h2{margin:0;color:var(--ux-primary-strong);font-size:1.2rem;}
+.dataset-drawer-header p{margin:5px 0 0;color:var(--ux-text-soft);font-size:.82rem;}
+.dataset-drawer-close{
+  min-width:44px;
+  min-height:44px;
+  border:1px solid var(--ux-border);
+  border-radius:10px;
+  background:#fff;
+  color:var(--ux-text-soft);
+  font-size:1.25rem;
+  cursor:pointer;
+}
+.dataset-drawer-body{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:var(--ux-space-6);
+}
+.dataset-drawer-body .grid2{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:var(--ux-space-4);
+}
+.dataset-drawer-body .fileBox{
+  min-height:520px;
+  align-items:stretch!important;
+  padding:var(--ux-space-4)!important;
+  text-align:start!important;
+}
+.dataset-drawer-body .base-catalog-list{
+  max-height:none;
+  flex:1;
+  margin-block-start:var(--ux-space-3);
+}
+.dataset-drawer-body .base-catalog-option{
+  min-height:44px;
+  grid-template-columns:22px minmax(0,1fr) auto;
+  gap:8px;
+  padding:8px 10px;
+  font-size:.78rem;
+}
+.dataset-drawer-body .base-catalog-option input{width:18px;height:18px;}
+.dataset-drawer-body .base-catalog-option em{font-size:.68rem;}
+.dataset-drawer-body .base-catalog-group{padding:8px 10px;font-size:.68rem;}
+.dataset-drawer-body .base-catalog-tools{grid-template-columns:minmax(0,1fr) auto auto;gap:8px;}
+.dataset-drawer-body .base-catalog-tools input,
+.dataset-drawer-body .base-catalog-tools button{
+  min-height:44px;
+  height:44px;
+  font-size:.75rem;
+}
+.dataset-drawer-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:var(--ux-space-3);
+  padding:var(--ux-space-4) var(--ux-space-6);
+  border-block-start:1px solid var(--ux-border);
+  background:#fafbfd;
+}
+.dataset-drawer-footer span{color:var(--ux-text-soft);font-size:.78rem;}
+.dataset-drawer-done{
+  min-height:44px;
+  padding:0 22px;
+  border:0;
+  border-radius:10px;
+  background:var(--ux-primary);
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+body.dataset-drawer-open{overflow:hidden;}
+
+.workspace-view-tabs{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-block-end:var(--ux-space-3);
+  padding:4px;
+  border:1px solid var(--ux-border);
+  border-radius:12px;
+  background:#eaf0f7;
+}
+.workspace-view-tab{
+  min-height:44px;
+  flex:1;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:var(--ux-text-soft);
+  font:700 .8rem 'IBM Plex Sans Thai','Segoe UI',sans-serif;
+  cursor:pointer;
+}
+.workspace-view-tab[aria-selected="true"]{
+  background:#fff;
+  color:var(--ux-primary-strong);
+  box-shadow:0 2px 8px rgba(9,31,62,.08);
+}
+.workspace-view-tab:disabled{cursor:not-allowed;opacity:.45;}
+
+.rightCol[data-workspace-view="map"] #reportCard{display:none!important;}
+.rightCol[data-workspace-view="report"] #mapCard{display:none!important;}
+.rightCol[data-workspace-view="report"] #reportCard{display:block!important;}
+
+@media(min-width:768px){
+  body.report-focus .layout{grid-template-columns:minmax(0,1fr);}
+  body.report-focus .leftCol{display:none;}
+  body.report-focus #reportCard{min-height:calc(100vh - 170px);}
+  body.report-focus .reportWrap{max-height:calc(100vh - 330px);}
+}
+
+body.ux-enhanced #map{
+  height:clamp(520px,calc(100vh - 260px),760px);
+  min-height:520px;
+}
+
+body.ux-enhanced .legend{
+  gap:var(--ux-space-3);
+  color:var(--ux-text-soft);
+  font-size:.75rem;
+}
+
+body.ux-enhanced #results{margin:0;}
+body:not(.has-analysis).ux-enhanced #results,
+body:not(.has-analysis).ux-enhanced #billingCard{display:none!important;}
+
+body.ux-enhanced .execSummary{
+  padding:var(--ux-space-5);
+  border:1px solid var(--ux-border);
+  border-radius:16px;
+  background:#fff;
+  color:var(--ux-text);
+  box-shadow:0 3px 14px rgba(13,42,78,.055);
+}
+.execSummary .execSummary-title{
+  color:var(--ux-primary-strong)!important;
+  font-size:.88rem!important;
+  letter-spacing:0!important;
+  text-transform:none!important;
+}
+.execSummary .execSummary-meta{color:var(--ux-text-soft)!important;}
+.execSummary .statGrid{gap:8px!important;}
+.execSummary .stat{
+  min-height:76px;
+  padding:11px!important;
+  border:1px solid #e0e6ef!important;
+  background:#f8fafc!important;
+  color:var(--ux-text)!important;
+  box-shadow:none!important;
+}
+.execSummary .stat .val{color:var(--ux-primary-strong)!important;font-size:1.05rem!important;}
+.execSummary .stat .lbl,
+.execSummary .stat .unit{color:var(--ux-text-soft)!important;font-size:.68rem!important;}
+
+.report-commandbar{
+  display:flex;
+  align-items:center;
+  gap:var(--ux-space-2);
+  margin-block:0 var(--ux-space-3);
+}
+.report-tools{
+  position:relative;
+}
+.report-tools>summary{
+  min-height:40px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 12px;
+  border:1px solid var(--ux-border);
+  border-radius:9px;
+  background:#fff;
+  color:var(--ux-primary);
+  font-size:.76rem;
+  font-weight:700;
+  cursor:pointer;
+  list-style:none;
+}
+.report-tools>summary::-webkit-details-marker{display:none;}
+.report-tools-panel{
+  position:absolute;
+  z-index:40;
+  inset-block-start:46px;
+  inset-inline-start:0;
+  width:min(680px,calc(100vw - 64px));
+  max-height:min(520px,70vh);
+  overflow:auto;
+  padding:var(--ux-space-4);
+  border:1px solid var(--ux-border);
+  border-radius:12px;
+  background:#fff;
+  box-shadow:var(--ux-shadow);
+}
+.report-tools-panel>div{
+  margin:0!important;
+  padding-block:10px;
+  border-block-end:1px solid #edf0f5;
+}
+.report-tools-panel>div:last-child{border-block-end:0;}
+.report-tools-panel label{min-height:44px;}
+.report-tools-panel input[type="checkbox"],
+.report-tools-panel input[type="radio"]{width:20px;height:20px;flex:0 0 auto;}
+.report-tools-panel button{min-height:44px!important;}
+.column-chooser-list{display:grid;gap:8px;min-width:230px;}
+.column-chooser-list label{display:flex;align-items:center;gap:8px;min-height:34px;color:var(--ux-text-soft);font-size:.78rem;}
+.column-chooser-list input{width:18px;height:18px;}
+
+body.ux-enhanced #reportCard{
+  min-height:calc(100vh - 150px);
+  content-visibility:auto;
+  contain-intrinsic-size:900px;
+}
+body.ux-enhanced .reportWrap{
+  max-height:calc(100vh - 300px);
+  margin-block-start:0;
+}
+body.ux-enhanced table.report{font-size:.8rem;}
+body.ux-enhanced table.report th{padding:12px 13px;font-size:.7rem;}
+body.ux-enhanced table.report td{padding:11px 13px;}
+table.report.hide-col-10 th:nth-child(10),
+table.report.hide-col-10 td:nth-child(10),
+table.report.hide-col-11 th:nth-child(11),
+table.report.hide-col-11 td:nth-child(11){display:none;}
+table.report tbody tr.reportRow:focus-visible{
+  outline:3px solid var(--ux-focus);
+  outline-offset:-3px;
+}
+
+body.ux-enhanced input,
+body.ux-enhanced button,
+body.ux-enhanced summary{scroll-margin-block:110px;}
+
+body.ux-enhanced input[type="checkbox"],
+body.ux-enhanced input[type="radio"]{accent-color:var(--ux-primary);}
+
+body.ux-enhanced .ghost,
+body.ux-enhanced .secondary,
+body.ux-enhanced .pea-layer-actions button,
+body.ux-enhanced .pea-layer-search-row button{
+  min-height:40px;
+}
+
+body.ux-enhanced .pea-layer-option{min-height:44px;font-size:.78rem;}
+body.ux-enhanced .pea-layer-option input,
+body.ux-enhanced .pea-type-filter input{width:18px;height:18px;}
+
+.ux-help{
+  color:var(--ux-text-muted);
+  font-size:.74rem;
+  line-height:1.55;
+}
+
+@media(max-width:1100px){
+  body.ux-enhanced .layout{grid-template-columns:1fr;}
+  body.ux-enhanced #map{height:520px!important;min-height:420px!important;}
+  .workflow-nav{top:70px;}
+  .dataset-drawer-body .fileBox{min-height:440px;}
+}
+
+@media(max-width:767px){
+  :root{--shell-h:60px;}
+  body.ux-enhanced .container{padding:10px 12px 88px;}
+  body.ux-enhanced .layout{display:block;}
+  .workflow-nav{
+    top:66px;
+    margin-inline:-2px;
+    overflow-x:auto;
+    justify-content:flex-start;
+    padding:4px;
+    border-radius:12px;
+  }
+  .workflow-step{
+    min-width:max-content;
+    min-height:44px;
+    padding:7px 10px;
+    font-size:.74rem;
+  }
+  .workflow-step-index{width:22px;height:22px;}
+  body.ux-enhanced .leftCol .card{padding:16px;}
+  body.ux-enhanced .leftCol .card-title{font-size:1rem;}
+  .setup-intro,
+  .dataset-summary-role,
+  .dataset-summary-copy,
+  .analysis-readiness,
+  .advanced-settings summary,
+  .advanced-settings-copy,
+  body.ux-enhanced .advanced-settings .field label,
+  .source-role-pill,
+  .source-role-switch button{font-size:.875rem!important;}
+  .dataset-selection-summary{padding:12px;}
+  .dataset-summary-row{grid-template-columns:78px minmax(0,1fr) auto;}
+  .dataset-summary-role{min-width:0;font-size:.72rem;}
+  .source-role-switch{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    align-items:stretch!important;
+    gap:10px!important;
+  }
+  .source-role-switch>div{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    align-items:center;
+    justify-items:center;
+    width:100%;
+    gap:8px!important;
+  }
+  .source-role-pill{
+    justify-content:center;
+    width:100%;
+    min-width:0;
+    padding-inline:7px!important;
+  }
+  .source-role-switch button{
+    width:100%;
+    min-width:0;
+  }
+  body.ux-enhanced #billingCard{padding:16px!important;}
+  body.ux-enhanced #billingCard .card-title{font-size:1rem!important;}
+  .billing-card-intro,
+  body.ux-enhanced #billingCard #costStatus,
+  .billing-section-label strong,
+  .billing-section-label span,
+  body.ux-enhanced #billingCard .costRow-label,
+  body.ux-enhanced #billingCard .costRow-value,
+  body.ux-enhanced #billingCard .costRow-meta,
+  .billing-export-copy strong,
+  .billing-export-copy span{font-size:.875rem!important;}
+  .billing-section-label{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:2px;
+  }
+  .billing-section-label span{text-align:start;}
+  body.ux-enhanced #billingCard .costRow{
+    align-items:flex-start;
+    gap:8px;
+    min-height:48px;
+    padding:12px!important;
+  }
+  body.ux-enhanced #billingCard .billing-status-row{padding-inline-start:32px!important;}
+  body.ux-enhanced #billingCard .costRow-value{font-size:.9rem!important;}
+  body.ux-enhanced #billingCard .billing-rate-row .costRow-label{font-size:.875rem!important;}
+  body.ux-enhanced #billingCard .billing-rate-row .costRow-value{font-size:.94rem!important;}
+  body.ux-enhanced #billingCard .costRow-meta input,
+  body.ux-enhanced #billingCard .billing-surcharge-row input{
+    min-height:44px;
+    font-size:1rem!important;
+  }
+  body.ux-enhanced #billingCard .totalBanner{
+    align-items:flex-start;
+    flex-direction:column;
+    padding:15px!important;
+  }
+  body.ux-enhanced #billingCard .totalBanner-lbl{
+    max-width:none;
+    font-size:.875rem!important;
+  }
+  body.ux-enhanced #billingCard .totalBanner-val{
+    justify-content:flex-start;
+    width:100%;
+    font-size:1.3rem!important;
+  }
+  body.ux-enhanced #billingCard .totalBanner-val .currency{font-size:.875rem!important;}
+  .billing-export-actions{grid-template-columns:repeat(2,minmax(0,1fr));}
+  body.ux-enhanced #billingCard #exportCsvBtn{grid-column:1/-1;}
+  body.ux-enhanced #billingCard .billing-export-actions .ghost{
+    min-height:44px;
+    font-size:.875rem!important;
+  }
+  .advanced-settings-grid{grid-template-columns:1fr;}
+  .analysis-actions{grid-template-columns:1fr!important;}
+  body.ux-enhanced .analysis-actions .primary,
+  body.ux-enhanced .analysis-actions .secondary{width:100%;min-height:48px;}
+
+  .dataset-drawer-backdrop{align-items:flex-end;}
+  .dataset-drawer{
+    width:100%;
+    height:min(92vh,840px);
+    border-radius:18px 18px 0 0;
+    animation:ux-sheet-in .22s ease-out;
+  }
+  @keyframes ux-sheet-in{from{opacity:.7;transform:translateY(28px)}to{opacity:1;transform:none}}
+  .dataset-drawer-header{padding:18px 16px 14px;}
+  .dataset-drawer-header h2{font-size:1.05rem;}
+  .dataset-drawer-header p,
+  .dataset-drawer-footer span,
+  .dataset-drawer-body .base-catalog-option,
+  .dataset-drawer-body .base-catalog-option em,
+  .dataset-drawer-body .base-catalog-group,
+  .dataset-drawer-body .base-catalog-tools input,
+  .dataset-drawer-body .base-catalog-tools button{font-size:.875rem;}
+  .dataset-drawer-body{padding:14px 16px;}
+  .dataset-drawer-body .grid2{grid-template-columns:1fr;}
+  .dataset-drawer-body .fileBox{min-height:390px;}
+  .dataset-drawer-footer{padding:12px 16px;}
+
+  body.ux-enhanced[data-mobile-stage="setup"] .rightCol,
+  body.ux-enhanced[data-mobile-stage="setup"] #results,
+  body.ux-enhanced[data-mobile-stage="setup"] #billingCard{display:none!important;}
+  body.ux-enhanced[data-mobile-stage="results"] #setupCard,
+  body.ux-enhanced[data-mobile-stage="results"] #results,
+  body.ux-enhanced[data-mobile-stage="results"] #billingCard{display:none!important;}
+  body.ux-enhanced[data-mobile-stage="billing"] #setupCard,
+  body.ux-enhanced[data-mobile-stage="billing"] .rightCol{display:none!important;}
+  body.ux-enhanced[data-mobile-stage="billing"] #results,
+  body.ux-enhanced[data-mobile-stage="billing"] #billingCard{display:block!important;}
+
+  .workspace-view-tabs{position:sticky;z-index:50;top:122px;}
+  body.ux-enhanced #map{height:calc(100dvh - 250px)!important;min-height:430px!important;}
+  body.ux-enhanced #mapCard{padding:14px;}
+  body.ux-enhanced #reportCard{min-height:0;padding:14px;}
+  body.ux-enhanced .reportWrap{max-height:calc(100dvh - 310px);}
+  body.ux-enhanced .reportWrap{overflow-x:hidden;}
+  body.ux-enhanced table.report{
+    display:block;
+    width:100%;
+    min-width:0;
+  }
+  body.ux-enhanced table.report thead{display:none;}
+  body.ux-enhanced table.report tbody{
+    display:grid;
+    gap:10px;
+    padding:2px;
+  }
+  body.ux-enhanced table.report tr.reportRow{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    overflow:hidden;
+    border:1px solid var(--ux-border);
+    border-radius:12px;
+    background:#fff;
+  }
+  body.ux-enhanced table.report tr.reportRow[style]{opacity:1!important;}
+  body.ux-enhanced table.report td{
+    min-width:0;
+    display:block;
+    padding:10px 12px;
+    border-block-end:1px solid #edf1f6;
+    text-align:start;
+    overflow-wrap:anywhere;
+  }
+  body.ux-enhanced table.report td::before{
+    content:attr(data-label);
+    display:block;
+    margin-block-end:3px;
+    color:var(--ux-text-muted);
+    font-size:.8125rem;
+    font-weight:600;
+    letter-spacing:.02em;
+  }
+  body.ux-enhanced table.report td:first-child{
+    grid-column:1/-1;
+    max-width:none;
+    padding:13px 12px;
+    background:#f5f8fc;
+    white-space:normal;
+  }
+  body.ux-enhanced table.report td.num{text-align:start;}
+  body.ux-enhanced table.report td input{min-height:40px;}
+  body.ux-enhanced table.report tr:not(.reportRow){
+    display:block;
+    padding:14px;
+  }
+  body.ux-enhanced table.report tr:not(.reportRow) td{display:block!important;}
+  .report-commandbar{align-items:stretch;flex-wrap:wrap;}
+  .report-tools{flex:1;}
+  .report-tools>summary{justify-content:center;min-height:44px;}
+  .report-tools-panel{
+    position:fixed;
+    z-index:calc(var(--ux-z-drawer) + 1);
+    inset:auto 10px 12px;
+    width:auto;
+    max-height:70dvh;
+    border-radius:16px;
+  }
+  .execSummary .statGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  .execSummary .stat{min-height:84px;}
+
+  body.ux-enhanced .shell-btn,
+  body.ux-enhanced .user-btn,
+  body.ux-enhanced .project-title-wrap input{min-height:44px;height:44px;}
+  body.ux-enhanced .shellbar-inner{gap:6px;}
+  body.ux-enhanced .project-title-wrap{min-width:0;}
+  body.ux-enhanced .project-title-wrap input{font-size:.82rem;}
+  body.ux-enhanced #newProjectBtn,
+  body.ux-enhanced #projectsBtn{min-width:44px;}
+
+  body.ux-enhanced .legend{display:grid;grid-template-columns:1fr 1fr;}
+  body.ux-enhanced input,
+  body.ux-enhanced button{font-size:max(.875rem,14px);}
+  body.ux-enhanced label:has(input[type="checkbox"]),
+  body.ux-enhanced label:has(input[type="radio"]){min-height:44px;}
+  body.ux-enhanced .leaflet-control-zoom a{
+    width:44px;
+    height:44px;
+    line-height:44px;
+  }
+}
+
+@media(max-width:420px){
+  .workflow-step-label{display:none;}
+  .workflow-step{min-width:52px;}
+  .workflow-step.is-current .workflow-step-label{display:inline;}
+  .workflow-step.is-current{min-width:max-content;}
+  .dataset-summary-copy{font-size:.7rem;}
+  .execSummary .statGrid{grid-template-columns:1fr 1fr!important;}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    scroll-behavior:auto!important;
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+  }
+}
+
+@media(forced-colors:active){
+  .workflow-step.is-current,
+  .dataset-drawer-done,
+  body.ux-enhanced .primary{border:2px solid ButtonText;}
+  .analysis-readiness-dot{forced-color-adjust:none;}
+}
+
+@media print{
+  .workflow-nav,.workspace-view-tabs,.dataset-drawer-backdrop,.report-commandbar{display:none!important;}
+  .rightCol[data-workspace-view] #mapCard,
+  .rightCol[data-workspace-view] #reportCard{display:block!important;}
+}

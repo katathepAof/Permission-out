@@ -3,6 +3,9 @@ compatibility_date = "2026-07-22"
 main = "./src/worker.js"
 keep_vars = true
 
+[secrets]
+required = [ "SUPABASE_SERVICE_ROLE_KEY" ]
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"
