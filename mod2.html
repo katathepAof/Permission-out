@@ -35,6 +35,21 @@
         <span>Site Facility</span>
         <strong id="datasetStatus">รอเข้าสู่ระบบ</strong>
       </div>
+      <div class="mod2-notifications" id="commentNotifications" hidden>
+        <button type="button" id="commentNotificationBtn" class="comment-notification-btn" aria-expanded="false" aria-controls="commentNotificationPanel">
+          <span aria-hidden="true">ความคิดเห็น</span>
+          <strong id="commentNotificationCount">0</strong>
+        </button>
+        <div class="comment-notification-panel" id="commentNotificationPanel" hidden>
+          <div class="comment-notification-head">
+            <strong>ความคิดเห็นล่าสุด</strong>
+            <button type="button" id="commentNotificationRefresh">รีเฟรช</button>
+          </div>
+          <div id="commentNotificationList" class="comment-notification-list">
+            <span class="comment-notification-empty">ยังไม่มีความคิดเห็นใหม่</span>
+          </div>
+        </div>
+      </div>
       <nav class="shellbar-actions" aria-label="บัญชีผู้ใช้">
         <button type="button" class="user-btn" id="accountBtn" aria-label="เปิดบัญชีผู้ใช้">
           <span id="userInitial" class="user-avatar">G</span>

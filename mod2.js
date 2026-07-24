@@ -8,6 +8,7 @@
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     })
     : null;
+  const COMMENT_NOTIFICATIONS_KEY = 'permission-out.mod2.comments.lastSeenAt';
 
   const state = {
     user: null,
@@ -17,7 +18,9 @@
     loaded: false,
     loading: false,
     cluster: true,
-    density: false
+    density: false,
+    notifications: [],
+    commentLastSeenAt: localStorage.getItem(COMMENT_NOTIFICATIONS_KEY) || ''
   };
 
   const GRADE_COLORS = {
@@ -68,6 +71,12 @@
     modalClose: document.getElementById('modalClose'),
     toastRegion: document.getElementById('toastRegion')
   };
+  elements.commentNotifications = document.getElementById('commentNotifications');
+  elements.commentNotificationBtn = document.getElementById('commentNotificationBtn');
+  elements.commentNotificationCount = document.getElementById('commentNotificationCount');
+  elements.commentNotificationPanel = document.getElementById('commentNotificationPanel');
+  elements.commentNotificationList = document.getElementById('commentNotificationList');
+  elements.commentNotificationRefresh = document.getElementById('commentNotificationRefresh');
 
   const filterElements = {
     regional: document.getElementById('filterRegional'),
@@ -85,6 +94,7 @@
   }).addTo(map);
   const siteLayer = L.layerGroup().addTo(map);
   let searchTimer = 0;
+  let notificationTimer = 0;
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -120,6 +130,10 @@
     return modulePermissions().mod2?.update === true;
   }
 
+  function isAdmin() {
+    return state.profile?.role === 'admin';
+  }
+
   function setHealth(text, type = '') {
     elements.datasetStatus.textContent = text;
     const health = elements.datasetStatus.closest('.mod2-health');
@@ -147,27 +161,30 @@
   }
 
   async function loadProfile(user) {
+    const latestUser = await client.auth.getUser().then(({ data }) => data.user).catch(() => null);
+    const authUser = latestUser?.id === user.id ? latestUser : user;
+    state.user = authUser;
     let result = await client
       .from('profiles')
       .select('id,display_name,organization,role,is_active')
-      .eq('id', user.id)
+      .eq('id', authUser.id)
       .maybeSingle();
     if (result.error && (result.error.code === '42703' || /role|is_active/i.test(result.error.message || ''))) {
       result = await client
         .from('profiles')
         .select('id,display_name,organization')
-        .eq('id', user.id)
+        .eq('id', authUser.id)
         .maybeSingle();
     }
     if (result.error) throw result.error;
     const profile = result.data || {};
-    const metadata = user.app_metadata || {};
+    const metadata = authUser.app_metadata || {};
     const isActive = metadata.permission_out_active === undefined
       ? profile.is_active !== false
       : metadata.permission_out_active !== false;
     if (!isActive) throw new Error('บัญชีนี้ถูกระงับการใช้งาน');
     return {
-      displayName: profile.display_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'Account',
+      displayName: profile.display_name || authUser.user_metadata?.display_name || authUser.email?.split('@')[0] || 'Account',
       organization: profile.organization || '',
       role: (metadata.permission_out_role || profile.role) === 'admin' ? 'admin' : 'user',
       permissions: metadata.permission_out_permissions || null
@@ -494,6 +511,7 @@
         });
         input.value = '';
         await loadComments();
+        if (isAdmin()) await loadCommentNotifications().catch(() => {});
       } catch (error) {
         toast(error.message, 'error');
       } finally {
@@ -672,6 +690,111 @@
       .openOn(map);
   }
 
+  function siteFromNotification(notification) {
+    const existing = state.sites.find(site => Number(site.id) === Number(notification.siteId));
+    if (existing) return existing;
+    return {
+      id: notification.siteId,
+      siteCode: notification.siteCode || '',
+      siteName: notification.siteName || '',
+      type: '',
+      grade: '',
+      regional: '',
+      area: '',
+      district: notification.district || '',
+      province: notification.province || '',
+      latitude: Number(notification.latitude),
+      longitude: Number(notification.longitude),
+      customers: 0,
+      nodeEquipment: '',
+      owner: '',
+      opex: 0,
+      remark: ''
+    };
+  }
+
+  function closeCommentNotifications() {
+    elements.commentNotificationPanel.hidden = true;
+    elements.commentNotificationBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function markCommentNotificationsSeen() {
+    const latest = state.notifications[0]?.createdAt;
+    if (!latest) return;
+    state.commentLastSeenAt = latest;
+    localStorage.setItem(COMMENT_NOTIFICATIONS_KEY, latest);
+    renderCommentNotifications();
+  }
+
+  function newCommentCount() {
+    const seen = state.commentLastSeenAt ? Date.parse(state.commentLastSeenAt) : 0;
+    return state.notifications.filter(item => Date.parse(item.createdAt) > seen).length;
+  }
+
+  function renderCommentNotifications() {
+    if (!elements.commentNotifications) return;
+    const enabled = Boolean(state.user && isAdmin());
+    elements.commentNotifications.hidden = !enabled;
+    if (!enabled) {
+      closeCommentNotifications();
+      return;
+    }
+    const count = newCommentCount();
+    elements.commentNotificationCount.textContent = count > 99 ? '99+' : String(count);
+    elements.commentNotificationBtn.classList.toggle('has-new', count > 0);
+    if (!state.notifications.length) {
+      elements.commentNotificationList.innerHTML = '<span class="comment-notification-empty">ยังไม่มีความคิดเห็นใหม่</span>';
+      return;
+    }
+    const seen = state.commentLastSeenAt ? Date.parse(state.commentLastSeenAt) : 0;
+    elements.commentNotificationList.replaceChildren(...state.notifications.map(item => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `comment-notification-item${Date.parse(item.createdAt) > seen ? ' is-new' : ''}`;
+      button.innerHTML = `
+        <strong>${escapeHtml(item.siteCode || `Site ${item.siteId}`)}${item.siteName ? ` · ${escapeHtml(item.siteName)}` : ''}</strong>
+        <span>${escapeHtml(item.body)}</span>
+        <small>${escapeHtml(item.authorName)} · ${escapeHtml(new Date(item.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }))}</small>`;
+      button.addEventListener('click', () => {
+        closeCommentNotifications();
+        const site = siteFromNotification(item);
+        if (!Number.isFinite(site.latitude) || !Number.isFinite(site.longitude)) {
+          toast('ไม่พบพิกัดของไซต์นี้', 'error');
+          return;
+        }
+        if (!state.filtered.some(filtered => Number(filtered.id) === Number(site.id))) {
+          elements.siteSearch.value = '';
+          for (const select of Object.values(filterElements)) select.value = '';
+          applyFilters(false);
+        }
+        focusSite(site);
+      });
+      return button;
+    }));
+  }
+
+  async function loadCommentNotifications({ silent = true } = {}) {
+    if (!state.user || !isAdmin()) {
+      state.notifications = [];
+      renderCommentNotifications();
+      return;
+    }
+    try {
+      const payload = await authenticatedJson('/api/mod2/comments/notifications?limit=30');
+      state.notifications = payload.notifications || [];
+      renderCommentNotifications();
+    } catch (error) {
+      renderCommentNotifications();
+      if (!silent) toast(`โหลดแจ้งเตือนไม่สำเร็จ: ${error.message}`, 'error');
+    }
+  }
+
+  function scheduleCommentNotifications() {
+    window.clearInterval(notificationTimer);
+    if (!state.user || !isAdmin()) return;
+    notificationTimer = window.setInterval(() => loadCommentNotifications().catch(() => {}), 45000);
+  }
+
   function csvCell(value) {
     let text = String(value ?? '');
     if (/^[=+\-@]/.test(text)) text = `'${text}`;
@@ -722,7 +845,10 @@
       state.sites = [];
       state.filtered = [];
       state.loaded = false;
+      state.notifications = [];
+      window.clearInterval(notificationTimer);
       siteLayer.clearLayers();
+      renderCommentNotifications();
       updateMetrics();
       setHealth('รอเข้าสู่ระบบ');
       setLoading(false);
@@ -730,6 +856,8 @@
       return false;
     }
     if (reloadData || !state.loaded) await loadSites(reloadData);
+    await loadCommentNotifications().catch(() => {});
+    scheduleCommentNotifications();
     return true;
   }
 
@@ -770,9 +898,24 @@
   elements.fitBtn.addEventListener('click', fitAll);
   elements.exportBtn.addEventListener('click', exportCsv);
   elements.accountBtn.addEventListener('click', showAccount);
+  elements.commentNotificationBtn?.addEventListener('click', () => {
+    const opening = elements.commentNotificationPanel.hidden;
+    elements.commentNotificationPanel.hidden = !opening;
+    elements.commentNotificationBtn.setAttribute('aria-expanded', String(opening));
+    if (opening) {
+      markCommentNotificationsSeen();
+      loadCommentNotifications({ silent: false }).catch(() => {});
+    }
+  });
+  elements.commentNotificationRefresh?.addEventListener('click', () => loadCommentNotifications({ silent: false }));
   elements.modalClose.addEventListener('click', () => closeModal());
   elements.modalBackdrop.addEventListener('click', event => {
     if (event.target === elements.modalBackdrop) closeModal();
+  });
+  document.addEventListener('click', event => {
+    if (elements.commentNotifications && !elements.commentNotifications.contains(event.target)) {
+      closeCommentNotifications();
+    }
   });
   map.on('zoomend', () => {
     if (state.cluster && !state.density) renderMap();

@@ -930,6 +930,59 @@ async function createMod2Comment(request, env, siteId) {
   return jsonResponse({ comment: result.data }, 201);
 }
 
+async function listMod2CommentNotifications(request, env) {
+  const { supabase } = await requireAdmin(request, env);
+  const url = new URL(request.url);
+  const limit = Math.max(1, Math.min(50, Number.parseInt(url.searchParams.get('limit') || '20', 10) || 20));
+  const comments = await supabase
+    .from('mod2_site_comments')
+    .select('id,site_id,author_id,body,created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (comments.error) throw comments.error;
+  const rows = comments.data || [];
+  const siteIds = [...new Set(rows.map(comment => comment.site_id).filter(Boolean))];
+  const authorIds = [...new Set(rows.map(comment => comment.author_id).filter(Boolean))];
+  const datasets = await supabase
+    .from('mod2_site_datasets')
+    .select('active_version_id')
+    .not('active_version_id', 'is', null);
+  if (datasets.error) throw datasets.error;
+  const activeVersionIds = [...new Set((datasets.data || []).map(dataset => dataset.active_version_id).filter(Boolean))];
+  const sites = siteIds.length && activeVersionIds.length
+    ? await supabase
+      .from('mod2_sites')
+      .select('id,version_id,site_code,site_name,latitude,longitude,province,district')
+      .in('id', siteIds)
+      .in('version_id', activeVersionIds)
+    : { data: [], error: null };
+  if (sites.error) throw sites.error;
+  const profiles = authorIds.length ? await getProfiles(supabase, authorIds) : [];
+  const siteById = new Map((sites.data || []).map(site => [site.id, site]));
+  const authorById = new Map(profiles.map(profile => [profile.id, profile.display_name || 'ผู้ใช้งาน']));
+  return jsonResponse({
+    notifications: rows
+      .map(comment => {
+        const site = siteById.get(comment.site_id);
+        if (!site) return null;
+        return {
+          id: comment.id,
+          siteId: site.id,
+          siteCode: site.site_code || '',
+          siteName: site.site_name || '',
+          province: site.province || '',
+          district: site.district || '',
+          latitude: Number(site.latitude),
+          longitude: Number(site.longitude),
+          body: comment.body || '',
+          authorName: authorById.get(comment.author_id) || 'ผู้ใช้งาน',
+          createdAt: comment.created_at
+        };
+      })
+      .filter(Boolean)
+  });
+}
+
 async function updateMod2Site(request, env, siteId) {
   const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
   const id = cleanMod2SiteId(siteId);
@@ -1019,6 +1072,7 @@ async function handleDataApi(request, env, url) {
 
 async function handleMod2Api(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/mod2/sites') return activeMod2Sites(request, env);
+  if (request.method === 'GET' && url.pathname === '/api/mod2/comments/notifications') return listMod2CommentNotifications(request, env);
   const commentMatch = url.pathname.match(/^\/api\/mod2\/sites\/(\d+)\/comments$/);
   if (commentMatch && request.method === 'GET') return listMod2Comments(request, env, commentMatch[1]);
   if (commentMatch && request.method === 'POST') return createMod2Comment(request, env, commentMatch[1]);
