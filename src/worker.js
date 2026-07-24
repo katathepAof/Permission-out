@@ -455,7 +455,7 @@ function publicDatasetVersion(version) {
 }
 
 async function listManagedDatasets(request, env) {
-  const { supabase } = await requireAdmin(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod1', 'update');
   const { data: datasets, error: datasetError } = await supabase
     .from('managed_datasets')
     .select('id,source,canonical_name,display_name,active_version_id,created_at,updated_at')
@@ -491,7 +491,7 @@ async function listManagedDatasets(request, env) {
 }
 
 async function createDatasetUpload(request, env) {
-  const { supabase, user } = await requireAdmin(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod1', 'update');
   const payload = await requestJson(request, 30_000);
   const source = cleanDataSource(payload.source);
   const { displayName, canonicalName } = cleanDatasetFileName(payload.fileName);
@@ -621,7 +621,7 @@ function validateManagedFeature(value, index) {
 }
 
 async function importDatasetFeatureBatch(request, env, versionId) {
-  const { supabase } = await requireAdmin(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod1', 'update');
   const id = cleanUserId(versionId);
   const payload = await requestJson(request, 5_000_000);
   if (!Array.isArray(payload.features) || !payload.features.length || payload.features.length > DATA_FEATURE_BATCH_SIZE) {
@@ -637,7 +637,7 @@ async function importDatasetFeatureBatch(request, env, versionId) {
 }
 
 async function completeDatasetVersion(request, env, versionId) {
-  const { supabase, user } = await requireAdmin(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod1', 'update');
   const id = cleanUserId(versionId);
   const versionResult = await supabase
     .from('managed_dataset_versions')
@@ -666,7 +666,7 @@ async function completeDatasetVersion(request, env, versionId) {
 }
 
 async function publishDatasetVersion(request, env, versionId) {
-  const { supabase, user } = await requireAdmin(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod1', 'update');
   const id = cleanUserId(versionId);
   const { data, error } = await supabase.rpc('publish_managed_dataset_version', {
     p_version_id: id,
@@ -677,7 +677,7 @@ async function publishDatasetVersion(request, env, versionId) {
 }
 
 async function failDatasetVersion(request, env, versionId) {
-  const { supabase, user } = await requireAdmin(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod1', 'update');
   const id = cleanUserId(versionId);
   const payload = await requestJson(request, 20_000);
   const message = cleanText(payload.message, 'รายละเอียดข้อผิดพลาด', 1000) || 'การนำเข้าไม่สำเร็จ';

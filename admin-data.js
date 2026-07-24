@@ -350,8 +350,8 @@
 
   async function openAdminData() {
     const auth = context();
-    if (!auth?.client || auth.getCurrentProfile()?.role !== 'admin') {
-      auth?.toast('เฉพาะผู้ดูแลระบบเท่านั้น', 'error');
+    if (!auth?.client || !auth.canAccessModule?.('mod1', 'update')) {
+      auth?.toast('บัญชีนี้ไม่มีสิทธิ์อัปเดตข้อมูล MOD 1', 'error');
       return;
     }
     auth.openModal('จัดการข้อมูล PEA / UFM', 'อัปโหลด ตรวจสอบ เปรียบเทียบ เผยแพร่ และย้อนกลับเวอร์ชัน', buildView(), true);

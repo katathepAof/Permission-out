@@ -17,6 +17,7 @@
   let currentProjectId = null;
   let dirty = false;
   let autoSaveTimer = null;
+  const MODULE_KEYS = ['mod1', 'mod2'];
   const peaLayerTrigger = document.getElementById('peaLayerTrigger');
   const peaLayerPanel = document.getElementById('peaLayerPanel');
   const peaLayerStatus = document.getElementById('peaLayerStatus');
@@ -1004,34 +1005,57 @@
       currentProfile = null;
       return null;
     }
+    const latestUser = await client.auth.getUser().then(({ data }) => data.user).catch(() => null);
+    const authUser = latestUser?.id === user.id ? latestUser : user;
+    currentUser = authUser;
     let result = await client
       .from('profiles')
       .select('id,display_name,organization,role,is_active')
-      .eq('id', user.id)
+      .eq('id', authUser.id)
       .maybeSingle();
     if (result.error && (result.error.code === '42703' || /role|is_active/i.test(result.error.message || ''))) {
       result = await client
         .from('profiles')
         .select('id,display_name,organization')
-        .eq('id', user.id)
+        .eq('id', authUser.id)
         .maybeSingle();
     }
     if (result.error) throw result.error;
     const data = result.data || {};
-    const metadata = user.app_metadata || {};
+    const metadata = authUser.app_metadata || {};
     const role = metadata.permission_out_role || data.role || 'user';
+    const normalizedRole = role === 'admin' ? 'admin' : 'user';
     const isActive = metadata.permission_out_active === undefined
       ? data.is_active !== false
       : metadata.permission_out_active !== false;
     if (!isActive) throw new Error('บัญชีนี้ถูกระงับการใช้งาน');
+    const permissions = modulePermissions(metadata.permission_out_permissions, normalizedRole);
     currentProfile = {
-      id: user.id,
-      display_name: data.display_name || user.user_metadata?.display_name || '',
-      organization: data.organization || user.user_metadata?.organization || '',
-      role: role === 'admin' ? 'admin' : 'user',
-      is_active: true
+      id: authUser.id,
+      display_name: data.display_name || authUser.user_metadata?.display_name || '',
+      organization: data.organization || authUser.user_metadata?.organization || '',
+      role: normalizedRole,
+      is_active: true,
+      permissions
     };
     return currentProfile;
+  }
+
+  function modulePermissions(value, role = 'user') {
+    const isAdmin = role === 'admin';
+    return Object.fromEntries(MODULE_KEYS.map(key => {
+      const permission = value && typeof value === 'object' ? value[key] || {} : {};
+      return [key, {
+        view: isAdmin || permission.view !== false,
+        update: isAdmin || permission.update === true
+      }];
+    }));
+  }
+
+  function canAccessModule(moduleKey, action = 'view') {
+    if (currentProfile?.role === 'admin') return true;
+    const permission = currentProfile?.permissions?.[moduleKey];
+    return action === 'update' ? permission?.view && permission?.update : permission?.view;
   }
 
   async function applySession(session, { showGate = true } = {}) {
@@ -1173,18 +1197,21 @@
     const roleLabel = currentProfile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
     info.innerHTML = `<span class="connection-pill">เชื่อมต่อ Supabase แล้ว</span><br><span class="account-role">${roleLabel}${currentProfile?.organization ? ` · ${escapeHtml(currentProfile.organization)}` : ''}</span>`;
     const actions = document.createElement('div'); actions.className = 'account-actions';
-    if (currentProfile?.role === 'admin') {
+    if (canAccessModule('mod1', 'update')) {
       const manageData = document.createElement('button');
       manageData.className = 'modal-primary';
       manageData.type = 'button';
       manageData.textContent = 'จัดการข้อมูล PEA / UFM';
       manageData.addEventListener('click', () => window.permissionOutOpenAdminData?.());
+      actions.appendChild(manageData);
+    }
+    if (currentProfile?.role === 'admin') {
       const manageUsers = document.createElement('button');
       manageUsers.className = 'modal-primary';
       manageUsers.type = 'button';
       manageUsers.textContent = 'จัดการผู้ใช้และสิทธิ์';
       manageUsers.addEventListener('click', () => window.permissionOutOpenAdminUsers?.());
-      actions.append(manageData, manageUsers);
+      actions.appendChild(manageUsers);
     }
     const signout = document.createElement('button'); signout.className = 'danger-btn'; signout.textContent = 'ออกจากระบบ';
     signout.addEventListener('click', async () => {
@@ -1202,6 +1229,7 @@
     client,
     getCurrentUser: () => currentUser,
     getCurrentProfile: () => currentProfile,
+    canAccessModule,
     openModal,
     closeModal,
     toast,
