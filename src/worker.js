@@ -782,6 +782,161 @@ async function activeMod2Sites(request, env) {
   });
 }
 
+function cleanMod2SiteId(value) {
+  const id = Number.parseInt(String(value || ''), 10);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    throw new HttpError(400, 'รหัสไซต์ไม่ถูกต้อง', 'validation_error');
+  }
+  return id;
+}
+
+async function activeMod2Site(supabase, id) {
+  const siteResult = await supabase.from('mod2_sites').select('*').eq('id', id).maybeSingle();
+  if (siteResult.error) throw siteResult.error;
+  if (!siteResult.data) throw new HttpError(404, 'ไม่พบไซต์นี้', 'not_found');
+  const datasetResult = await supabase
+    .from('mod2_site_datasets')
+    .select('id,active_version_id')
+    .eq('active_version_id', siteResult.data.version_id)
+    .maybeSingle();
+  if (datasetResult.error) throw datasetResult.error;
+  if (!datasetResult.data) throw new HttpError(404, 'ไซต์นี้ไม่ได้อยู่ในชุดข้อมูลที่เผยแพร่', 'not_found');
+  return { site: siteResult.data, dataset: datasetResult.data };
+}
+
+function mod2SiteFeature(site) {
+  return {
+    type: 'Feature',
+    id: site.id,
+    geometry: {
+      type: 'Point',
+      coordinates: [Number(site.longitude), Number(site.latitude)]
+    },
+    properties: {
+      site_code: site.site_code,
+      site_name: site.site_name,
+      type_of_digit: site.type_of_digit,
+      site_grade: site.site_grade,
+      regional: site.regional,
+      uih_area: site.uih_area,
+      district: site.district,
+      province: site.province,
+      latitude: Number(site.latitude),
+      longitude: Number(site.longitude),
+      customers: Number(site.customers || 0),
+      node_equipment: site.node_equipment,
+      owner: site.owner,
+      opex: Number(site.opex || 0),
+      remark: site.remark
+    }
+  };
+}
+
+async function listMod2Comments(request, env, siteId) {
+  const { supabase } = await requireUser(request, env);
+  const id = cleanMod2SiteId(siteId);
+  await activeMod2Site(supabase, id);
+  const result = await supabase
+    .from('mod2_site_comments')
+    .select('id,author_id,body,created_at,updated_at')
+    .eq('site_id', id)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (result.error) throw result.error;
+  const authorIds = [...new Set((result.data || []).map(comment => comment.author_id))];
+  const profiles = await getProfiles(supabase, authorIds);
+  const names = new Map(profiles.map(profile => [
+    profile.id,
+    profile.display_name || 'ผู้ใช้งาน'
+  ]));
+  return jsonResponse({
+    comments: (result.data || []).map(comment => ({
+      id: comment.id,
+      body: comment.body,
+      authorName: names.get(comment.author_id) || 'ผู้ใช้งาน',
+      createdAt: comment.created_at,
+      updatedAt: comment.updated_at
+    }))
+  });
+}
+
+async function createMod2Comment(request, env, siteId) {
+  const { supabase, user } = await requireUser(request, env);
+  const id = cleanMod2SiteId(siteId);
+  await activeMod2Site(supabase, id);
+  const payload = await requestJson(request, 5_000);
+  const body = cleanText(payload.body, 'ความคิดเห็น', 1000, true);
+  const result = await supabase
+    .from('mod2_site_comments')
+    .insert({ site_id: id, author_id: user.id, body })
+    .select('id,body,created_at,updated_at')
+    .single();
+  if (result.error) throw result.error;
+  return jsonResponse({ comment: result.data }, 201);
+}
+
+async function updateMod2Site(request, env, siteId) {
+  const { supabase, user } = await requireAdmin(request, env);
+  const id = cleanMod2SiteId(siteId);
+  const { site, dataset } = await activeMod2Site(supabase, id);
+  const payload = await requestJson(request, 20_000);
+  const latitude = Number(payload.latitude);
+  const longitude = Number(payload.longitude);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new HttpError(400, 'Latitude ไม่ถูกต้อง', 'validation_error');
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new HttpError(400, 'Longitude ไม่ถูกต้อง', 'validation_error');
+  }
+  const changes = {
+    site_code: cleanText(payload.siteCode, ' Site Code', 100, true),
+    site_name: cleanText(payload.siteName, 'ชื่อไซต์', 200) || null,
+    province: cleanText(payload.province, 'จังหวัด', 200) || null,
+    district: cleanText(payload.district, 'อำเภอ', 200) || null,
+    regional: cleanText(payload.regional, ' Regional', 200) || null,
+    uih_area: cleanText(payload.area, ' UIH Area', 200) || null,
+    site_grade: cleanText(payload.grade, ' Site Grade', 200) || null,
+    type_of_digit: cleanText(payload.type, ' Type of Digit', 200) || null,
+    owner: cleanText(payload.owner, ' Owner', 200) || null,
+    node_equipment: cleanText(payload.nodeEquipment, ' Node Equipment', 500) || null,
+    remark: cleanText(payload.remark, ' Remark', 2000) || null,
+    latitude,
+    longitude,
+    geom: { type: 'Point', coordinates: [longitude, latitude] }
+  };
+  const result = await supabase.from('mod2_sites').update(changes).eq('id', id).select('*').single();
+  if (result.error) throw result.error;
+  const audit = await supabase.from('mod2_site_audit').insert({
+    dataset_id: dataset.id,
+    version_id: site.version_id,
+    site_code: result.data.site_code,
+    action: 'update',
+    old_data: site,
+    new_data: result.data,
+    actor_id: user.id
+  });
+  if (audit.error) throw audit.error;
+  return jsonResponse({ site: mod2SiteFeature(result.data) });
+}
+
+async function deleteMod2Site(request, env, siteId) {
+  const { supabase, user } = await requireAdmin(request, env);
+  const id = cleanMod2SiteId(siteId);
+  const { site, dataset } = await activeMod2Site(supabase, id);
+  const removal = await supabase.from('mod2_sites').delete().eq('id', id);
+  if (removal.error) throw removal.error;
+  const audit = await supabase.from('mod2_site_audit').insert({
+    dataset_id: dataset.id,
+    version_id: site.version_id,
+    site_code: site.site_code,
+    action: 'delete',
+    old_data: site,
+    actor_id: user.id
+  });
+  if (audit.error) throw audit.error;
+  return jsonResponse({ deleted: true, id });
+}
+
 async function handleAdminApi(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/admin/users') return listAdminUsers(request, env);
   if (request.method === 'POST' && url.pathname === '/api/admin/users') return createAdminUser(request, env);
@@ -809,6 +964,12 @@ async function handleDataApi(request, env, url) {
 
 async function handleMod2Api(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/mod2/sites') return activeMod2Sites(request, env);
+  const commentMatch = url.pathname.match(/^\/api\/mod2\/sites\/(\d+)\/comments$/);
+  if (commentMatch && request.method === 'GET') return listMod2Comments(request, env, commentMatch[1]);
+  if (commentMatch && request.method === 'POST') return createMod2Comment(request, env, commentMatch[1]);
+  const siteMatch = url.pathname.match(/^\/api\/mod2\/sites\/(\d+)$/);
+  if (siteMatch && request.method === 'PATCH') return updateMod2Site(request, env, siteMatch[1]);
+  if (siteMatch && request.method === 'DELETE') return deleteMod2Site(request, env, siteMatch[1]);
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
 }
 

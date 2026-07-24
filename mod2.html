@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/vendor/leaflet.css">
   <link rel="stylesheet" href="/production.css?v=20260723-modules">
-  <link rel="stylesheet" href="/mod2.css?v=20260724-mod2">
+  <link rel="stylesheet" href="/mod2.css?v=20260724-mod2-popup">
 </head>
 <body class="mod2-body">
   <header class="app-shellbar" aria-label="แถบจัดการระบบ">
@@ -73,23 +73,12 @@
           <button type="button" id="resetFilters">ล้างทั้งหมด</button>
         </div>
         <div class="filter-grid">
-          <label>Regional<select id="filterRegional" multiple size="3"></select></label>
-          <label>UIH Area<select id="filterArea" multiple size="3"></select></label>
-          <label>Province<select id="filterProvince" multiple size="4"></select></label>
-          <label>Site Grade<select id="filterGrade" multiple size="4"></select></label>
-          <label>Type of Digit<select id="filterType" multiple size="3"></select></label>
-          <label>Owner<select id="filterOwner" multiple size="4"></select></label>
-        </div>
-        <p class="filter-hint">เลือกได้หลายค่าโดยกด Ctrl ค้างไว้</p>
-      </section>
-
-      <section class="mod2-results">
-        <div class="section-heading">
-          <h2>ไซต์ที่พบ</h2>
-          <span id="resultCount">0</span>
-        </div>
-        <div id="siteList" class="site-list" aria-live="polite">
-          <div class="empty-state">เข้าสู่ระบบเพื่อโหลดข้อมูล</div>
+          <label>Regional<select id="filterRegional"></select></label>
+          <label>UIH Area<select id="filterArea"></select></label>
+          <label>Province<select id="filterProvince"></select></label>
+          <label>Site Grade<select id="filterGrade"></select></label>
+          <label>Type of Digit<select id="filterType"></select></label>
+          <label>Owner<select id="filterOwner"></select></label>
         </div>
       </section>
     </aside>
@@ -160,6 +149,6 @@
   <script src="/vendor/leaflet.js"></script>
   <script src="/bootstrap.js"></script>
   <script src="/vendor/supabase.js"></script>
-  <script src="/mod2.js?v=20260724-mod2"></script>
+  <script src="/mod2.js?v=20260724-mod2-popup"></script>
 </body>
 </html>

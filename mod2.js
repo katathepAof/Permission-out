@@ -45,8 +45,6 @@
     clearSearch: document.getElementById('clearSearch'),
     resetFilters: document.getElementById('resetFilters'),
     reloadBtn: document.getElementById('reloadBtn'),
-    siteList: document.getElementById('siteList'),
-    resultCount: document.getElementById('resultCount'),
     metricSites: document.getElementById('metricSites'),
     metricCustomers: document.getElementById('metricCustomers'),
     metricNodes: document.getElementById('metricNodes'),
@@ -255,11 +253,13 @@
     openModal('บัญชีผู้ใช้', state.user.email || '', content, true);
   }
 
-  async function authenticatedJson(path) {
+  async function authenticatedJson(path, options = {}) {
     const { data } = await client.auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
-    const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
+    if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const response = await fetch(path, { ...options, headers });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(payload.error?.message || `HTTP ${response.status}`);
@@ -345,13 +345,17 @@
   }
 
   function selectedValues(select) {
-    return new Set([...select.selectedOptions].map(option => option.value));
+    return new Set(select.value ? [select.value] : []);
   }
 
   function populateFilters() {
     for (const [key, select] of Object.entries(filterElements)) {
       const selected = selectedValues(select);
       const fragment = document.createDocumentFragment();
+      const allOption = document.createElement('option');
+      allOption.value = '';
+      allOption.textContent = 'ทั้งหมด';
+      fragment.appendChild(allOption);
       for (const value of uniqueValues(key)) {
         const option = document.createElement('option');
         option.value = value;
@@ -386,7 +390,6 @@
       return Object.entries(selections).every(([key, values]) => !values.size || values.has(site[key]));
     });
     updateMetrics();
-    renderSites();
     renderMap();
     renderLegend();
     if (autoFit && state.filtered.length) fitAll();
@@ -402,45 +405,7 @@
     elements.metricCustomers.textContent = sites.reduce((sum, site) => sum + site.customers, 0).toLocaleString('th-TH');
     elements.metricNodes.textContent = new Set(sites.map(site => site.nodeEquipment).filter(Boolean)).size.toLocaleString('th-TH');
     elements.metricOwners.textContent = new Set(sites.map(site => site.owner).filter(Boolean)).size.toLocaleString('th-TH');
-    elements.resultCount.textContent = sites.length.toLocaleString('th-TH');
     elements.mapSubtitle.textContent = `แสดง ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites`;
-  }
-
-  function renderSites() {
-    if (!state.filtered.length) {
-      const empty = document.createElement('div');
-      empty.className = 'empty-state';
-      empty.textContent = state.loaded ? 'ไม่พบไซต์ที่ตรงกับตัวกรอง' : 'ยังไม่มีข้อมูล';
-      elements.siteList.replaceChildren(empty);
-      return;
-    }
-    const fragment = document.createDocumentFragment();
-    for (const site of state.filtered.slice(0, 120)) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'site-item';
-      const dot = document.createElement('i');
-      dot.className = 'site-item-dot';
-      dot.style.background = gradeColor(site.grade);
-      const copy = document.createElement('span');
-      const code = document.createElement('strong');
-      code.textContent = site.siteCode;
-      const name = document.createElement('span');
-      name.textContent = site.siteName || '—';
-      copy.append(code, name);
-      const meta = document.createElement('em');
-      meta.textContent = site.area || site.province || site.grade || '';
-      button.append(dot, copy, meta);
-      button.addEventListener('click', () => focusSite(site));
-      fragment.appendChild(button);
-    }
-    if (state.filtered.length > 120) {
-      const more = document.createElement('div');
-      more.className = 'more-results';
-      more.textContent = `อีก ${(state.filtered.length - 120).toLocaleString('th-TH')} sites แสดงอยู่บนแผนที่`;
-      fragment.appendChild(more);
-    }
-    elements.siteList.replaceChildren(fragment);
   }
 
   function popupContent(site) {
@@ -453,11 +418,128 @@
       ['Customers', site.customers.toLocaleString('th-TH')],
       ['Node Equipment', site.nodeEquipment]
     ].filter(([, value]) => value !== '' && value != null);
-    return `<div class="facility-popup">
+    const popup = document.createElement('div');
+    popup.className = 'facility-popup';
+    popup.innerHTML = `
       <div class="facility-popup-code">${escapeHtml(site.siteCode)}</div>
       <h3>${escapeHtml(site.siteName || '—')}</h3>
       <dl>${rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('')}</dl>
-    </div>`;
+      <div class="facility-popup-section">
+        <strong>ความคิดเห็น</strong>
+        <div class="facility-comments"><span class="facility-comment-empty">กำลังโหลด…</span></div>
+        <form class="facility-comment-form">
+          <input name="comment" maxlength="1000" required aria-label="เพิ่มความคิดเห็น" placeholder="เขียนความคิดเห็น…">
+          <button type="submit">ส่ง</button>
+        </form>
+      </div>`;
+    const comments = popup.querySelector('.facility-comments');
+    const renderComments = items => {
+      if (!items.length) {
+        comments.innerHTML = '<span class="facility-comment-empty">ยังไม่มีความคิดเห็น</span>';
+        return;
+      }
+      comments.innerHTML = items.map(item => `<div class="facility-comment"><b>${escapeHtml(item.authorName || 'ผู้ใช้งาน')}<time>${escapeHtml(new Date(item.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }))}</time></b>${escapeHtml(item.body)}</div>`).join('');
+    };
+    const loadComments = async () => {
+      try {
+        const payload = await authenticatedJson(`/api/mod2/sites/${site.id}/comments`);
+        renderComments(payload.comments || []);
+      } catch (error) {
+        comments.innerHTML = `<span class="facility-comment-empty">${escapeHtml(error.message)}</span>`;
+      }
+    };
+    popup.querySelector('.facility-comment-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const input = event.currentTarget.elements.comment;
+      const body = input.value.trim();
+      if (!body) return;
+      const button = event.currentTarget.querySelector('button');
+      button.disabled = true;
+      try {
+        await authenticatedJson(`/api/mod2/sites/${site.id}/comments`, {
+          method: 'POST',
+          body: JSON.stringify({ body })
+        });
+        input.value = '';
+        await loadComments();
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+    if (state.profile?.role === 'admin') {
+      const actions = document.createElement('div');
+      actions.className = 'facility-admin-actions';
+      actions.innerHTML = '<button type="button" data-action="edit">แก้ไขข้อมูล</button><button type="button" class="is-danger" data-action="delete">ลบไซต์</button>';
+      actions.querySelector('[data-action="edit"]').addEventListener('click', () => showSiteEditor(site));
+      actions.querySelector('[data-action="delete"]').addEventListener('click', () => deleteSite(site));
+      popup.appendChild(actions);
+    }
+    loadComments();
+    return popup;
+  }
+
+  function showSiteEditor(site) {
+    map.closePopup();
+    const content = document.createElement('form');
+    content.className = 'site-edit-grid';
+    const fields = [
+      ['siteCode', 'Site Code', site.siteCode, true],
+      ['siteName', 'ชื่อไซต์', site.siteName],
+      ['province', 'จังหวัด', site.province],
+      ['district', 'อำเภอ', site.district],
+      ['regional', 'Regional', site.regional],
+      ['area', 'UIH Area', site.area],
+      ['grade', 'Site Grade', site.grade],
+      ['type', 'Type of Digit', site.type],
+      ['owner', 'Owner', site.owner],
+      ['nodeEquipment', 'Node Equipment', site.nodeEquipment],
+      ['latitude', 'Latitude', site.latitude, true, 'number'],
+      ['longitude', 'Longitude', site.longitude, true, 'number']
+    ];
+    content.innerHTML = fields.map(([name, label, value, required, type = 'text']) => `
+      <div class="modal-field"><label>${escapeHtml(label)}</label><input name="${name}" type="${type}" value="${escapeHtml(value)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : 'maxlength="200"'}></div>
+    `).join('') + `
+      <div class="modal-field is-wide"><label>Remark</label><textarea name="remark" maxlength="2000">${escapeHtml(site.remark)}</textarea></div>
+      <button class="modal-primary is-wide" type="submit">บันทึกการแก้ไข</button>`;
+    content.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!content.reportValidity()) return;
+      const button = content.querySelector('button');
+      button.disabled = true;
+      const payload = Object.fromEntries(new FormData(content));
+      payload.latitude = Number(payload.latitude);
+      payload.longitude = Number(payload.longitude);
+      try {
+        const result = await authenticatedJson(`/api/mod2/sites/${site.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+        Object.assign(site, featureToSite(result.site));
+        closeModal(true);
+        applyFilters(false);
+        toast('บันทึกข้อมูลไซต์แล้ว', 'success');
+      } catch (error) {
+        toast(error.message, 'error');
+        button.disabled = false;
+      }
+    });
+    openModal(`แก้ไข ${site.siteCode}`, 'สิทธิ์ผู้ดูแลระบบ', content, true);
+  }
+
+  async function deleteSite(site) {
+    if (!window.confirm(`ยืนยันการลบไซต์ ${site.siteCode}? ความคิดเห็นของไซต์นี้จะถูกลบด้วย`)) return;
+    try {
+      await authenticatedJson(`/api/mod2/sites/${site.id}`, { method: 'DELETE' });
+      state.sites = state.sites.filter(item => item.id !== site.id);
+      map.closePopup();
+      populateFilters();
+      applyFilters(false);
+      toast(`ลบไซต์ ${site.siteCode} แล้ว`, 'success');
+    } catch (error) {
+      toast(error.message, 'error');
+    }
   }
 
   function markerIcon(site) {
@@ -634,7 +716,7 @@
   elements.resetFilters.addEventListener('click', () => {
     elements.siteSearch.value = '';
     for (const select of Object.values(filterElements)) {
-      for (const option of select.options) option.selected = false;
+      select.value = '';
     }
     applyFilters();
   });
