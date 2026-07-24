@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v12-data-versioning';
-const CORE = ['/', '/production.css?v=20260723-modules', '/production.js?v=20260723-modules', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v13-mod2';
+const CORE = ['/', '/mod2/', '/production.css?v=20260723-modules', '/production.js?v=20260723-modules', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260724-mod2', '/mod2.js?v=20260724-mod2', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -26,7 +26,8 @@ self.addEventListener('fetch', event => {
   if (
     event.request.method !== 'GET' ||
     url.origin !== self.location.origin ||
-    url.pathname === '/bootstrap.js'
+    url.pathname === '/bootstrap.js' ||
+    url.pathname.startsWith('/api/')
   ) return;
 
   event.respondWith((async () => {
@@ -49,7 +50,7 @@ self.addEventListener('fetch', event => {
       // Only navigations may fall back to the app shell. Returning HTML for
       // CSS, JavaScript, fonts or images causes MIME-type errors.
       if (event.request.mode === 'navigate') {
-        const appShell = await caches.match('/');
+        const appShell = await caches.match(url.pathname.startsWith('/mod2') ? '/mod2/' : '/');
         if (appShell) return appShell;
       }
 

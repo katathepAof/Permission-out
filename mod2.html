@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07152c">
+  <title>MOD 2 · Site Facility & Design | Permission Out</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/vendor/leaflet.css">
+  <link rel="stylesheet" href="/production.css?v=20260723-modules">
+  <link rel="stylesheet" href="/mod2.css?v=20260724-mod2">
+</head>
+<body class="mod2-body">
+  <header class="app-shellbar" aria-label="แถบจัดการระบบ">
+    <div class="shellbar-inner">
+      <a class="shellbar-brand" href="/" aria-label="Permission Out MOD 1">
+        <span class="brand-mark">PO</span>
+        <span class="brand-copy"><b>Permission Out</b><small>Route Intelligence</small></span>
+      </a>
+      <nav class="module-switcher" aria-label="โมดูลระบบ">
+        <a href="/" class="module-tab">
+          <span>MOD 1</span><strong>วิเคราะห์ PEA / UFM</strong>
+        </a>
+        <a href="/mod2/" class="module-tab is-active" aria-current="page">
+          <span>MOD 2</span><strong>Site Facility</strong>
+        </a>
+      </nav>
+      <div class="mod2-health" aria-label="สถานะข้อมูล MOD 2">
+        <span class="mod2-health-dot" aria-hidden="true"></span>
+        <span>Site Facility</span>
+        <strong id="datasetStatus">รอเข้าสู่ระบบ</strong>
+      </div>
+      <nav class="shellbar-actions" aria-label="บัญชีผู้ใช้">
+        <button type="button" class="user-btn" id="accountBtn" aria-label="เปิดบัญชีผู้ใช้">
+          <span id="userInitial" class="user-avatar">G</span>
+          <span class="user-copy">
+            <strong id="accountLabel">เข้าสู่ระบบ</strong>
+            <small id="accountMeta">ยังไม่เข้าสู่ระบบ</small>
+          </span>
+          <span class="user-chevron" aria-hidden="true">⌄</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mod2-workspace">
+    <aside class="mod2-sidebar" aria-label="ตัวกรอง Site Facility">
+      <section class="mod2-intro">
+        <div>
+          <span class="eyebrow">MOD 2</span>
+          <h1>Site Facility &amp; Design</h1>
+          <p>ค้นหาและวิเคราะห์โครงสร้างพื้นฐานไซต์จากชุดข้อมูลกลาง</p>
+        </div>
+        <button type="button" class="icon-button" id="reloadBtn" title="โหลดข้อมูลใหม่" aria-label="โหลดข้อมูลใหม่">↻</button>
+      </section>
+
+      <section class="mod2-search-section">
+        <label for="siteSearch">ค้นหาไซต์</label>
+        <div class="mod2-search">
+          <span aria-hidden="true">⌕</span>
+          <input id="siteSearch" type="search" placeholder="Site Code, ชื่อ, จังหวัด, อุปกรณ์…" autocomplete="off">
+          <button type="button" id="clearSearch" aria-label="ล้างคำค้นหา">×</button>
+        </div>
+      </section>
+
+      <section class="mod2-filters">
+        <div class="section-heading">
+          <h2>ตัวกรอง</h2>
+          <button type="button" id="resetFilters">ล้างทั้งหมด</button>
+        </div>
+        <div class="filter-grid">
+          <label>Regional<select id="filterRegional" multiple size="3"></select></label>
+          <label>UIH Area<select id="filterArea" multiple size="3"></select></label>
+          <label>Province<select id="filterProvince" multiple size="4"></select></label>
+          <label>Site Grade<select id="filterGrade" multiple size="4"></select></label>
+          <label>Type of Digit<select id="filterType" multiple size="3"></select></label>
+          <label>Owner<select id="filterOwner" multiple size="4"></select></label>
+        </div>
+        <p class="filter-hint">เลือกได้หลายค่าโดยกด Ctrl ค้างไว้</p>
+      </section>
+
+      <section class="mod2-results">
+        <div class="section-heading">
+          <h2>ไซต์ที่พบ</h2>
+          <span id="resultCount">0</span>
+        </div>
+        <div id="siteList" class="site-list" aria-live="polite">
+          <div class="empty-state">เข้าสู่ระบบเพื่อโหลดข้อมูล</div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="mod2-content">
+      <div class="metric-grid" aria-label="สรุปข้อมูล">
+        <article class="metric-card metric-primary">
+          <span>Sites</span>
+          <strong id="metricSites">—</strong>
+          <small>รายการที่ตรงกับตัวกรอง</small>
+        </article>
+        <article class="metric-card metric-green">
+          <span>Customers</span>
+          <strong id="metricCustomers">—</strong>
+          <small>ลูกค้ารวม</small>
+        </article>
+        <article class="metric-card metric-purple">
+          <span>Node Types</span>
+          <strong id="metricNodes">—</strong>
+          <small>รูปแบบอุปกรณ์</small>
+        </article>
+        <article class="metric-card metric-gold">
+          <span>Owners</span>
+          <strong id="metricOwners">—</strong>
+          <small>เจ้าของพื้นที่</small>
+        </article>
+      </div>
+
+      <div class="map-card">
+        <div class="map-toolbar">
+          <div>
+            <strong>Network Infrastructure Map</strong>
+            <span id="mapSubtitle">รอโหลดข้อมูลกลาง</span>
+          </div>
+          <div class="map-actions">
+            <button type="button" id="clusterBtn" class="is-active">Cluster</button>
+            <button type="button" id="heatBtn">Density</button>
+            <button type="button" id="fitBtn">Fit all</button>
+            <button type="button" id="exportBtn">Export CSV</button>
+          </div>
+        </div>
+        <div id="mod2Map" aria-label="แผนที่ Site Facility"></div>
+        <div id="mapLoading" class="map-loading">
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <strong>กำลังโหลดข้อมูล MOD 2</strong>
+          <small id="loadingDetail">กำลังตรวจสอบเซสชัน…</small>
+        </div>
+        <div class="map-legend" id="mapLegend"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="mod2-modal-backdrop" id="modalBackdrop" hidden>
+    <section class="mod2-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header>
+        <div>
+          <h2 id="modalTitle">เข้าสู่ระบบ</h2>
+          <p id="modalSubtitle"></p>
+        </div>
+        <button type="button" id="modalClose" aria-label="ปิด">×</button>
+      </header>
+      <div id="modalBody" class="mod2-modal-body"></div>
+    </section>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+
+  <script src="/vendor/leaflet.js"></script>
+  <script src="/bootstrap.js"></script>
+  <script src="/vendor/supabase.js"></script>
+  <script src="/mod2.js?v=20260724-mod2"></script>
+</body>
+</html>

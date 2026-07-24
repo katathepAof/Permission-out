@@ -52,6 +52,15 @@ if (protectedData.status !== 401 || protectedDataBody.error?.code !== 'unauthori
   throw new Error('Dataset authentication guard failed');
 }
 
+const protectedMod2 = await worker.fetch(new Request('https://example.com/api/mod2/sites'), {
+  ...env,
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'
+});
+const protectedMod2Body = await protectedMod2.json();
+if (protectedMod2.status !== 401 || protectedMod2Body.error?.code !== 'unauthorized') {
+  throw new Error('MOD 2 authentication guard failed');
+}
+
 const protectedUpload = await worker.fetch(new Request('https://example.com/api/admin/data/uploads', { method: 'POST' }), {
   ...env,
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'

@@ -115,9 +115,11 @@ npx wrangler deploy
 
 - `Permission_Out.html` — แกนวิเคราะห์และหน้าหลัก
 - `production.js` / `production.css` — MOD 1, Supabase datasets, auth และ UI production
+- `mod2.html` / `mod2.js` / `mod2.css` — MOD 2 Site Facility map, filters, dashboard และ CSV export
 - `admin-users.js` / `admin-users.css` — หน้าจัดการผู้ใช้สำหรับ Admin
 - `admin-data.js` / `admin-data.css` — อัปโหลด Staging, ตรวจ Diff, Publish และ Rollback ข้อมูล PEA/UFM
 - `supabase/schema.sql` — ตาราง, indexes, triggers, grants และ RLS policies
+- `supabase/migrations/20260724120000_mod2_site_facility.sql` — MOD 2 Site Facility แบบ versioned, PostGIS, RLS และ audit
 - `scripts/build.mjs` — สร้าง static bundle และ inject public Supabase config
 - `src/worker.js` — runtime config, health endpoint และ static-assets fallback
 - `_headers` — CSP และ security headers สำหรับ Cloudflare
@@ -156,3 +158,31 @@ npx wrangler deploy
 - เปิด Cloudflare Web Analytics/Logpush ตามนโยบายองค์กร
 - กำหนด retention และ backup/PITR ของ Supabase ตาม SLA
 - แยกตาราง, Storage prefix และ RLS ของแต่ละ MOD ให้ชัดเจน แม้จะใช้ Supabase project และระบบ Login เดียวกัน
+
+## MOD 2 Site Facility dataset
+
+ข้อมูลตั้งต้น 2,009 รายการใน `UIH sites 2026 sync 5 - Copy.html` นำเข้าเป็นหนึ่งไซต์ต่อหนึ่งแถวใน
+`mod2_sites` พร้อม PostGIS Point (EPSG:4326) โดยแต่ละรอบนำเข้าสร้าง immutable version และเก็บไฟล์
+JSON ต้นฉบับใน Private Storage bucket `permission-out-mod2-data` สำหรับการส่งมอบให้ผู้ดูแล Supabase
+ของหน่วยงานปลายทาง ให้ทำตาม `MOD2_SUPABASE_HANDOFF.md`
+
+1. รัน `supabase/migrations/20260724120000_mod2_site_facility.sql` ใน Supabase SQL Editor
+2. ตรวจและสร้าง JSON แบบ local:
+
+   ```bash
+   npm run data:prepare-mod2-sites
+   ```
+
+3. นำเข้า Finalize และ Publish version:
+
+   ```bash
+   # PowerShell
+   $env:MOD2_SUPABASE_PROJECT_REF = "project-ref-ของหน่วยงาน"
+   npm run data:import-mod2-sites
+   ```
+
+Importer ตรวจ Supabase project ref, จำนวนแถว, Site Code ซ้ำ, ช่วงพิกัด และ SHA-256 ก่อนเขียนข้อมูล
+หาก SHA-256 เดิมเคยถูก Publish แล้ว คำสั่งจะจบแบบ idempotent โดยไม่สร้าง version ซ้ำ ผู้ดำเนินการ
+นำเข้าจะเป็น Admin ที่ active รายแรก หรือกำหนด UUID ชัดเจนด้วย `MOD2_IMPORT_ACTOR_ID` ค่า
+`MOD2_SUPABASE_PROJECT_REF` ต้องตรงกับ subdomain ของ `SUPABASE_URL` เพื่อป้องกันการนำเข้าผิด Project
+และควรรันคำสั่งบนเครื่องของหน่วยงานเท่านั้น ไม่ส่ง `SUPABASE_SECRET_KEY` หรือ service-role key ให้บุคคลอื่น

@@ -55,11 +55,16 @@ async function serveWorkerApi(nodeRequest, nodeResponse) {
 createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-    if (pathname.startsWith('/api/')) {
+    if (pathname.startsWith('/api/') || pathname === '/bootstrap.js') {
       await serveWorkerApi(request, response);
       return;
     }
-    const relative = pathname === '/' ? 'index.html' : normalize(pathname).replace(/^[/\\]+/, '');
+    const routePath = pathname === '/mod2' ? '/mod2/' : pathname;
+    const relative = routePath === '/'
+      ? 'index.html'
+      : routePath.endsWith('/')
+        ? `${normalize(routePath).replace(/^[/\\]+/, '')}index.html`
+        : normalize(routePath).replace(/^[/\\]+/, '');
     const file = join(root, relative);
     if (!file.startsWith(root)) throw new Error('Invalid path');
     const body = await readFile(file);

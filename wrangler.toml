@@ -10,4 +10,4 @@ required = [ "SUPABASE_SERVICE_ROLE_KEY" ]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = [ "/", "/index.html", "/bootstrap.js", "/api/*" ]
+run_worker_first = [ "/", "/index.html", "/mod2", "/mod2/*", "/bootstrap.js", "/api/*" ]

@@ -729,6 +729,59 @@ async function activeDatasetFeatures(request, env, datasetId) {
   });
 }
 
+function mod2ListParam(searchParams, name) {
+  const raw = String(searchParams.get(name) || '').trim();
+  if (!raw) return null;
+  const values = [...new Set(raw.split(',').map(value => value.trim()).filter(Boolean))];
+  if (values.length > 50 || values.some(value => value.length > 200)) {
+    throw new HttpError(400, `ตัวกรอง ${name} ไม่ถูกต้อง`, 'validation_error');
+  }
+  return values;
+}
+
+function mod2BboxParam(searchParams) {
+  const raw = String(searchParams.get('bbox') || '').trim();
+  if (!raw) return null;
+  const bbox = raw.split(',').map(Number);
+  if (
+    bbox.length !== 4
+    || !bbox.every(Number.isFinite)
+    || bbox[0] < -180 || bbox[2] > 180
+    || bbox[1] < -90 || bbox[3] > 90
+    || bbox[0] >= bbox[2] || bbox[1] >= bbox[3]
+  ) {
+    throw new HttpError(400, 'ขอบเขตแผนที่ไม่ถูกต้อง', 'validation_error');
+  }
+  return bbox;
+}
+
+async function activeMod2Sites(request, env) {
+  const { supabase } = await requireUser(request, env);
+  const url = new URL(request.url);
+  const afterId = Math.max(0, Number.parseInt(url.searchParams.get('after') || '0', 10) || 0);
+  const limit = Math.max(1, Math.min(1000, Number.parseInt(url.searchParams.get('limit') || '500', 10) || 500));
+  const query = cleanText(url.searchParams.get('query'), 'คำค้นหา', 200);
+  const result = await supabase.rpc('get_mod2_site_page', {
+    p_after_id: afterId,
+    p_limit: limit,
+    p_bbox: mod2BboxParam(url.searchParams),
+    p_query: query || null,
+    p_regionals: mod2ListParam(url.searchParams, 'regional'),
+    p_uih_areas: mod2ListParam(url.searchParams, 'area'),
+    p_provinces: mod2ListParam(url.searchParams, 'province'),
+    p_site_grades: mod2ListParam(url.searchParams, 'grade'),
+    p_types_of_digit: mod2ListParam(url.searchParams, 'type'),
+    p_owners: mod2ListParam(url.searchParams, 'owner')
+  });
+  if (result.error) throw result.error;
+  return jsonResponse(result.data || {
+    type: 'FeatureCollection',
+    features: [],
+    nextAfter: null,
+    count: 0
+  });
+}
+
 async function handleAdminApi(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/admin/users') return listAdminUsers(request, env);
   if (request.method === 'POST' && url.pathname === '/api/admin/users') return createAdminUser(request, env);
@@ -751,6 +804,11 @@ async function handleDataApi(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/data/catalog') return activeDatasetCatalog(request, env);
   const featureMatch = url.pathname.match(/^\/api\/data\/datasets\/([^/]+)\/features$/);
   if (featureMatch && request.method === 'GET') return activeDatasetFeatures(request, env, featureMatch[1]);
+  throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
+}
+
+async function handleMod2Api(request, env, url) {
+  if (request.method === 'GET' && url.pathname === '/api/mod2/sites') return activeMod2Sites(request, env);
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
 }
 
@@ -807,10 +865,27 @@ export default {
       }
     }
 
+    if (url.pathname.startsWith('/api/mod2/')) {
+      try {
+        return await handleMod2Api(request, env, url);
+      } catch (error) {
+        const migrationMissing = ['42P01', 'PGRST205', 'PGRST202'].includes(error?.code);
+        const status = migrationMissing ? 503 : error instanceof HttpError ? error.status : 500;
+        const code = migrationMissing ? 'mod2_migration_required' : error instanceof HttpError ? error.code : 'server_error';
+        const message = migrationMissing
+          ? 'ยังไม่ได้ติดตั้ง MOD 2 migration ใน Supabase'
+          : status === 500 ? 'โหลดข้อมูล MOD 2 ไม่สำเร็จ กรุณาลองใหม่' : error.message;
+        return jsonResponse({ error: { code, message } }, status);
+      }
+    }
+
     const assetResponse = await env.ASSETS.fetch(request);
-    if ((url.pathname === '/' || url.pathname === '/index.html') && assetResponse.headers.get('Content-Type')?.includes('text/html')) {
+    if (
+      ['/', '/index.html', '/mod2', '/mod2/', '/mod2/index.html'].includes(url.pathname)
+      && assetResponse.headers.get('Content-Type')?.includes('text/html')
+    ) {
       const html = await assetResponse.text();
-      const injected = html.replace('<script src="bootstrap.js"></script>', `<script>${configAssignment(env)}</script>`);
+      const injected = html.replace(/<script src="\/?bootstrap\.js"><\/script>/, `<script>${configAssignment(env)}</script>`);
       const headers = new Headers(assetResponse.headers);
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       return new Response(injected, { status: assetResponse.status, statusText: assetResponse.statusText, headers });

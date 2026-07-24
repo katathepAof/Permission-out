@@ -6,7 +6,7 @@ const dist = resolve(root, 'dist');
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 
-const assets = ['production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'manifest.webmanifest', 'sw.js', 'logo.svg', '_headers'];
+const assets = ['production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.css', 'mod2.js', 'manifest.webmanifest', 'sw.js', 'logo.svg', '_headers'];
 for (const file of assets) await cp(resolve(root, file), resolve(dist, file));
 const vendor = resolve(dist, 'vendor');
 await mkdir(vendor, { recursive: true });
@@ -18,6 +18,10 @@ await cp(resolve(root, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'
 
 let html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 await writeFile(resolve(dist, 'index.html'), html, 'utf8');
+const mod2 = resolve(dist, 'mod2');
+await mkdir(mod2, { recursive: true });
+html = await readFile(resolve(root, 'mod2.html'), 'utf8');
+await writeFile(resolve(mod2, 'index.html'), html, 'utf8');
 
 const js = `window.APP_CONFIG = ${JSON.stringify({ supabaseUrl: '', supabaseAnonKey: '', appName: 'Permission Out', autosave: false, requireSupabase: true })};\n`;
 await writeFile(resolve(dist, 'bootstrap.js'), js, 'utf8');
