@@ -308,7 +308,11 @@
     if (!token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
     const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
     if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-    const response = await fetch(path, { ...options, headers });
+    const response = await fetch(path, {
+      cache: 'no-store',
+      ...options,
+      headers
+    });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(payload.error?.message || `HTTP ${response.status}`);
@@ -474,7 +478,10 @@
       <h3>${escapeHtml(site.siteName || '—')}</h3>
       <dl>${rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('')}</dl>
       <div class="facility-popup-section">
-        <strong>ความคิดเห็น</strong>
+        <div class="facility-comment-heading">
+          <strong>ความคิดเห็น</strong>
+          <button type="button" aria-label="โหลดความคิดเห็นล่าสุด">รีเฟรช</button>
+        </div>
         <div class="facility-comments"><span class="facility-comment-empty">กำลังโหลด…</span></div>
         <form class="facility-comment-form">
           <input name="comment" maxlength="1000" required aria-label="เพิ่มความคิดเห็น" placeholder="เขียนความคิดเห็น…">
@@ -497,6 +504,15 @@
         comments.innerHTML = `<span class="facility-comment-empty">${escapeHtml(error.message)}</span>`;
       }
     };
+    popup.querySelector('.facility-comment-heading button').addEventListener('click', loadComments);
+    const commentRefreshTimer = window.setInterval(() => {
+      if (!popup.isConnected) {
+        window.clearInterval(commentRefreshTimer);
+        return;
+      }
+      loadComments();
+    }, 5000);
+    window.addEventListener('focus', loadComments, { once: true });
     popup.querySelector('.facility-comment-form').addEventListener('submit', async event => {
       event.preventDefault();
       const input = event.currentTarget.elements.comment;

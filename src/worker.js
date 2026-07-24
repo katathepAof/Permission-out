@@ -895,7 +895,7 @@ async function listMod2Comments(request, env, siteId) {
     .from('mod2_site_comments')
     .select('id,author_id,body,created_at,updated_at')
     .eq('site_id', id)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(100);
   if (result.error) throw result.error;
   const authorIds = [...new Set((result.data || []).map(comment => comment.author_id))];
@@ -905,7 +905,7 @@ async function listMod2Comments(request, env, siteId) {
     profile.display_name || 'ผู้ใช้งาน'
   ]));
   return jsonResponse({
-    comments: (result.data || []).map(comment => ({
+    comments: [...(result.data || [])].reverse().map(comment => ({
       id: comment.id,
       body: comment.body,
       authorName: names.get(comment.author_id) || 'ผู้ใช้งาน',

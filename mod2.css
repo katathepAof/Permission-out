@@ -97,6 +97,9 @@ body.mod2-body{margin:0;overflow:hidden;background:var(--mod2-canvas);color:#122
 .facility-popup dt{color:#7c8999}.facility-popup dd{margin:0;color:#263d57;font-weight:600;word-break:break-word}
 .facility-popup-section{margin-top:11px;padding-top:9px;border-top:1px solid #e4ebf2}
 .facility-popup-section>strong{display:block;margin-bottom:6px;color:#294967;font-size:.68rem}
+.facility-comment-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.facility-comment-heading strong{color:#294967;font-size:.68rem}
+.facility-comment-heading button{padding:2px 6px;border:0;border-radius:5px;background:#edf4fa;color:#266497;font:600 .56rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer}
 .facility-comments{display:flex;max-height:120px;overflow:auto;flex-direction:column;gap:6px}
 .facility-comment{padding:6px 7px;border-radius:7px;background:#f3f7fb;color:#334d68;font-size:.62rem;line-height:1.4}
 .facility-comment b{display:block;color:#1e5f9c;font-size:.59rem}.facility-comment time{margin-left:5px;color:#8997a7;font-weight:400}

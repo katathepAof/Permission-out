@@ -11,6 +11,7 @@ const adminData = await readFile(resolve(root, 'admin-data.js'), 'utf8');
 const uxRefresh = await readFile(resolve(root, 'ux-refresh.js'), 'utf8');
 const mod2Html = await readFile(resolve(root, 'mod2.html'), 'utf8');
 const mod2Js = await readFile(resolve(root, 'mod2.js'), 'utf8');
+const workerSource = await readFile(resolve(root, 'src/worker.js'), 'utf8');
 for (const id of ['peaDatasetStatus', 'ufmDatasetStatus', 'accountBtn', 'analyzeBtn', 'swapSourceRoles', 'reportBody', 'map', 'peaLayerTrigger', 'peaLayerList', 'baseCatalogSearch', 'baseCatalogList', 'compareCatalogSearch', 'compareCatalogList']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`Missing required element: ${id}`);
 }
@@ -45,6 +46,12 @@ if (!html.includes('admin-data.css') || !html.includes('admin-data.js')) throw n
 if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new Error('Module navigation is missing');
 for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="filterProvince"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
+}
+if (!mod2Js.includes("cache: 'no-store'") || !mod2Js.includes('commentRefreshTimer')) {
+  throw new Error('MOD 2 comments must refresh across active users without cache');
+}
+if (!workerSource.includes(".order('created_at', { ascending: false })") || !workerSource.includes("comments: [...(result.data || [])].reverse()")) {
+  throw new Error('MOD 2 comments API must return the newest comments in chronological order');
 }
 if (!mod2Js.includes('signInWithPassword') || !mod2Js.includes('getSession') || !mod2Js.includes('loadSites')) {
   throw new Error('MOD 2 authentication or data loader is missing');
