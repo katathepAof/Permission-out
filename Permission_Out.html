@@ -115,11 +115,25 @@ body{
   grid-template-columns:380px 1fr;
   gap:20px;
   align-items:start;
+  transition:grid-template-columns .24s var(--ease);
 }
+.layout.is-map-focus{grid-template-columns:1fr;}
+.layout.is-map-focus .leftCol{display:none;}
+.layout.is-map-focus .rightCol{position:static;}
+.layout.is-map-focus .rightCol>.card{margin-bottom:0;}
+.layout.is-map-focus #map{height:calc(100vh - 260px);min-height:680px;}
+body.mod1-map-focus .container{max-width:none;padding-left:24px;padding-right:24px;}
+body.mod1-map-focus .layout{display:block;width:100%;}
+body.mod1-map-focus .leftCol{display:none!important;}
+body.mod1-map-focus .rightCol{position:static!important;width:100%!important;max-width:none!important;}
+body.mod1-map-focus .rightCol>.card{width:100%!important;max-width:none!important;margin-bottom:0;}
+body.mod1-map-focus #map{height:calc(100vh - 260px)!important;min-height:680px!important;}
 .rightCol{position:sticky; top:20px;}
 
 @media(max-width:1100px){
   .layout{grid-template-columns:1fr;}
+  .layout.is-map-focus{grid-template-columns:1fr;}
+  body.mod1-map-focus .container{padding-left:16px;padding-right:16px;}
   .rightCol{position:static;}
   .container{padding:20px 16px 50px;}
   #map{height:440px !important; min-height:0 !important;}
@@ -156,6 +170,10 @@ body{
   color:var(--ink-mute);
   margin-left:auto;
 }
+.map-title-actions{display:inline-flex;align-items:center;gap:8px;margin-left:0;}
+.map-focus-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 13px;border:1px solid var(--border-strong);border-radius:10px;background:#fff;color:var(--navy-700);font:700 .68rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer;white-space:nowrap;transition:.18s var(--ease);}
+.map-focus-toggle:hover,.map-focus-toggle[aria-pressed="true"]{border-color:var(--gold);background:var(--gold-tint);color:var(--gold-deep);}
+.map-focus-toggle-icon{font-size:.9rem;}
 
 /* Step indicator — refined gold-rimmed circle */
 .step{
@@ -1253,8 +1271,14 @@ table.report td.num{
   <div class="card">
     <h2 class="card-title">
       <span class="step">2</span>
-      แผนที่เส้นทาง
+      ตรวจสอบเส้นทางบนแผนที่
       <span class="title-meta" id="mapStatus">แสดงทันทีเมื่อนำเข้าไฟล์ — คลิกเส้นเพื่อดูข้อมูล</span>
+      <span class="map-title-actions">
+        <button type="button" class="map-focus-toggle" id="mapFocusToggle" aria-pressed="false" title="ซ่อนส่วนตั้งค่าและขยายแผนที่">
+          <span class="map-focus-toggle-icon" aria-hidden="true">⛶</span>
+          <span class="map-focus-toggle-text">ขยายแผนที่</span>
+        </button>
+      </span>
     </h2>
     <div class="pea-layer-control" id="peaLayerControl">
       <button type="button" class="pea-layer-trigger" id="peaLayerTrigger" aria-expanded="false" aria-controls="peaLayerPanel">
@@ -3391,6 +3415,25 @@ mapSearchInput.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   if (!mapSearchInput.contains(e.target) && !mapSearchResults.contains(e.target)) hideSearchResults();
 });
+
+const mod1Layout = document.querySelector('.layout');
+const mapFocusToggle = document.getElementById('mapFocusToggle');
+const mapFocusKey = 'permission-out.mod1.mapFocus';
+function setMapFocus(focused, persist = true) {
+  if (!mod1Layout || !mapFocusToggle) return;
+  mod1Layout.classList.toggle('is-map-focus', focused);
+  document.body.classList.toggle('mod1-map-focus', focused);
+  mapFocusToggle.setAttribute('aria-pressed', String(focused));
+  mapFocusToggle.title = focused ? 'แสดงส่วนตั้งค่าและสรุปผล' : 'ซ่อนส่วนตั้งค่าและขยายแผนที่';
+  const text = mapFocusToggle.querySelector('.map-focus-toggle-text');
+  if (text) text.textContent = focused ? 'แสดงการตั้งค่า' : 'ขยายแผนที่';
+  if (persist) localStorage.setItem(mapFocusKey, focused ? '1' : '0');
+  window.setTimeout(() => { if (map) map.invalidateSize(); }, 280);
+}
+mapFocusToggle?.addEventListener('click', () => {
+  setMapFocus(!mod1Layout?.classList.contains('is-map-focus'));
+});
+setMapFocus(localStorage.getItem(mapFocusKey) === '1', false);
 
 document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTable(); recomputeAll(); });
 </script>

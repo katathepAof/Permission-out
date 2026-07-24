@@ -1182,7 +1182,7 @@
       const manageUsers = document.createElement('button');
       manageUsers.className = 'modal-primary';
       manageUsers.type = 'button';
-      manageUsers.textContent = 'จัดการผู้ใช้';
+      manageUsers.textContent = 'จัดการผู้ใช้และสิทธิ์';
       manageUsers.addEventListener('click', () => window.permissionOutOpenAdminUsers?.());
       actions.append(manageData, manageUsers);
     }

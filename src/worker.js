@@ -7,6 +7,10 @@ const DATA_FEATURE_BATCH_SIZE = 100;
 const DATA_FILE_MAX_BYTES = 100 * 1024 * 1024;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const MODULE_PERMISSIONS = Object.freeze({
+  mod1: { label: 'MOD 1', view: true, update: false },
+  mod2: { label: 'MOD 2', view: true, update: false }
+});
 
 class HttpError extends Error {
   constructor(status, message, code = 'request_failed') {
@@ -94,6 +98,14 @@ async function requireUser(request, env) {
   return { supabase, user: authData.user, profile, access };
 }
 
+async function requireModuleAccess(request, env, moduleKey, action = 'view') {
+  const session = await requireUser(request, env);
+  if (!hasModulePermission(session.access, moduleKey, action)) {
+    throw new HttpError(403, 'บัญชีนี้ไม่มีสิทธิ์ใช้งานส่วนนี้', 'permission_denied');
+  }
+  return session;
+}
+
 async function requestJson(request, maxBytes = 20_000) {
   if (!request.headers.get('Content-Type')?.toLowerCase().includes('application/json')) {
     throw new HttpError(415, 'คำขอต้องเป็น application/json', 'unsupported_media_type');
@@ -144,7 +156,42 @@ function userAccess(user, profile = {}) {
   const role = metadata.permission_out_role || profile.role || 'user';
   const metadataActive = metadata.permission_out_active;
   const isActive = metadataActive === undefined ? profile.is_active !== false : metadataActive !== false;
-  return { role: role === 'admin' ? 'admin' : 'user', isActive };
+  const normalizedRole = role === 'admin' ? 'admin' : 'user';
+  return {
+    role: normalizedRole,
+    isActive,
+    permissions: normalizePermissions(metadata.permission_out_permissions, normalizedRole)
+  };
+}
+
+function normalizePermissions(value, role = 'user') {
+  const permissions = {};
+  const isAdmin = role === 'admin';
+  for (const [key, defaults] of Object.entries(MODULE_PERMISSIONS)) {
+    const source = value && typeof value === 'object' ? value[key] || {} : {};
+    permissions[key] = {
+      label: defaults.label,
+      view: isAdmin || source.view !== false,
+      update: isAdmin || source.update === true
+    };
+  }
+  return permissions;
+}
+
+function cleanPermissions(value, role = 'user') {
+  const permissions = normalizePermissions(value, role);
+  if (role === 'admin') return permissions;
+  for (const key of Object.keys(permissions)) {
+    permissions[key].view = Boolean(permissions[key].view);
+    permissions[key].update = Boolean(permissions[key].update && permissions[key].view);
+  }
+  return permissions;
+}
+
+function hasModulePermission(access, moduleKey, action = 'view') {
+  if (access.role === 'admin') return true;
+  const permission = access.permissions?.[moduleKey];
+  return action === 'update' ? permission?.view && permission?.update : permission?.view;
 }
 
 function missingAccessColumns(error) {
@@ -218,6 +265,7 @@ function publicUser(user, profile = {}) {
     organization: profile.organization || user.user_metadata?.organization || '',
     role: access.role,
     isActive: access.isActive,
+    permissions: access.permissions,
     emailConfirmedAt: user.email_confirmed_at || null,
     lastSignInAt: user.last_sign_in_at || null,
     createdAt: user.created_at || profile.created_at || null
@@ -262,12 +310,17 @@ async function createAdminUser(request, env) {
   const displayName = cleanText(payload.displayName, 'ชื่อผู้ใช้', 120, true);
   const organization = cleanText(payload.organization, 'หน่วยงาน', 160);
   const role = cleanRole(payload.role);
+  const permissions = cleanPermissions(payload.permissions, role);
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: { display_name: displayName, organization },
-    app_metadata: { permission_out_role: role, permission_out_active: true }
+    app_metadata: {
+      permission_out_role: role,
+      permission_out_active: true,
+      permission_out_permissions: permissions
+    }
   });
   if (error || !data.user) throw error || new Error('สร้างผู้ใช้ไม่สำเร็จ');
   const profile = {
@@ -306,12 +359,14 @@ async function updateAdminUser(request, env, targetId) {
 
   const displayName = cleanText(payload.displayName ?? existing.display_name, 'ชื่อผู้ใช้', 120, true);
   const organization = cleanText(payload.organization ?? existing.organization, 'หน่วยงาน', 160);
+  const permissions = cleanPermissions(payload.permissions ?? existingAccess.permissions, role);
   const authChanges = {
     user_metadata: { display_name: displayName, organization },
     app_metadata: {
       ...(authUserData.user.app_metadata || {}),
       permission_out_role: role,
-      permission_out_active: isActive
+      permission_out_active: isActive,
+      permission_out_permissions: permissions
     },
     ban_duration: isActive ? 'none' : '876000h'
   };
@@ -651,7 +706,7 @@ async function failDatasetVersion(request, env, versionId) {
 }
 
 async function activeDatasetCatalog(request, env) {
-  const { supabase } = await requireUser(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod1', 'view');
   const url = new URL(request.url);
   const source = cleanDataSource(url.searchParams.get('source'));
   const datasets = await supabase
@@ -689,7 +744,7 @@ async function activeDatasetCatalog(request, env) {
 }
 
 async function activeDatasetFeatures(request, env, datasetId) {
-  const { supabase } = await requireUser(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod1', 'view');
   const id = cleanUserId(datasetId);
   const url = new URL(request.url);
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') || '0', 10) || 0);
@@ -756,7 +811,7 @@ function mod2BboxParam(searchParams) {
 }
 
 async function activeMod2Sites(request, env) {
-  const { supabase } = await requireUser(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod2', 'view');
   const url = new URL(request.url);
   const afterId = Math.max(0, Number.parseInt(url.searchParams.get('after') || '0', 10) || 0);
   const limit = Math.max(1, Math.min(1000, Number.parseInt(url.searchParams.get('limit') || '500', 10) || 500));
@@ -833,7 +888,7 @@ function mod2SiteFeature(site) {
 }
 
 async function listMod2Comments(request, env, siteId) {
-  const { supabase } = await requireUser(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod2', 'view');
   const id = cleanMod2SiteId(siteId);
   await activeMod2Site(supabase, id);
   const result = await supabase
@@ -861,7 +916,7 @@ async function listMod2Comments(request, env, siteId) {
 }
 
 async function createMod2Comment(request, env, siteId) {
-  const { supabase, user } = await requireUser(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'view');
   const id = cleanMod2SiteId(siteId);
   await activeMod2Site(supabase, id);
   const payload = await requestJson(request, 5_000);
@@ -876,7 +931,7 @@ async function createMod2Comment(request, env, siteId) {
 }
 
 async function updateMod2Site(request, env, siteId) {
-  const { supabase, user } = await requireAdmin(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
   const id = cleanMod2SiteId(siteId);
   const { site, dataset } = await activeMod2Site(supabase, id);
   const payload = await requestJson(request, 20_000);
@@ -920,7 +975,7 @@ async function updateMod2Site(request, env, siteId) {
 }
 
 async function deleteMod2Site(request, env, siteId) {
-  const { supabase, user } = await requireAdmin(request, env);
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
   const id = cleanMod2SiteId(siteId);
   const { site, dataset } = await activeMod2Site(supabase, id);
   const removal = await supabase.from('mod2_sites').delete().eq('id', id);

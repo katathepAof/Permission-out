@@ -5,6 +5,10 @@
   if (!context) return;
 
   const state = { users: [], search: '' };
+  const MODULES = [
+    { key: 'mod1', label: 'MOD 1', detail: 'PEA / UFM' },
+    { key: 'mod2', label: 'MOD 2', detail: 'Site Facility' }
+  ];
   const el = (tag, className, text) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -53,6 +57,85 @@
 
   function makeStatusBadge(user) {
     return el('span', `admin-status-badge ${user.isActive ? 'is-active' : 'is-inactive'}`, user.isActive ? 'ใช้งาน' : 'ระงับ');
+  }
+
+  function modulePermissions(user) {
+    const role = user?.role || 'user';
+    const source = user?.permissions || {};
+    return Object.fromEntries(MODULES.map(module => {
+      const permission = source[module.key] || {};
+      return [module.key, {
+        view: role === 'admin' || permission.view !== false,
+        update: role === 'admin' || permission.update === true
+      }];
+    }));
+  }
+
+  function permissionInputName(moduleKey, action) {
+    return `permission_${moduleKey}_${action}`;
+  }
+
+  function makePermissionPanel(user, roleSelect) {
+    const panel = el('section', 'admin-permission-panel');
+    const heading = el('div', 'admin-permission-heading');
+    heading.append(
+      el('strong', '', 'สิทธิ์ราย MOD'),
+      el('span', '', 'กำหนดว่าเห็น MOD ไหน และอัปเดตข้อมูลได้หรือไม่')
+    );
+    const grid = el('div', 'admin-permission-grid');
+    const access = modulePermissions(user);
+    for (const module of MODULES) {
+      const row = el('div', 'admin-permission-row');
+      const label = el('div', 'admin-permission-label');
+      label.append(el('strong', '', module.label), el('span', '', module.detail));
+      const view = el('label', 'admin-permission-toggle');
+      const viewInput = document.createElement('input');
+      viewInput.type = 'checkbox';
+      viewInput.name = permissionInputName(module.key, 'view');
+      viewInput.checked = access[module.key]?.view !== false;
+      view.append(viewInput, document.createTextNode('เห็น'));
+      const update = el('label', 'admin-permission-toggle');
+      const updateInput = document.createElement('input');
+      updateInput.type = 'checkbox';
+      updateInput.name = permissionInputName(module.key, 'update');
+      updateInput.checked = access[module.key]?.update === true;
+      update.append(updateInput, document.createTextNode('อัปเดต'));
+      viewInput.addEventListener('change', () => {
+        if (!viewInput.checked) updateInput.checked = false;
+        updateInput.disabled = !viewInput.checked || roleSelect.value === 'admin';
+      });
+      row.append(label, view, update);
+      grid.appendChild(row);
+    }
+    const syncRole = () => {
+      const isAdmin = roleSelect.value === 'admin';
+      for (const module of MODULES) {
+        const view = grid.querySelector(`[name="${permissionInputName(module.key, 'view')}"]`);
+        const update = grid.querySelector(`[name="${permissionInputName(module.key, 'update')}"]`);
+        if (isAdmin) {
+          view.checked = true;
+          update.checked = true;
+        }
+        view.disabled = isAdmin;
+        update.disabled = isAdmin || !view.checked;
+      }
+    };
+    roleSelect.addEventListener('change', syncRole);
+    panel.append(heading, grid);
+    syncRole();
+    return panel;
+  }
+
+  function permissionsFromForm(form, role) {
+    const permissions = {};
+    for (const module of MODULES) {
+      const view = role === 'admin' || form.elements[permissionInputName(module.key, 'view')]?.checked === true;
+      permissions[module.key] = {
+        view,
+        update: role === 'admin' || (view && form.elements[permissionInputName(module.key, 'update')]?.checked === true)
+      };
+    }
+    return permissions;
   }
 
   function renderUserRows(container) {
@@ -125,12 +208,12 @@
     });
     content.append(toolbar, summary, list);
     renderUserRows(list);
-    context.openModal('จัดการผู้ใช้', 'เพิ่ม แก้ไข ระงับ หรือลบบัญชี Permission Out', content, true);
+    context.openModal('จัดการผู้ใช้และสิทธิ์', 'เพิ่ม แก้ไข ระงับ หรือลบบัญชี พร้อมกำหนดสิทธิ์ราย MOD', content, true);
   }
 
   async function loadUsers() {
     const content = el('div', 'admin-users-loading', 'กำลังโหลดรายชื่อผู้ใช้…');
-    context.openModal('จัดการผู้ใช้', 'เฉพาะผู้ดูแลระบบ', content, true);
+    context.openModal('จัดการผู้ใช้และสิทธิ์', 'เฉพาะผู้ดูแลระบบ', content, true);
     try {
       const payload = await adminApi('/api/admin/users?perPage=100');
       state.users = payload.users || [];
@@ -142,7 +225,7 @@
       retry.type = 'button';
       retry.addEventListener('click', loadUsers);
       failed.appendChild(retry);
-      document.getElementById('appModalBody').replaceChildren(failed);
+      (document.getElementById('appModalBody') || document.getElementById('modalBody'))?.replaceChildren(failed);
     }
   }
 
@@ -222,7 +305,7 @@
     const submit = el('button', 'modal-primary', editing ? 'บันทึกการแก้ไข' : 'สร้างผู้ใช้');
     submit.type = 'submit';
     actions.append(cancel, submit);
-    form.append(grid, errorBox, actions);
+    form.append(grid, makePermissionPanel(user, role), errorBox, actions);
     content.append(back, form);
 
     form.addEventListener('submit', async event => {
@@ -236,7 +319,8 @@
         displayName: displayName.value.trim(),
         organization: organization.value.trim(),
         role: role.value,
-        isActive: active.value === 'true'
+        isActive: active.value === 'true',
+        permissions: permissionsFromForm(form, role.value)
       };
       if (password.value) payload.password = password.value;
       try {
@@ -259,7 +343,7 @@
       }
     });
 
-    context.openModal(editing ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้', editing ? user.email : 'สร้างบัญชีใหม่ใน Supabase Auth', content, true);
+    context.openModal(editing ? 'แก้ไขผู้ใช้และสิทธิ์' : 'เพิ่มผู้ใช้', editing ? user.email : 'สร้างบัญชีใหม่ใน Supabase Auth', content, true);
   }
 
   async function deleteUser(user) {

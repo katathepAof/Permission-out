@@ -34,6 +34,10 @@
     'Trunk IP RAN+Access': '#0f766e',
     'Interconnect(Access)': '#9a5b13'
   };
+  const MODULES = [
+    { key: 'mod1', label: 'MOD 1', detail: 'PEA / UFM route intelligence' },
+    { key: 'mod2', label: 'MOD 2', detail: 'Site Facility & Design' }
+  ];
 
   const elements = {
     accountBtn: document.getElementById('accountBtn'),
@@ -100,6 +104,22 @@
     window.setTimeout(() => item.remove(), 4200);
   }
 
+  function modulePermissions(profile = state.profile) {
+    const role = profile?.role || 'user';
+    const source = profile?.permissions || {};
+    return Object.fromEntries(MODULES.map(module => {
+      const permission = source[module.key] || {};
+      return [module.key, {
+        view: role === 'admin' || permission.view !== false,
+        update: role === 'admin' || permission.update === true
+      }];
+    }));
+  }
+
+  function canUpdateMod2() {
+    return modulePermissions().mod2?.update === true;
+  }
+
   function setHealth(text, type = '') {
     elements.datasetStatus.textContent = text;
     const health = elements.datasetStatus.closest('.mod2-health');
@@ -149,7 +169,8 @@
     return {
       displayName: profile.display_name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'Account',
       organization: profile.organization || '',
-      role: (metadata.permission_out_role || profile.role) === 'admin' ? 'admin' : 'user'
+      role: (metadata.permission_out_role || profile.role) === 'admin' ? 'admin' : 'user',
+      permissions: metadata.permission_out_permissions || null
     };
   }
 
@@ -241,6 +262,16 @@
     mod1.style.display = 'grid';
     mod1.style.placeItems = 'center';
     mod1.style.textDecoration = 'none';
+    const actions = document.createElement('div');
+    actions.className = 'account-actions';
+    if (state.profile?.role === 'admin') {
+      const permissions = document.createElement('button');
+      permissions.className = 'modal-primary';
+      permissions.type = 'button';
+      permissions.textContent = 'จัดการผู้ใช้และสิทธิ์';
+      permissions.addEventListener('click', () => window.permissionOutOpenAdminUsers?.());
+      actions.appendChild(permissions);
+    }
     const signout = document.createElement('button');
     signout.className = 'modal-danger';
     signout.type = 'button';
@@ -249,7 +280,8 @@
       await client.auth.signOut();
       closeModal(true);
     });
-    content.append(summary, mod1, signout);
+    actions.appendChild(signout);
+    content.append(summary, mod1, actions);
     openModal('บัญชีผู้ใช้', state.user.email || '', content, true);
   }
 
@@ -468,7 +500,7 @@
         button.disabled = false;
       }
     });
-    if (state.profile?.role === 'admin') {
+    if (canUpdateMod2()) {
       const actions = document.createElement('div');
       actions.className = 'facility-admin-actions';
       actions.innerHTML = '<button type="button" data-action="edit">แก้ไขข้อมูล</button><button type="button" class="is-danger" data-action="delete">ลบไซต์</button>';
@@ -525,7 +557,7 @@
         button.disabled = false;
       }
     });
-    openModal(`แก้ไข ${site.siteCode}`, 'สิทธิ์ผู้ดูแลระบบ', content, true);
+    openModal(`แก้ไข ${site.siteCode}`, 'ผู้ใช้ที่มีสิทธิ์อัปเดต MOD 2', content, true);
   }
 
   async function deleteSite(site) {
@@ -745,6 +777,16 @@
   map.on('zoomend', () => {
     if (state.cluster && !state.density) renderMap();
   });
+
+  window.permissionOutAdminContext = {
+    client,
+    getCurrentUser: () => state.user,
+    getCurrentProfile: () => state.profile,
+    openModal,
+    closeModal,
+    toast,
+    escapeHtml
+  };
 
   async function initialize() {
     updateAccountUi();
