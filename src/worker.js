@@ -845,6 +845,14 @@ function cleanMod2SiteId(value) {
   return id;
 }
 
+function cleanMod2CommentId(value) {
+  const id = Number.parseInt(String(value || ''), 10);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    throw new HttpError(400, 'รหัสความคิดเห็นไม่ถูกต้อง', 'validation_error');
+  }
+  return id;
+}
+
 async function activeMod2Site(supabase, id) {
   const siteResult = await supabase.from('mod2_sites').select('*').eq('id', id).maybeSingle();
   if (siteResult.error) throw siteResult.error;
@@ -928,6 +936,36 @@ async function createMod2Comment(request, env, siteId) {
     .single();
   if (result.error) throw result.error;
   return jsonResponse({ comment: result.data }, 201);
+}
+
+async function adminMod2Comment(request, env, commentId, action) {
+  const { supabase } = await requireAdmin(request, env);
+  const id = cleanMod2CommentId(commentId);
+  const existing = await supabase
+    .from('mod2_site_comments')
+    .select('id,site_id,body,created_at,updated_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  if (!existing.data) throw new HttpError(404, 'ไม่พบความคิดเห็นนี้', 'not_found');
+  await activeMod2Site(supabase, existing.data.site_id);
+
+  if (action === 'update') {
+    const payload = await requestJson(request, 5_000);
+    const body = cleanText(payload.body, 'ความคิดเห็น', 1000, true);
+    const result = await supabase
+      .from('mod2_site_comments')
+      .update({ body, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('id,body,created_at,updated_at')
+      .single();
+    if (result.error) throw result.error;
+    return jsonResponse({ comment: result.data });
+  }
+
+  const result = await supabase.from('mod2_site_comments').delete().eq('id', id);
+  if (result.error) throw result.error;
+  return jsonResponse({ deleted: true, id });
 }
 
 async function listMod2CommentNotifications(request, env) {
@@ -1076,6 +1114,9 @@ async function handleMod2Api(request, env, url) {
   const commentMatch = url.pathname.match(/^\/api\/mod2\/sites\/(\d+)\/comments$/);
   if (commentMatch && request.method === 'GET') return listMod2Comments(request, env, commentMatch[1]);
   if (commentMatch && request.method === 'POST') return createMod2Comment(request, env, commentMatch[1]);
+  const commentItemMatch = url.pathname.match(/^\/api\/mod2\/comments\/(\d+)$/);
+  if (commentItemMatch && request.method === 'PATCH') return adminMod2Comment(request, env, commentItemMatch[1], 'update');
+  if (commentItemMatch && request.method === 'DELETE') return adminMod2Comment(request, env, commentItemMatch[1], 'delete');
   const siteMatch = url.pathname.match(/^\/api\/mod2\/sites\/(\d+)$/);
   if (siteMatch && request.method === 'PATCH') return updateMod2Site(request, env, siteMatch[1]);
   if (siteMatch && request.method === 'DELETE') return deleteMod2Site(request, env, siteMatch[1]);

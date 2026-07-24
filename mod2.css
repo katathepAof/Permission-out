@@ -103,6 +103,10 @@ body.mod2-body{margin:0;overflow:hidden;background:var(--mod2-canvas);color:#122
 .facility-comments{display:flex;max-height:120px;overflow:auto;flex-direction:column;gap:6px}
 .facility-comment{padding:6px 7px;border-radius:7px;background:#f3f7fb;color:#334d68;font-size:.62rem;line-height:1.4}
 .facility-comment b{display:block;color:#1e5f9c;font-size:.59rem}.facility-comment time{margin-left:5px;color:#8997a7;font-weight:400}
+.facility-comment>span{display:block;white-space:pre-wrap;word-break:break-word}
+.facility-comment-actions{display:flex;justify-content:flex-end;gap:4px;margin-top:4px}
+.facility-comment-actions button{padding:1px 5px;border:0;border-radius:4px;background:#e3edf6;color:#28618f;font:600 .53rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer}
+.facility-comment-actions button:last-child{background:#fbe9e9;color:#a43a3a}
 .facility-comment-empty{color:#8593a3;font-size:.61rem}
 .facility-comment-form{display:flex;gap:5px;margin-top:7px}
 .facility-comment-form input{min-width:0;height:32px;flex:1;padding:0 8px;border:1px solid #d6e0ea;border-radius:7px;font:500 .64rem 'IBM Plex Sans Thai',sans-serif}

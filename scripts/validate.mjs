@@ -53,6 +53,12 @@ if (!mod2Js.includes("cache: 'no-store'") || !mod2Js.includes('commentRefreshTim
 if (!workerSource.includes(".order('created_at', { ascending: false })") || !workerSource.includes("comments: [...(result.data || [])].reverse()")) {
   throw new Error('MOD 2 comments API must return the newest comments in chronological order');
 }
+if (!workerSource.includes('async function adminMod2Comment') || !workerSource.includes("commentItemMatch && request.method === 'PATCH'") || !workerSource.includes("commentItemMatch && request.method === 'DELETE'")) {
+  throw new Error('MOD 2 admin comment update/delete API is missing');
+}
+if (!mod2Js.includes("data-action=\"edit\"") || !mod2Js.includes("`/api/mod2/comments/${item.id}`")) {
+  throw new Error('MOD 2 admin comment controls are missing');
+}
 if (!mod2Js.includes('signInWithPassword') || !mod2Js.includes('getSession') || !mod2Js.includes('loadSites')) {
   throw new Error('MOD 2 authentication or data loader is missing');
 }

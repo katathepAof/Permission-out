@@ -494,7 +494,42 @@
         comments.innerHTML = '<span class="facility-comment-empty">ยังไม่มีความคิดเห็น</span>';
         return;
       }
-      comments.innerHTML = items.map(item => `<div class="facility-comment"><b>${escapeHtml(item.authorName || 'ผู้ใช้งาน')}<time>${escapeHtml(new Date(item.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }))}</time></b>${escapeHtml(item.body)}</div>`).join('');
+      comments.innerHTML = items.map(item => `<div class="facility-comment" data-comment-id="${Number(item.id)}">
+        <b>${escapeHtml(item.authorName || 'ผู้ใช้งาน')}<time>${escapeHtml(new Date(item.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }))}${item.updatedAt !== item.createdAt ? ' · แก้ไขแล้ว' : ''}</time></b>
+        <span>${escapeHtml(item.body)}</span>
+        ${isAdmin() ? '<div class="facility-comment-actions"><button type="button" data-action="edit">แก้ไข</button><button type="button" data-action="delete">ลบ</button></div>' : ''}
+      </div>`).join('');
+      if (isAdmin()) {
+        comments.querySelectorAll('.facility-comment').forEach(comment => {
+          const item = items.find(entry => Number(entry.id) === Number(comment.dataset.commentId));
+          comment.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+            const body = window.prompt('แก้ไขความคิดเห็น', item.body);
+            if (body === null || !body.trim() || body.trim() === item.body) return;
+            try {
+              await authenticatedJson(`/api/mod2/comments/${item.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ body: body.trim() })
+              });
+              await loadComments();
+              await loadCommentNotifications().catch(() => {});
+              toast('แก้ไขความคิดเห็นแล้ว', 'success');
+            } catch (error) {
+              toast(error.message, 'error');
+            }
+          });
+          comment.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+            if (!window.confirm('ยืนยันการลบความคิดเห็นนี้?')) return;
+            try {
+              await authenticatedJson(`/api/mod2/comments/${item.id}`, { method: 'DELETE' });
+              await loadComments();
+              await loadCommentNotifications().catch(() => {});
+              toast('ลบความคิดเห็นแล้ว', 'success');
+            } catch (error) {
+              toast(error.message, 'error');
+            }
+          });
+        });
+      }
     };
     const loadComments = async () => {
       try {
