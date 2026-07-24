@@ -31,6 +31,9 @@ if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreas
 if (!csvSection.includes("'รหัส Placemark', 'ชื่อ Placemark'") || !csvSection.includes('placemarkCode(seg)') || !csvSection.includes('placemarkName(seg)')) {
   throw new Error('CSV export must separate Placemark code and name columns');
 }
+if (csvSection.includes("placemarkCode(seg) || '-'")) {
+  throw new Error('CSV export must leave missing Placemark codes blank');
+}
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes('sourceRolesAreSwapped() ? ufmLines : peaLines') || !html.includes('applyProvinceFilter(true)')) throw new Error('Source-role swap or province map focus is missing');
 if (!html.includes('<th>Status จากไฟล์</th>') || !html.includes('source_measured') || !production.includes('propertiesWithDescriptionFields') || !production.includes('function routeIdentifier(properties)')) throw new Error('UFM source metadata or Placemark identifier resolution is missing');
