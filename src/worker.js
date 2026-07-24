@@ -939,7 +939,7 @@ async function createMod2Comment(request, env, siteId) {
 }
 
 async function adminMod2Comment(request, env, commentId, action) {
-  const { supabase } = await requireAdmin(request, env);
+  const { supabase } = await requireModuleAccess(request, env, 'mod2', 'update');
   const id = cleanMod2CommentId(commentId);
   const existing = await supabase
     .from('mod2_site_comments')

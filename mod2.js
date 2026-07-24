@@ -134,6 +134,10 @@
     return state.profile?.role === 'admin';
   }
 
+  function canManageMod2Comments() {
+    return isAdmin() || canUpdateMod2();
+  }
+
   function setHealth(text, type = '') {
     elements.datasetStatus.textContent = text;
     const health = elements.datasetStatus.closest('.mod2-health');
@@ -497,9 +501,9 @@
       comments.innerHTML = items.map(item => `<div class="facility-comment" data-comment-id="${Number(item.id)}">
         <b>${escapeHtml(item.authorName || 'ผู้ใช้งาน')}<time>${escapeHtml(new Date(item.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }))}${item.updatedAt !== item.createdAt ? ' · แก้ไขแล้ว' : ''}</time></b>
         <span>${escapeHtml(item.body)}</span>
-        ${isAdmin() ? '<div class="facility-comment-actions"><button type="button" data-action="edit">แก้ไข</button><button type="button" data-action="delete">ลบ</button></div>' : ''}
+        ${canManageMod2Comments() ? '<div class="facility-comment-actions"><button type="button" data-action="edit">แก้ไข</button><button type="button" data-action="delete">ลบ</button></div>' : ''}
       </div>`).join('');
-      if (isAdmin()) {
+      if (canManageMod2Comments()) {
         comments.querySelectorAll('.facility-comment').forEach(comment => {
           const item = items.find(entry => Number(entry.id) === Number(comment.dataset.commentId));
           comment.querySelector('[data-action="edit"]').addEventListener('click', async () => {

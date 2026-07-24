@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v15-mod2-admin-comments';
-const CORE = ['/', '/mod2/', '/production.css?v=20260723-modules', '/production.js?v=20260723-modules', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260724-mod2-admin-comments', '/mod2.js?v=20260724-mod2-admin-comments', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v16-mod2-comment-permission';
+const CORE = ['/', '/mod2/', '/production.css?v=20260723-modules', '/production.js?v=20260723-modules', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260724-mod2-comment-permission', '/mod2.js?v=20260724-mod2-comment-permission', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

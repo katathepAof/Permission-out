@@ -56,8 +56,11 @@ if (!workerSource.includes(".order('created_at', { ascending: false })") || !wor
 if (!workerSource.includes('async function adminMod2Comment') || !workerSource.includes("commentItemMatch && request.method === 'PATCH'") || !workerSource.includes("commentItemMatch && request.method === 'DELETE'")) {
   throw new Error('MOD 2 admin comment update/delete API is missing');
 }
-if (!mod2Js.includes("data-action=\"edit\"") || !mod2Js.includes("`/api/mod2/comments/${item.id}`")) {
+if (!mod2Js.includes('function canManageMod2Comments()') || !mod2Js.includes("data-action=\"edit\"") || !mod2Js.includes("`/api/mod2/comments/${item.id}`")) {
   throw new Error('MOD 2 admin comment controls are missing');
+}
+if (!workerSource.includes("requireModuleAccess(request, env, 'mod2', 'update')")) {
+  throw new Error('MOD 2 comment management must use MOD 2 update permission');
 }
 if (!mod2Js.includes('signInWithPassword') || !mod2Js.includes('getSession') || !mod2Js.includes('loadSites')) {
   throw new Error('MOD 2 authentication or data loader is missing');
