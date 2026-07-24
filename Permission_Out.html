@@ -121,19 +121,34 @@ body{
 .layout.is-map-focus .leftCol{display:none;}
 .layout.is-map-focus .rightCol{position:static;}
 .layout.is-map-focus .rightCol>.card{margin-bottom:0;}
-.layout.is-map-focus #map{height:calc(100vh - 260px);min-height:680px;}
-body.mod1-map-focus .container{max-width:none;padding-left:24px;padding-right:24px;}
-body.mod1-map-focus .layout{display:block;width:100%;}
-body.mod1-map-focus .leftCol{display:none!important;}
-body.mod1-map-focus .rightCol{position:static!important;width:100%!important;max-width:none!important;}
-body.mod1-map-focus .rightCol>.card{width:100%!important;max-width:none!important;margin-bottom:0;}
-body.mod1-map-focus #map{height:calc(100vh - 260px)!important;min-height:680px!important;}
+body.mod1-map-focus{overflow:hidden;}
+body.mod1-map-focus .rightCol{
+  position:fixed!important;
+  inset:82px 18px 18px!important;
+  width:auto!important;
+  max-width:none!important;
+  z-index:8000;
+}
+body.mod1-map-focus .rightCol>.card{
+  width:100%!important;
+  height:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  border-radius:18px;
+  box-shadow:0 26px 80px rgba(14,35,64,.28);
+}
+body.mod1-map-focus #map{
+  height:100%!important;
+  min-height:0!important;
+}
 .rightCol{position:sticky; top:20px;}
 
 @media(max-width:1100px){
   .layout{grid-template-columns:1fr;}
   .layout.is-map-focus{grid-template-columns:1fr;}
-  body.mod1-map-focus .container{padding-left:16px;padding-right:16px;}
+  body.mod1-map-focus .rightCol{inset:76px 10px 10px!important;}
   .rightCol{position:static;}
   .container{padding:20px 16px 50px;}
   #map{height:440px !important; min-height:0 !important;}
@@ -174,6 +189,47 @@ body.mod1-map-focus #map{height:calc(100vh - 260px)!important;min-height:680px!i
 .map-focus-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 13px;border:1px solid var(--border-strong);border-radius:10px;background:#fff;color:var(--navy-700);font:700 .68rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer;white-space:nowrap;transition:.18s var(--ease);}
 .map-focus-toggle:hover,.map-focus-toggle[aria-pressed="true"]{border-color:var(--gold);background:var(--gold-tint);color:var(--gold-deep);}
 .map-focus-toggle-icon{font-size:.9rem;}
+
+.rightCol > .card{
+  padding:20px;
+  overflow:hidden;
+}
+.rightCol > .card > .map-card-header{
+  display:grid;
+  grid-template-columns:max-content minmax(320px,1fr);
+  gap:12px;
+  align-items:center;
+  margin-bottom:14px;
+}
+.rightCol > .card .map-card-heading{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:0;
+  font:inherit;
+  color:inherit;
+}
+.rightCol > .card .map-title-tools{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:8px;
+  align-items:stretch;
+  min-width:0;
+}
+.rightCol > .card .map-focus-toggle{
+  min-height:36px;
+  padding-inline:14px;
+}
+.rightCol > .card .map-focus-toggle-floating{
+  position:absolute;
+  top:12px;
+  right:12px;
+  z-index:650;
+  min-height:34px;
+  background:rgba(255,255,255,.95);
+  box-shadow:0 8px 22px rgba(14,35,64,.16);
+  backdrop-filter:blur(8px);
+}
 
 /* Step indicator — refined gold-rimmed circle */
 .step{
@@ -613,11 +669,22 @@ button.ghost:hover{
   height:calc(100vh - 220px);
   min-height:540px;
   border-radius:var(--r-md);
-  margin-top:14px;
+  margin-top:0;
   border:1px solid var(--border);
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.5), var(--sh-sm);
   background:var(--bg-soft);
   z-index:0;
+}
+.map-frame{
+  position:relative;
+  min-height:0;
+}
+body.mod1-map-focus .map-frame{
+  height:100%;
+}
+body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
+  top:14px;
+  right:14px;
 }
 
 .legend{
@@ -687,6 +754,83 @@ button.ghost:hover{
 }
 #mapSearchResults > div:last-child{border-bottom:none;}
 #mapSearchResults > div:hover{background:var(--gold-tint);}
+
+.rightCol > .card .pea-layer-control{
+  margin-bottom:0;
+  min-width:0;
+}
+.rightCol > .card .pea-layer-trigger{
+  height:42px;
+  min-height:42px;
+  max-height:42px;
+  width:100%;
+  box-sizing:border-box;
+  padding:0 9px;
+  border-radius:10px;
+  display:grid;
+  grid-template-columns:26px minmax(0,1fr) 30px 12px;
+  align-items:center;
+  gap:8px;
+}
+.rightCol > .card .pea-layer-trigger-icon{
+  width:26px;
+  height:26px;
+}
+.rightCol > .card .pea-layer-trigger-copy strong{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.76rem;
+  line-height:1.05;
+}
+.rightCol > .card .pea-layer-trigger-copy small{
+  display:none;
+}
+.rightCol > .card .pea-layer-count{
+  min-width:30px;
+  height:24px;
+  font-size:.72rem;
+}
+.rightCol > .card .map-search-wrap{
+  height:42px;
+  margin-bottom:0;
+  min-width:0;
+}
+.rightCol > .card #mapSearchInput{
+  display:block;
+  height:42px;
+  width:100%;
+  box-sizing:border-box;
+  padding-top:0;
+  padding-bottom:0;
+  border-radius:10px;
+  font-size:.8rem;
+}
+.rightCol > .card #map{
+  margin-top:0;
+  min-height:560px;
+}
+.rightCol > .card .legend{
+  margin-top:10px;
+  gap:10px 14px;
+  padding:8px 10px;
+  font-size:.74rem;
+}
+@media(max-width:900px){
+  .rightCol > .card{
+    padding:16px;
+  }
+  .rightCol > .card > .map-card-header{
+    grid-template-columns:1fr;
+  }
+  .rightCol > .card .map-title-tools{
+    grid-template-columns:1fr;
+  }
+  .rightCol > .card .map-focus-toggle-floating .map-focus-toggle-text{
+    display:none;
+  }
+}
 
 /* ============================================================
    COST PANEL — Executive pricing breakdown
@@ -1269,46 +1413,50 @@ table.report td.num{
 <div class="rightCol">
 
   <div class="card">
-    <h2 class="card-title">
-      <span class="step">2</span>
-      ตรวจสอบเส้นทางบนแผนที่
-      <span class="title-meta" id="mapStatus">แสดงทันทีเมื่อนำเข้าไฟล์ — คลิกเส้นเพื่อดูข้อมูล</span>
-      <span class="map-title-actions">
-        <button type="button" class="map-focus-toggle" id="mapFocusToggle" aria-pressed="false" title="ซ่อนส่วนตั้งค่าและขยายแผนที่">
-          <span class="map-focus-toggle-icon" aria-hidden="true">⛶</span>
-          <span class="map-focus-toggle-text">ขยายแผนที่</span>
-        </button>
-      </span>
-    </h2>
-    <div class="pea-layer-control" id="peaLayerControl">
-      <button type="button" class="pea-layer-trigger" id="peaLayerTrigger" aria-expanded="false" aria-controls="peaLayerPanel">
-        <span class="pea-layer-trigger-icon" aria-hidden="true">▱</span>
-        <span class="pea-layer-trigger-copy"><strong>พื้นที่ PEA</strong><small id="peaLayerStatus">กำลังโหลดรายการ…</small></span>
-        <span class="pea-layer-count" id="peaLayerCount">0</span>
-        <span class="pea-layer-chevron" aria-hidden="true">⌄</span>
-      </button>
-      <div class="pea-layer-panel" id="peaLayerPanel" hidden>
-        <div class="pea-layer-search-row">
-          <input type="search" id="peaLayerSearch" placeholder="ค้นหาชื่อ กฟจ. / กฟอ. / กฟส. / กฟย." autocomplete="off">
-          <button type="button" id="peaLayerClear">ล้าง</button>
+    <div class="card-title map-card-header">
+      <h2 class="map-card-heading">
+        <span class="step">2</span>
+        ตรวจสอบเส้นทางบนแผนที่
+      </h2>
+      <span id="mapStatus" hidden></span>
+      <div class="map-title-tools">
+        <div class="pea-layer-control" id="peaLayerControl">
+          <button type="button" class="pea-layer-trigger" id="peaLayerTrigger" aria-expanded="false" aria-controls="peaLayerPanel">
+            <span class="pea-layer-trigger-icon" aria-hidden="true">▱</span>
+            <span class="pea-layer-trigger-copy"><strong>พื้นที่ PEA</strong><small id="peaLayerStatus">กำลังโหลดรายการ…</small></span>
+            <span class="pea-layer-count" id="peaLayerCount">0</span>
+            <span class="pea-layer-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="pea-layer-panel" id="peaLayerPanel" hidden>
+            <div class="pea-layer-search-row">
+              <input type="search" id="peaLayerSearch" placeholder="ค้นหาชื่อ กฟจ. / กฟอ. / กฟส. / กฟย." autocomplete="off">
+              <button type="button" id="peaLayerClear">ล้าง</button>
+            </div>
+            <div class="pea-layer-actions">
+              <button type="button" id="peaLayerSelectVisible">เลือกผลค้นหาทั้งหมด</button>
+              <button type="button" id="peaLayerClearAll">ยกเลิกทั้งหมด</button>
+            </div>
+            <div class="pea-layer-types" id="peaLayerTypes" aria-label="กรองประเภทหน่วยงาน"></div>
+            <div class="pea-layer-list" id="peaLayerList" role="group" aria-label="เลือกพื้นที่ PEA หลายรายการ"></div>
+          </div>
         </div>
-        <div class="pea-layer-actions">
-          <button type="button" id="peaLayerSelectVisible">เลือกผลค้นหาทั้งหมด</button>
-          <button type="button" id="peaLayerClearAll">ยกเลิกทั้งหมด</button>
+        <div class="map-search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="mapSearchInput" placeholder="ค้นหาเส้นทาง / Placemark / พิกัด..." autocomplete="off">
+          <div id="mapSearchResults"></div>
         </div>
-        <div class="pea-layer-types" id="peaLayerTypes" aria-label="กรองประเภทหน่วยงาน"></div>
-        <div class="pea-layer-list" id="peaLayerList" role="group" aria-label="เลือกพื้นที่ PEA หลายรายการ"></div>
       </div>
     </div>
-    <div class="map-search-wrap">
-      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <input type="text" id="mapSearchInput" placeholder="ค้นหาชื่อเส้นทาง / Placemark หรือพิกัด (เช่น 13.7563, 100.5018)..." autocomplete="off">
-      <div id="mapSearchResults"></div>
+    <div class="map-frame">
+      <button type="button" class="map-focus-toggle map-focus-toggle-floating" id="mapFocusToggle" aria-pressed="false" title="เข้าสู่โหมดเต็มจอ">
+        <span class="map-focus-toggle-icon" aria-hidden="true">⛶</span>
+        <span class="map-focus-toggle-text">เต็มจอ</span>
+      </button>
+      <div id="map"></div>
     </div>
-    <div id="map"></div>
     <div class="legend">
       <span><span class="swatch" style="background:#e07b39;"></span> A · พรีวิวก่อนวิเคราะห์</span>
       <span><span class="swatch" style="background:#3a7bd5;"></span> B · พรีวิวก่อนวิเคราะห์</span>
@@ -3424,14 +3572,19 @@ function setMapFocus(focused, persist = true) {
   mod1Layout.classList.toggle('is-map-focus', focused);
   document.body.classList.toggle('mod1-map-focus', focused);
   mapFocusToggle.setAttribute('aria-pressed', String(focused));
-  mapFocusToggle.title = focused ? 'แสดงส่วนตั้งค่าและสรุปผล' : 'ซ่อนส่วนตั้งค่าและขยายแผนที่';
+  mapFocusToggle.title = focused ? 'ออกจากโหมดเต็มจอ' : 'เข้าสู่โหมดเต็มจอ';
   const text = mapFocusToggle.querySelector('.map-focus-toggle-text');
-  if (text) text.textContent = focused ? 'แสดงการตั้งค่า' : 'ขยายแผนที่';
+  if (text) text.textContent = focused ? 'ออกจากเต็มจอ' : 'เต็มจอ';
   if (persist) localStorage.setItem(mapFocusKey, focused ? '1' : '0');
   window.setTimeout(() => { if (map) map.invalidateSize(); }, 280);
 }
 mapFocusToggle?.addEventListener('click', () => {
   setMapFocus(!mod1Layout?.classList.contains('is-map-focus'));
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && mod1Layout?.classList.contains('is-map-focus')) {
+    setMapFocus(false);
+  }
 });
 setMapFocus(localStorage.getItem(mapFocusKey) === '1', false);
 
