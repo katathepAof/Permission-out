@@ -3162,20 +3162,20 @@ async function exportCSV() {
   }
   rows.push([]);
   rows.push(['รายละเอียดเส้นที่ทับกัน']);
-  rows.push(['ลำดับ', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
+  rows.push(['ลำดับ', 'รหัส Placemark', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
   if (overlappingSegments.length === 0) {
     rows.push(['-', 'ไม่พบเส้นที่ทับกันตามตัวกรองที่เลือก']);
   } else {
     overlappingSegments.forEach((seg, index) => {
       const st = STATUS_META[seg.status] || STATUS_META.new;
-      rows.push([index + 1, placemarkDisplayText(seg), seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
+      rows.push([index + 1, placemarkCode(seg) || '-', placemarkName(seg), seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
     });
   }
   rows.push([]);
   rows.push([]);
   rows.push(['รายละเอียดช่วง (New = ฐาน A+B, Remove = เปรียบเทียบ C+D, Same = เหมือนกัน) พร้อมสถานะและความสัมพันธ์เส้นทาง']);
   rows.push(['ขอบเขตการคิดค่าบริการ', 'เส้นที่ตรงกับตัวกรองในการ์ด 4 (ค่าเริ่มต้นคือทุกเส้นที่ Import)']);
-  rows.push(['ลำดับ', 'ชื่อไฟล์', 'ชื่อ Placemark', 'จังหวัด', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)']);
+  rows.push(['ลำดับ', 'ชื่อไฟล์', 'รหัส Placemark', 'ชื่อ Placemark', 'จังหวัด', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)']);
 
   const costByStatus = { new: 0, same: 0, remove: 0 };
   let filteredSubtotal = 0;
@@ -3196,20 +3196,20 @@ async function exportCSV() {
     costByStatus[st] += cost;
     filteredSubtotal += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
-    rows.push([i + 1, srcFile, placemarkDisplayText(seg), province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
+    rows.push([i + 1, srcFile, placemarkCode(seg) || '-', placemarkName(seg), province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
   });
 
   const detailStartIndex = rows.length - exportSegments.length;
-  rows[detailStartIndex - 1].splice(4, 0, 'PEA Area IDs', 'PEA Area Names', 'PEA Office Types', 'PEA Assignment Method');
-  rows[detailStartIndex - 1].push('Source Code', 'Measured', 'Calculated');
+  rows[detailStartIndex - 1].splice(5, 0, 'PEA Area IDs', 'PEA Area Names', 'PEA Office Types', 'PEA Assignment Method');
+  rows[detailStartIndex - 1].push('Measured', 'Calculated');
   exportSegments.forEach((segment, index) => {
-    rows[detailStartIndex + index].splice(4, 0,
+    rows[detailStartIndex + index].splice(5, 0,
       peaAreaExportValue(segment, 'id'),
       peaAreaExportValue(segment, 'name'),
       peaAreaExportValue(segment, 'officeType'),
       peaAreaExportValue(segment, 'assignmentMethod'));
     const sourceMetadata = segment.sourceMetadata || {};
-    rows[detailStartIndex + index].push(sourceMetadata.code || '', sourceMetadata.measured || '', sourceMetadata.calculated || '');
+    rows[detailStartIndex + index].push(sourceMetadata.measured || '', sourceMetadata.calculated || '');
   });
 
   const subtotal = filteredSubtotal;
