@@ -14,22 +14,38 @@
 <body>
   <main class="login-shell">
     <section class="login-story" aria-label="ข้อมูลระบบ Permission Out">
-      <a class="login-brand" href="/" aria-label="Permission Out">
-        <span>PO</span>
-        <strong>Permission Out</strong>
-      </a>
-      <div class="login-story-copy">
-        <p class="login-eyebrow">ROUTE INTELLIGENCE PLATFORM</p>
-        <h1>เปลี่ยนข้อมูลโครงข่าย<br>ให้พร้อมตัดสินใจ</h1>
-        <p>วิเคราะห์และเปรียบเทียบแนวสาย ตรวจสอบพื้นที่ให้บริการ ประเมินค่าใช้จ่าย และบริหารข้อมูล Site Facility บนข้อมูลกลางที่ตรวจสอบย้อนหลังได้</p>
+      <header class="story-header">
+        <a class="login-brand" href="/" aria-label="Permission Out">
+          <span>PO</span>
+          <div><strong>Permission Out</strong><small>Network Intelligence Platform</small></div>
+        </a>
+        <span class="environment-badge">ENTERPRISE WORKSPACE</span>
+      </header>
+
+      <div class="story-main">
+        <div class="story-copy">
+          <p class="login-eyebrow">CENTRALIZED INFRASTRUCTURE DATA</p>
+          <h1>วิเคราะห์โครงข่าย<br>บนข้อมูลเดียวกัน</h1>
+          <p>ระบบสนับสนุนการตรวจสอบ วางแผน และตัดสินใจด้านโครงสร้างพื้นฐาน ด้วยข้อมูลที่เชื่อมโยงและตรวจสอบย้อนหลังได้</p>
+        </div>
+
+        <div class="capability-grid" aria-label="ความสามารถของระบบ">
+          <article><span>01</span><div><strong>Route Comparison</strong><small>เปรียบเทียบแนวสาย PEA และ UFM</small></div></article>
+          <article><span>02</span><div><strong>Coverage Validation</strong><small>ตรวจสอบพื้นที่และเส้นทางให้บริการ</small></div></article>
+          <article><span>03</span><div><strong>Cost Assessment</strong><small>ประเมินเสา ระยะทาง และค่าบริการ</small></div></article>
+          <article><span>04</span><div><strong>Site Facility</strong><small>บริหารข้อมูลไซต์และอุปกรณ์โครงข่าย</small></div></article>
+        </div>
       </div>
-      <div class="login-security">
-        <span aria-hidden="true">✓</span>
-        <div><strong>Protected workspace</strong><small>ตรวจสอบ session สถานะบัญชี และสิทธิ์รายโมดูลทุกคำขอ</small></div>
-      </div>
+
+      <footer class="story-footer">
+        <div><i aria-hidden="true"></i><span><strong>Central data</strong><small>ชุดข้อมูลกลางแบบมีเวอร์ชัน</small></span></div>
+        <div><i aria-hidden="true"></i><span><strong>Audit ready</strong><small>รองรับการตรวจสอบย้อนหลัง</small></span></div>
+        <div><i aria-hidden="true"></i><span><strong>Access control</strong><small>กำหนดสิทธิ์แยกตามโมดูล</small></span></div>
+      </footer>
     </section>
 
     <section class="login-stage">
+      <div class="stage-status"><span aria-hidden="true"></span> SECURE ACCESS</div>
       <div class="login-card">
         <header>
           <span class="login-card-mark" aria-hidden="true">PO</span>
@@ -39,7 +55,7 @@
           </div>
         </header>
 
-        <p class="login-intro" id="loginIntro">ใช้บัญชีที่ผู้ดูแลระบบสร้างให้เพื่อเข้าใช้งานอย่างปลอดภัย</p>
+        <p class="login-intro" id="loginIntro">กรอกข้อมูลบัญชีที่ได้รับจากผู้ดูแลระบบ</p>
 
         <form id="loginForm" novalidate>
           <label for="loginEmail">อีเมล</label>
@@ -69,10 +85,11 @@
         </form>
 
         <footer>
-          <span>ยังไม่มีบัญชี?</span>
+          <span>ต้องการสิทธิ์เข้าใช้งานหรือพบปัญหา?</span>
           <strong>ติดต่อผู้ดูแลระบบของหน่วยงาน</strong>
         </footer>
       </div>
+      <p class="stage-footnote">Permission Out · Authorized personnel only</p>
     </section>
   </main>
 
