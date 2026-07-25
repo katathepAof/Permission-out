@@ -21,8 +21,9 @@
 1. สร้าง Supabase project แล้วเปิด **SQL Editor**
 2. รันไฟล์ [`supabase/schema.sql`](supabase/schema.sql) ทั้งไฟล์
 3. รัน [`supabase/migrations/20260723100000_billing_engine.sql`](supabase/migrations/20260723100000_billing_engine.sql) เพื่อสร้างสูตรคำนวณกลางแบบมีเวอร์ชัน, RPC สำหรับคำนวณรายรายการ/แบบชุด และตาราง audit
-4. ใน **Authentication → URL Configuration** กำหนด Site URL เป็นโดเมน Cloudflare Pages และเพิ่ม localhost/preview URLs ที่ต้องใช้
-5. ใช้ Project URL และ Publishable key (หรือ legacy anon key) เท่านั้น ห้ามนำ `service_role` key มาใส่ฝั่งเว็บ
+4. หลัง migrations หลักทั้งหมด ให้รัน [`supabase/migrations/20260726120000_private_mod1_access.sql`](supabase/migrations/20260726120000_private_mod1_access.sql) เพื่อปิด Public Storage, เพิ่มสิทธิ์รายโมดูลใน RLS และบังคับให้ไฟล์ข้อมูล MOD 1 ผ่าน Worker
+5. ใน **Authentication → URL Configuration** กำหนด Site URL เป็นโดเมน Cloudflare Pages และเพิ่ม localhost/preview URLs ที่ต้องใช้
+6. ใช้ Project URL และ Publishable key (หรือ legacy anon key) เท่านั้น ห้ามนำ `service_role` key มาใส่ฝั่งเว็บ
 
 ### ระบบ Login และ Admin User Management
 
@@ -41,7 +42,7 @@ where id = (select id from auth.users where email = 'admin@your-company.com');
 
 Service-role key ใช้เฉพาะภายใน Cloudflare Worker สำหรับ `/api/admin/users` และไม่ถูกส่งไปยัง Browser หรือ `bootstrap.js` ระบบจะตรวจ Supabase access token, สถานะบัญชี และสิทธิ์ `admin` ทุกคำขอ รวมถึงป้องกัน Admin ลบบัญชีตนเองหรือลดจำนวน Admin ที่ใช้งานได้เหลือศูนย์
 
-Worker บันทึกสิทธิ์หลักไว้ใน Supabase Auth `app_metadata` (`permission_out_role` และ `permission_out_active`) และซิงก์ลง `profiles` เมื่อ Schema รองรับ จึง Login และจัดการผู้ใช้ได้แม้ฐานเดิมยังไม่ได้เพิ่มสองคอลัมน์ดังกล่าว แต่ยังควรรัน migration เพื่อให้หน่วยงานอื่น query สิทธิ์จากฐานข้อมูลกลางได้โดยตรง
+Worker บันทึกสิทธิ์หลักไว้ใน Supabase Auth `app_metadata` และซิงก์ `role`, `is_active` และ `permissions` ลง `profiles` เพื่อให้ Worker และ RLS ตรวจสถานะล่าสุดทุกคำขอโดยไม่รอ access token รอบใหม่
 
 บัญชีใหม่ต้องสร้างจากเมนู **บัญชีผู้ใช้ → จัดการผู้ใช้** โดย Admin การสมัครบัญชีด้วยตนเองจากหน้าเว็บถูกปิดไว้ ผู้ใช้ยังสามารถขอลิงก์ตั้งรหัสผ่านใหม่ผ่านหน้า Login ได้
 
@@ -120,6 +121,7 @@ npx wrangler deploy
 - `admin-data.js` / `admin-data.css` — อัปโหลด Staging, ตรวจ Diff, Publish และ Rollback ข้อมูล PEA/UFM
 - `supabase/schema.sql` — ตาราง, indexes, triggers, grants และ RLS policies
 - `supabase/migrations/20260724120000_mod2_site_facility.sql` — MOD 2 Site Facility แบบ versioned, PostGIS, RLS และ audit
+- `supabase/migrations/20260726120000_private_mod1_access.sql` — Private Storage และสิทธิ์ MOD 1 แบบ per-request สำหรับ Worker/RLS
 - `scripts/build.mjs` — สร้าง static bundle และ inject public Supabase config
 - `src/worker.js` — runtime config, health endpoint และ static-assets fallback
 - `_headers` — CSP และ security headers สำหรับ Cloudflare
@@ -129,6 +131,7 @@ npx wrangler deploy
 
 - KMZ ต้นฉบับเก็บใน Supabase Storage ที่ `uih-20072026/v1/kmz/` สำหรับตรวจสอบย้อนหลังและใช้งานกับ Google Earth
 - หน้าเว็บเลือกด้วย Dataset ID และจะดาวน์โหลดข้อมูลแบบ compact gzip เมื่อกดวิเคราะห์เท่านั้น (`analysis/*.json.gz`)
+- Bucket `permission-out-data` ต้องเป็น Private และหน้าเว็บอ่านไฟล์ผ่าน `/api/data/assets/*` ซึ่งตรวจ session และสิทธิ์ MOD 1 ทุกคำขอ
 - ข้อมูลสำหรับส่งต่อเป็น GeoJSON ตาม RFC 7946 + gzip (`exchange/*.geojson.gz`) พร้อม `data-dictionary.csv`, SHA-256, CRS และ metadata ใน `manifest.json`
 - PostGIS schema, GiST spatial index และ API แบบแบ่งหน้าอยู่ใน `supabase/migrations/20260722190000_uih_postgis.sql`
 - หลัง apply migration ให้รัน `npm run data:import-uih-postgis` เพื่อนำ geometry เข้าตารางที่ค้นหาเชิงพื้นที่ได้
@@ -137,6 +140,7 @@ npx wrangler deploy
 
 - ไฟล์ KML/KMZ ต้นฉบับจากโฟลเดอร์ `UFM` ถูกแปลงและจัดเก็บใน Supabase Storage ที่ `ufm/v1/`
 - หน้าเว็บแสดงรายการไฟล์เปรียบเทียบเป็น checkbox เลือกพร้อมกันได้หลายชุด และดาวน์โหลด compact gzip เฉพาะตอนกดวิเคราะห์
+- Manifest, PEA chunks และไฟล์วิเคราะห์ UIH/UFM ไม่เปิด Public URL; Cloudflare Worker เป็นผู้ตรวจสิทธิ์และ stream ข้อมูลจาก Private Storage
 - `analysis/*.json.gz` ใช้สำหรับวิเคราะห์บนเว็บอย่างรวดเร็ว ส่วน `exchange/*.geojson.gz` เป็น GeoJSON ตาม RFC 7946 สำหรับส่งต่อหน่วยงานอื่น
 - ตัวโหลดจะแตก metadata ที่ฝังใน `description` ของ UFM เช่น Code, Status, Type, Core, Measured และ Calculated เพื่อแสดงในตาราง/Popup และแนบไปกับ Export
 - `manifest.json` มีจำนวนเส้น ขนาดไฟล์ SHA-256 และ CRS ส่วน `data-dictionary.csv` อธิบายโครงสร้างข้อมูล

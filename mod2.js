@@ -5,10 +5,16 @@
   const cloudEnabled = Boolean(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase?.createClient);
   const client = cloudEnabled
     ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      auth: {
+        persistSession: true,
+        storage: window.sessionStorage,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
     })
     : null;
   const COMMENT_NOTIFICATIONS_KEY = 'permission-out.mod2.comments.lastSeenAt';
+  const MAP_FOCUS_KEY = 'permission-out.mod2.mapFocus';
 
   const state = {
     user: null,
@@ -63,6 +69,7 @@
     clusterBtn: document.getElementById('clusterBtn'),
     heatBtn: document.getElementById('heatBtn'),
     fitBtn: document.getElementById('fitBtn'),
+    mapFocusToggle: document.getElementById('mapFocusToggle'),
     exportBtn: document.getElementById('exportBtn'),
     modalBackdrop: document.getElementById('modalBackdrop'),
     modalTitle: document.getElementById('modalTitle'),
@@ -170,7 +177,7 @@
     state.user = authUser;
     let result = await client
       .from('profiles')
-      .select('id,display_name,organization,role,is_active')
+      .select('id,display_name,organization,role,is_active,permissions')
       .eq('id', authUser.id)
       .maybeSingle();
     if (result.error && (result.error.code === '42703' || /role|is_active/i.test(result.error.message || ''))) {
@@ -191,7 +198,7 @@
       displayName: profile.display_name || authUser.user_metadata?.display_name || authUser.email?.split('@')[0] || 'Account',
       organization: profile.organization || '',
       role: (metadata.permission_out_role || profile.role) === 'admin' ? 'admin' : 'user',
-      permissions: metadata.permission_out_permissions || null
+      permissions: profile.permissions || metadata.permission_out_permissions || null
     };
   }
 
@@ -951,6 +958,18 @@
     renderMap();
   });
   elements.fitBtn.addEventListener('click', fitAll);
+  function setMapFocus(focused, persist = true) {
+    document.body.classList.toggle('mod2-map-focus', focused);
+    elements.mapFocusToggle.setAttribute('aria-pressed', String(focused));
+    elements.mapFocusToggle.title = focused ? 'ออกจากโหมดเต็มจอ' : 'เข้าสู่โหมดเต็มจอ';
+    const text = elements.mapFocusToggle.querySelector('.map-focus-toggle-text');
+    if (text) text.textContent = focused ? 'ออกจากเต็มจอ' : 'เต็มจอ';
+    if (persist) localStorage.setItem(MAP_FOCUS_KEY, focused ? '1' : '0');
+    window.setTimeout(() => map.invalidateSize(), 280);
+  }
+  elements.mapFocusToggle.addEventListener('click', () => {
+    setMapFocus(!document.body.classList.contains('mod2-map-focus'));
+  });
   elements.exportBtn.addEventListener('click', exportCsv);
   elements.accountBtn.addEventListener('click', showAccount);
   elements.commentNotificationBtn?.addEventListener('click', () => {
@@ -970,6 +989,11 @@
   document.addEventListener('click', event => {
     if (elements.commentNotifications && !elements.commentNotifications.contains(event.target)) {
       closeCommentNotifications();
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && document.body.classList.contains('mod2-map-focus')) {
+      setMapFocus(false);
     }
   });
   map.on('zoomend', () => {
@@ -1010,6 +1034,7 @@
   }
 
   requestAnimationFrame(() => {
+    setMapFocus(localStorage.getItem(MAP_FOCUS_KEY) === '1', false);
     map.invalidateSize();
     initialize().catch(error => {
       setLoading(false);

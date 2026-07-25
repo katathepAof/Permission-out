@@ -41,7 +41,7 @@ const { data: buckets, error: listError } = await client.storage.listBuckets();
 if (listError) throw listError;
 if (!(buckets || []).some(bucket => bucket.id === BUCKET)) {
   const { error } = await client.storage.createBucket(BUCKET, {
-    public: true,
+    public: false,
     fileSizeLimit: 52428800,
     allowedMimeTypes: [
       'application/json', 'application/geo+json', 'application/gzip', 'text/csv',
@@ -50,6 +50,16 @@ if (!(buckets || []).some(bucket => bucket.id === BUCKET)) {
   });
   if (error) throw error;
   console.log(`Created bucket ${BUCKET} in ${EXPECTED_PROJECT_REF}`);
+} else {
+  const { error } = await client.storage.updateBucket(BUCKET, {
+    public: false,
+    fileSizeLimit: 104857600,
+    allowedMimeTypes: [
+      'application/json', 'application/geo+json', 'application/gzip', 'text/csv',
+      'application/vnd.google-earth.kmz', 'application/octet-stream'
+    ]
+  });
+  if (error) throw error;
 }
 
 function uploadSourceWithTus() {
@@ -120,9 +130,8 @@ for (const absolute of files) {
   uploadedCount += 1;
 }
 
-const manifestUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${PREFIX}/manifest.json`;
-const manifestResponse = await fetch(`${manifestUrl}?verify=${Date.now()}`);
-if (!manifestResponse.ok) throw new Error(`Manifest verification failed: HTTP ${manifestResponse.status}`);
-const manifest = await manifestResponse.json();
+const { data: manifestFile, error: manifestError } = await client.storage.from(BUCKET).download(`${PREFIX}/manifest.json`);
+if (manifestError || !manifestFile) throw new Error(`Manifest verification failed: ${manifestError?.message || 'empty response'}`);
+const manifest = JSON.parse(await manifestFile.text());
 if (manifest.featureCount !== 911) throw new Error(`Manifest verification failed: ${manifest.featureCount} features`);
 console.log(JSON.stringify({ projectRef, bucket: BUCKET, uploadedFiles: uploadedCount + 1, featureCount: manifest.featureCount }, null, 2));

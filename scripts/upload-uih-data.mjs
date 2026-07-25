@@ -39,6 +39,15 @@ if (projectRef !== EXPECTED_PROJECT_REF) throw new Error(`Refusing upload: expec
 const client = createClient(supabaseUrl, adminKey, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
 });
+const { error: bucketError } = await client.storage.updateBucket(BUCKET, {
+  public: false,
+  fileSizeLimit: 104857600,
+  allowedMimeTypes: [
+    'application/json', 'application/geo+json', 'application/gzip', 'text/csv',
+    'application/vnd.google-earth.kmz', 'application/octet-stream'
+  ]
+});
+if (bucketError) throw bucketError;
 const files = await filesUnder(outputRoot);
 let uploadedFiles = 0;
 for (const absolute of files) {
@@ -57,9 +66,8 @@ for (const absolute of files) {
   console.log(`Uploaded ${uploadedFiles}/${files.length}: ${localRelative}`);
 }
 
-const manifestUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${PREFIX}/manifest.json`;
-const response = await fetch(`${manifestUrl}?verify=${Date.now()}`);
-if (!response.ok) throw new Error(`Manifest verification failed: HTTP ${response.status}`);
-const manifest = await response.json();
+const { data: manifestFile, error: manifestError } = await client.storage.from(BUCKET).download(`${PREFIX}/manifest.json`);
+if (manifestError || !manifestFile) throw new Error(`Manifest verification failed: ${manifestError?.message || 'empty response'}`);
+const manifest = JSON.parse(await manifestFile.text());
 if (manifest.fileCount !== 24) throw new Error(`Manifest verification failed: expected 24 files, received ${manifest.fileCount}`);
 console.log(JSON.stringify({ projectRef, bucket: BUCKET, prefix: PREFIX, uploadedFiles, fileCount: manifest.fileCount }, null, 2));

@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const ADMIN_PAGE_SIZE = 100;
 const DATA_BUCKET = 'permission-out-admin-data';
+const MOD1_ASSET_BUCKET = 'permission-out-data';
+const MOD1_ASSET_PREFIXES = Object.freeze(['pea-area/v1/', 'uih-20072026/v1/', 'ufm/v1/']);
 const DATA_FEATURE_BATCH_SIZE = 100;
 const DATA_FILE_MAX_BYTES = 100 * 1024 * 1024;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -160,8 +162,30 @@ function userAccess(user, profile = {}) {
   return {
     role: normalizedRole,
     isActive,
-    permissions: normalizePermissions(metadata.permission_out_permissions, normalizedRole)
+    permissions: normalizePermissions(profile.permissions || metadata.permission_out_permissions, normalizedRole)
   };
+}
+
+function cleanMod1AssetPath(value) {
+  let path;
+  try {
+    path = decodeURIComponent(String(value || ''));
+  } catch {
+    throw new HttpError(400, 'เส้นทางไฟล์ข้อมูลไม่ถูกต้อง', 'validation_error');
+  }
+  const segments = path.split('/');
+  if (
+    path.length > 600 ||
+    !MOD1_ASSET_PREFIXES.some(prefix => path.startsWith(prefix)) ||
+    segments.some(segment => !segment || segment === '.' || segment === '..' || /[\\\u0000-\u001f]/.test(segment))
+  ) {
+    throw new HttpError(400, 'เส้นทางไฟล์ข้อมูลไม่ถูกต้อง', 'validation_error');
+  }
+  return path;
+}
+
+function encodeStoragePath(path) {
+  return path.split('/').map(encodeURIComponent).join('/');
 }
 
 function normalizePermissions(value, role = 'user') {
@@ -195,13 +219,13 @@ function hasModulePermission(access, moduleKey, action = 'view') {
 }
 
 function missingAccessColumns(error) {
-  return error?.code === '42703' || /role|is_active/i.test(String(error?.message || ''));
+  return error?.code === '42703' || /role|is_active|permissions/i.test(String(error?.message || ''));
 }
 
 async function getProfile(supabase, id) {
   let result = await supabase
     .from('profiles')
-    .select('id,display_name,organization,role,is_active,created_at')
+    .select('id,display_name,organization,role,is_active,permissions,created_at')
     .eq('id', id)
     .maybeSingle();
   if (result.error && missingAccessColumns(result.error)) {
@@ -219,7 +243,7 @@ async function getProfiles(supabase, ids) {
   if (!ids.length) return [];
   let result = await supabase
     .from('profiles')
-    .select('id,display_name,organization,role,is_active,created_at')
+    .select('id,display_name,organization,role,is_active,permissions,created_at')
     .in('id', ids);
   if (result.error && missingAccessColumns(result.error)) {
     result = await supabase
@@ -237,7 +261,7 @@ async function saveProfile(supabase, profile, { updateOnly = false } = {}) {
     : supabase.from('profiles').upsert(data, { onConflict: 'id' });
   let result = await write(profile);
   if (result.error && missingAccessColumns(result.error)) {
-    const { role, is_active: isActive, ...compatibleProfile } = profile;
+    const { role, is_active: isActive, permissions, ...compatibleProfile } = profile;
     result = await write(compatibleProfile);
   }
   if (result.error) throw result.error;
@@ -328,6 +352,7 @@ async function createAdminUser(request, env) {
     display_name: displayName,
     organization: organization || null,
     role,
+    permissions,
     is_active: true
   };
   try {
@@ -383,7 +408,7 @@ async function updateAdminUser(request, env, targetId) {
   }
   const { data, error } = await supabase.auth.admin.updateUserById(id, authChanges);
   if (error || !data.user) throw error || new Error('แก้ไขผู้ใช้ไม่สำเร็จ');
-  const profile = { id, display_name: displayName, organization: organization || null, role, is_active: isActive };
+  const profile = { id, display_name: displayName, organization: organization || null, role, permissions, is_active: isActive };
   await saveProfile(supabase, profile, { updateOnly: true });
   return jsonResponse({ user: publicUser(data.user, profile) });
 }
@@ -968,6 +993,47 @@ async function adminMod2Comment(request, env, commentId, action) {
   return jsonResponse({ deleted: true, id });
 }
 
+async function activeMod1Asset(request, env, rawPath) {
+  await requireModuleAccess(request, env, 'mod1', 'view');
+  if (request.method !== 'GET') throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
+  const path = cleanMod1AssetPath(rawPath);
+  const key = serviceRoleKey(env);
+  const upstream = await fetch(
+    `${String(env.SUPABASE_URL).replace(/\/$/, '')}/storage/v1/object/authenticated/${MOD1_ASSET_BUCKET}/${encodeStoragePath(path)}`,
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Accept: request.headers.get('Accept') || '*/*'
+      }
+    }
+  );
+  if (!upstream.ok) {
+    await upstream.body?.cancel().catch(() => {});
+    if (upstream.status === 404) throw new HttpError(404, 'ไม่พบไฟล์ข้อมูลที่ร้องขอ', 'asset_not_found');
+    throw new HttpError(502, 'อ่านไฟล์ข้อมูลกลางไม่สำเร็จ กรุณาลองใหม่', 'asset_upstream_failed');
+  }
+
+  const headers = new Headers();
+  for (const name of ['Content-Type', 'Content-Length', 'Content-Encoding', 'Content-Disposition', 'ETag', 'Last-Modified']) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'no-referrer');
+  return new Response(upstream.body, { status: 200, headers });
+}
+
+async function activeBillingFormula(request, env, url) {
+  const { supabase } = await requireModuleAccess(request, env, 'mod1', 'view');
+  const code = cleanText(url.searchParams.get('code') || 'permission_fee', 'รหัสสูตร', 80, true);
+  if (!/^[a-z0-9_-]+$/.test(code)) throw new HttpError(400, 'รหัสสูตรไม่ถูกต้อง', 'validation_error');
+  const { data, error } = await supabase.rpc('get_active_billing_formula', { p_code: code });
+  if (error) throw error;
+  return jsonResponse({ formula: Array.isArray(data) ? data[0] || null : data || null });
+}
+
 async function listMod2CommentNotifications(request, env) {
   const { supabase } = await requireAdmin(request, env);
   const url = new URL(request.url);
@@ -1102,6 +1168,9 @@ async function handleAdminApi(request, env, url) {
 }
 
 async function handleDataApi(request, env, url) {
+  const assetMatch = url.pathname.match(/^\/api\/data\/assets\/(.+)$/);
+  if (assetMatch) return activeMod1Asset(request, env, assetMatch[1]);
+  if (url.pathname === '/api/data/billing-formula') return activeBillingFormula(request, env, url);
   if (request.method === 'GET' && url.pathname === '/api/data/catalog') return activeDatasetCatalog(request, env);
   const featureMatch = url.pathname.match(/^\/api\/data\/datasets\/([^/]+)\/features$/);
   if (featureMatch && request.method === 'GET') return activeDatasetFeatures(request, env, featureMatch[1]);

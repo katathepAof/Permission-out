@@ -52,6 +52,24 @@ if (protectedData.status !== 401 || protectedDataBody.error?.code !== 'unauthori
   throw new Error('Dataset authentication guard failed');
 }
 
+const protectedAsset = await worker.fetch(new Request('https://example.com/api/data/assets/pea-area/v1/manifest.json'), {
+  ...env,
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'
+});
+const protectedAssetBody = await protectedAsset.json();
+if (protectedAsset.status !== 401 || protectedAssetBody.error?.code !== 'unauthorized') {
+  throw new Error('Private MOD 1 asset authentication guard failed');
+}
+
+const protectedFormula = await worker.fetch(new Request('https://example.com/api/data/billing-formula?code=permission_fee'), {
+  ...env,
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'
+});
+const protectedFormulaBody = await protectedFormula.json();
+if (protectedFormula.status !== 401 || protectedFormulaBody.error?.code !== 'unauthorized') {
+  throw new Error('Billing formula authentication guard failed');
+}
+
 const protectedMod2 = await worker.fetch(new Request('https://example.com/api/mod2/sites'), {
   ...env,
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'

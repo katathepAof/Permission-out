@@ -5,7 +5,12 @@
   const cloudEnabled = Boolean(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase?.createClient);
   const cloudRequired = cfg.requireSupabase !== false;
   const client = cloudEnabled ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: {
+      persistSession: true,
+      storage: window.sessionStorage,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
   }) : null;
   const LOCAL_KEY = 'permission-out.projects.v2';
   const titleInput = document.getElementById('projectTitle');
@@ -102,29 +107,32 @@
   }
 
   function peaAssetUrl(path) {
-    const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
     const encoded = String(path).split('/').map(encodeURIComponent).join('/');
-    return `${base}/storage/v1/object/public/permission-out-data/pea-area/v1/${encoded}`;
+    return `/api/data/assets/pea-area/v1/${encoded}`;
   }
 
   function uihAssetUrl(path) {
-    const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
     const encoded = String(path).split('/').map(encodeURIComponent).join('/');
-    return `${base}/storage/v1/object/public/permission-out-data/uih-20072026/v1/${encoded}`;
+    return `/api/data/assets/uih-20072026/v1/${encoded}`;
   }
 
   function ufmAssetUrl(path) {
-    const base = String(cfg.supabaseUrl || '').replace(/\/$/, '');
     const encoded = String(path).split('/').map(encodeURIComponent).join('/');
-    return `${base}/storage/v1/object/public/permission-out-data/ufm/v1/${encoded}`;
+    return `/api/data/assets/ufm/v1/${encoded}`;
   }
 
-  async function authenticatedJson(path) {
+  async function authenticatedFetch(path, options = {}) {
     if (!client) throw new Error('ต้องเชื่อมต่อ Supabase');
     const { data } = await client.auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
-    const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', `Bearer ${token}`);
+    return fetch(path, { ...options, headers });
+  }
+
+  async function authenticatedJson(path, options = {}) {
+    const response = await authenticatedFetch(path, options);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error?.message || `HTTP ${response.status}`);
     return payload;
@@ -315,7 +323,7 @@
   function fetchBaseAnalysis(item) {
     const cacheKey = item.managed ? `managed:${item.id}:v${item.versionNo || 0}` : item.analysisPath;
     if (baseAnalysisCache.has(cacheKey)) return baseAnalysisCache.get(cacheKey);
-    const request = item.managed ? fetchManagedAnalysis(item) : fetch(uihAssetUrl(item.analysisPath)).then(async response => {
+    const request = item.managed ? fetchManagedAnalysis(item) : authenticatedFetch(uihAssetUrl(item.analysisPath)).then(async response => {
       if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
       if (!response.body || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์ไม่รองรับการอ่านข้อมูล gzip แบบสตรีม');
       const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
@@ -365,7 +373,7 @@
     }
     try {
       setDatasetHealth(peaDatasetStatus, 'กำลังโหลด');
-      const response = await fetch(`${uihAssetUrl('manifest.json')}?v=1`);
+      const response = await authenticatedFetch(`${uihAssetUrl('manifest.json')}?v=1`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       let manifest = await response.json();
       if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
@@ -437,7 +445,7 @@
   function fetchCompareAnalysis(item) {
     const cacheKey = item.managed ? `managed:${item.id}:v${item.versionNo || 0}` : item.analysisPath;
     if (compareAnalysisCache.has(cacheKey)) return compareAnalysisCache.get(cacheKey);
-    const request = item.managed ? fetchManagedAnalysis(item) : fetch(ufmAssetUrl(item.analysisPath)).then(async response => {
+    const request = item.managed ? fetchManagedAnalysis(item) : authenticatedFetch(ufmAssetUrl(item.analysisPath)).then(async response => {
       if (!response.ok) throw new Error(`${item.name}: HTTP ${response.status}`);
       if (!response.body || typeof DecompressionStream === 'undefined') throw new Error('เบราว์เซอร์ไม่รองรับการอ่านข้อมูล gzip แบบสตรีม');
       const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
@@ -487,7 +495,7 @@
     }
     try {
       setDatasetHealth(ufmDatasetStatus, 'กำลังโหลด');
-      const response = await fetch(`${ufmAssetUrl('manifest.json')}?v=1`);
+      const response = await authenticatedFetch(`${ufmAssetUrl('manifest.json')}?v=1`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       let manifest = await response.json();
       if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
@@ -565,7 +573,7 @@
 
   async function fetchPeaChunk(path) {
     if (peaChunkCache.has(path)) return peaChunkCache.get(path);
-    const promise = fetch(peaAssetUrl(path)).then(response => {
+    const promise = authenticatedFetch(peaAssetUrl(path)).then(response => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
     });
@@ -742,7 +750,7 @@
     peaLayerTrigger.disabled = true;
     updatePeaSummary('กำลังโหลดรายการจาก Supabase…');
     try {
-      const response = await fetch(peaAssetUrl('manifest.json'));
+      const response = await authenticatedFetch(peaAssetUrl('manifest.json'));
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       peaManifest = await response.json();
       buildPeaLookupGrid();
@@ -763,9 +771,8 @@
   async function initializeBillingFormula() {
     if (!client) return;
     try {
-      const { data, error } = await client.rpc('get_active_billing_formula', { p_code: 'permission_fee' });
-      if (error) throw error;
-      const formula = Array.isArray(data) ? data[0] : data;
+      const payload = await authenticatedJson('/api/data/billing-formula?code=permission_fee');
+      const formula = payload.formula;
       if (formula) window.permissionOutBillingFormula = { ...formula, source: 'supabase' };
     } catch (error) {
       console.warn('Using local billing formula fallback:', error.message);
@@ -1010,7 +1017,7 @@
     currentUser = authUser;
     let result = await client
       .from('profiles')
-      .select('id,display_name,organization,role,is_active')
+      .select('id,display_name,organization,role,is_active,permissions')
       .eq('id', authUser.id)
       .maybeSingle();
     if (result.error && (result.error.code === '42703' || /role|is_active/i.test(result.error.message || ''))) {
@@ -1029,7 +1036,7 @@
       ? data.is_active !== false
       : metadata.permission_out_active !== false;
     if (!isActive) throw new Error('บัญชีนี้ถูกระงับการใช้งาน');
-    const permissions = modulePermissions(metadata.permission_out_permissions, normalizedRole);
+    const permissions = modulePermissions(data.permissions || metadata.permission_out_permissions, normalizedRole);
     currentProfile = {
       id: authUser.id,
       display_name: data.display_name || authUser.user_metadata?.display_name || '',
