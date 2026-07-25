@@ -214,55 +214,11 @@
     }
   }
 
-  function authErrorMessage(error) {
-    const message = String(error?.message || '');
-    if (/invalid login credentials/i.test(message)) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
-    if (/email not confirmed/i.test(message)) return 'อีเมลยังไม่ได้รับการยืนยัน';
-    if (/rate limit/i.test(message)) return 'ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่';
-    return message || 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่';
-  }
-
   function showAuth(initialError = '') {
-    const content = document.createElement('div');
-    content.innerHTML = `
-      <div class="auth-brand" aria-hidden="true">PO</div>
-      <p class="auth-note">ใช้บัญชีเดียวกับ MOD 1 เพื่อเข้าถึง Site Facility dataset ที่เผยแพร่แล้ว</p>
-      <form id="mod2AuthForm" novalidate>
-        <div class="modal-field">
-          <label for="mod2AuthEmail">อีเมล</label>
-          <input id="mod2AuthEmail" type="email" autocomplete="username" required maxlength="254">
-        </div>
-        <div class="modal-field">
-          <label for="mod2AuthPassword">รหัสผ่าน</label>
-          <input id="mod2AuthPassword" type="password" autocomplete="current-password" required minlength="8" maxlength="128">
-        </div>
-        <div class="auth-error" id="mod2AuthError" role="alert">${escapeHtml(initialError)}</div>
-        <button class="modal-primary" id="mod2AuthSubmit" type="submit">เข้าสู่ระบบ</button>
-      </form>`;
-    const form = content.querySelector('#mod2AuthForm');
-    const errorBox = content.querySelector('#mod2AuthError');
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      if (!form.reportValidity()) return;
-      const button = content.querySelector('#mod2AuthSubmit');
-      button.disabled = true;
-      button.textContent = 'กำลังเข้าสู่ระบบ…';
-      errorBox.textContent = '';
-      const response = await client.auth.signInWithPassword({
-        email: content.querySelector('#mod2AuthEmail').value.trim(),
-        password: content.querySelector('#mod2AuthPassword').value
-      });
-      if (response.error) {
-        errorBox.textContent = authErrorMessage(response.error);
-        button.disabled = false;
-        button.textContent = 'เข้าสู่ระบบ';
-        return;
-      }
-      await applySession(response.data.session, { showGate: false, reloadData: true });
-      closeModal(true);
-      toast('เข้าสู่ระบบสำเร็จ', 'success');
-    });
-    openModal('เข้าสู่ระบบ Permission Out', 'MOD 2 · Site Facility & Design', content, false);
+    const target = new URL('/login/', location.origin);
+    target.searchParams.set('returnTo', `${location.pathname}${location.search}`);
+    if (initialError) target.searchParams.set('reason', 'session_expired');
+    location.replace(target);
   }
 
   function showAccount() {
@@ -1025,7 +981,7 @@
     await applySession(data.session, { showGate: true });
     client.auth.onAuthStateChange((_event, session) => {
       window.setTimeout(() => applySession(session, { showGate: true }).catch(error => {
-        toast(authErrorMessage(error), 'error');
+        toast(error.message || 'ตรวจสอบเซสชันไม่สำเร็จ', 'error');
       }), 0);
     });
     if ('serviceWorker' in navigator) {

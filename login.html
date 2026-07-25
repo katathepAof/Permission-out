@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07152c">
+  <title>เข้าสู่ระบบ | Permission Out</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/login.css?v=20260726-central-login">
+</head>
+<body>
+  <main class="login-shell">
+    <section class="login-story" aria-label="ข้อมูลระบบ Permission Out">
+      <a class="login-brand" href="/" aria-label="Permission Out">
+        <span>PO</span>
+        <strong>Permission Out</strong>
+      </a>
+      <div class="login-story-copy">
+        <p class="login-eyebrow">ROUTE INTELLIGENCE PLATFORM</p>
+        <h1>พื้นที่ทำงานกลาง<br>สำหรับทุกโมดูล</h1>
+        <p>เข้าสู่ระบบเพียงจุดเดียว ระบบจะพาคุณกลับไปยังโมดูลที่ร้องขอและตรวจสอบสิทธิ์ล่าสุดก่อนเข้าใช้งาน</p>
+      </div>
+      <div class="login-security">
+        <span aria-hidden="true">✓</span>
+        <div><strong>Protected workspace</strong><small>ตรวจสอบ session สถานะบัญชี และสิทธิ์รายโมดูลทุกคำขอ</small></div>
+      </div>
+    </section>
+
+    <section class="login-stage">
+      <div class="login-card">
+        <header>
+          <span class="login-card-mark" aria-hidden="true">PO</span>
+          <div>
+            <p id="loginContext">PERMISSION OUT</p>
+            <h2 id="loginTitle">เข้าสู่ระบบ</h2>
+          </div>
+        </header>
+
+        <p class="login-intro" id="loginIntro">ใช้บัญชีที่ผู้ดูแลระบบสร้างให้เพื่อเข้าใช้งานอย่างปลอดภัย</p>
+
+        <form id="loginForm" novalidate>
+          <label for="loginEmail">อีเมล</label>
+          <input id="loginEmail" name="email" type="email" autocomplete="username" maxlength="254" placeholder="name@company.com" required>
+
+          <label for="loginPassword">รหัสผ่าน</label>
+          <div class="password-control">
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="กรอกรหัสผ่าน" required>
+            <button id="togglePassword" type="button" aria-label="แสดงรหัสผ่าน">แสดง</button>
+          </div>
+
+          <div class="login-error" id="loginError" role="alert"></div>
+          <button class="login-submit" id="loginSubmit" type="submit">เข้าสู่ระบบ</button>
+          <button class="login-link" id="forgotPassword" type="button">ลืมรหัสผ่าน</button>
+        </form>
+
+        <form id="recoveryForm" class="recovery-form" hidden novalidate>
+          <label for="newPassword">รหัสผ่านใหม่</label>
+          <div class="password-control">
+            <input id="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="อย่างน้อย 12 ตัวอักษร" required>
+            <button id="toggleNewPassword" type="button" aria-label="แสดงรหัสผ่านใหม่">แสดง</button>
+          </div>
+          <label for="confirmPassword">ยืนยันรหัสผ่านใหม่</label>
+          <input id="confirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" required>
+          <div class="login-error" id="recoveryError" role="alert"></div>
+          <button class="login-submit" id="recoverySubmit" type="submit">บันทึกรหัสผ่านใหม่</button>
+        </form>
+
+        <footer>
+          <span>ยังไม่มีบัญชี?</span>
+          <strong>ติดต่อผู้ดูแลระบบของหน่วยงาน</strong>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <script src="/bootstrap.js"></script>
+  <script src="/vendor/supabase.js"></script>
+  <script src="/login.js?v=20260726-central-login"></script>
+</body>
+</html>

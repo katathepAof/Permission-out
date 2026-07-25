@@ -1261,7 +1261,7 @@ export default {
 
     const assetResponse = await env.ASSETS.fetch(request);
     if (
-      ['/', '/index.html', '/mod2', '/mod2/', '/mod2/index.html'].includes(url.pathname)
+      ['/', '/index.html', '/mod2', '/mod2/', '/mod2/index.html', '/login', '/login/', '/login/index.html'].includes(url.pathname)
       && assetResponse.headers.get('Content-Type')?.includes('text/html')
     ) {
       const html = await assetResponse.text();

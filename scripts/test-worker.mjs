@@ -25,6 +25,19 @@ const htmlResponse = await worker.fetch(new Request('https://example.com/'), env
 const html = await htmlResponse.text();
 if (!html.includes(env.SUPABASE_URL) || html.includes('src="bootstrap.js"')) throw new Error('HTML runtime config injection failed');
 
+const loginResponse = await worker.fetch(new Request('https://example.com/login/'), {
+  ...env,
+  ASSETS: {
+    fetch: async () => new Response('<html><body><script src="/bootstrap.js"></script></body></html>', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    })
+  }
+});
+const loginHtml = await loginResponse.text();
+if (!loginHtml.includes(env.SUPABASE_URL) || loginHtml.includes('src="/bootstrap.js"')) {
+  throw new Error('Central login runtime config injection failed');
+}
+
 const assetResponse = await worker.fetch(new Request('https://example.com/production.js'), env);
 if (await assetResponse.text() !== 'asset-ok') throw new Error('Static asset fallback test failed');
 

@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v17-private-access-map-focus-comments';
-const CORE = ['/', '/mod2/', '/production.css?v=20260723-modules', '/production.js?v=20260726-private-mod1-access', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260726-map-focus-comment-permission', '/mod2.js?v=20260726-map-focus-comment-permission-session-auth', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v18-central-login';
+const CORE = ['/', '/mod2/', '/login/', '/production.css?v=20260723-modules', '/production.js?v=20260726-central-login', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260726-map-focus-comment-permission', '/mod2.js?v=20260726-central-login', '/login.css?v=20260726-central-login', '/login.js?v=20260726-central-login', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -50,7 +50,9 @@ self.addEventListener('fetch', event => {
       // Only navigations may fall back to the app shell. Returning HTML for
       // CSS, JavaScript, fonts or images causes MIME-type errors.
       if (event.request.mode === 'navigate') {
-        const appShell = await caches.match(url.pathname.startsWith('/mod2') ? '/mod2/' : '/');
+        const appShell = await caches.match(
+          url.pathname.startsWith('/mod2') ? '/mod2/' : url.pathname.startsWith('/login') ? '/login/' : '/'
+        );
         if (appShell) return appShell;
       }
 

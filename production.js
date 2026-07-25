@@ -1088,86 +1088,11 @@
     return Boolean(currentUser);
   }
 
-  function authErrorMessage(error) {
-    const message = String(error?.message || '');
-    if (/invalid login credentials/i.test(message)) return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
-    if (/email not confirmed/i.test(message)) return 'อีเมลยังไม่ได้รับการยืนยัน';
-    if (/user is banned/i.test(message)) return 'บัญชีนี้ถูกระงับการใช้งาน';
-    if (/rate limit/i.test(message)) return 'ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่';
-    return message || 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่';
-  }
-
   function showAuth(initialError = '') {
-    const content = document.createElement('div');
-    content.className = 'login-panel';
-    content.innerHTML = `
-      <div class="login-brand" aria-hidden="true">PO</div>
-      <div class="auth-note">เข้าสู่ระบบด้วยบัญชีที่ผู้ดูแลสร้างให้ เพื่อใช้งานและบันทึกโครงการบน Supabase อย่างปลอดภัย</div>
-      <form id="authForm" novalidate>
-        <div class="modal-field">
-          <label for="authEmail">อีเมล</label>
-          <input id="authEmail" type="email" autocomplete="username" required maxlength="254" placeholder="name@company.com">
-        </div>
-        <div class="modal-field">
-          <label for="authPassword">รหัสผ่าน</label>
-          <div class="password-field">
-            <input id="authPassword" type="password" autocomplete="current-password" required minlength="8" maxlength="128" placeholder="กรอกรหัสผ่าน">
-            <button type="button" id="toggleAuthPassword" aria-label="แสดงรหัสผ่าน">แสดง</button>
-          </div>
-        </div>
-        <div class="auth-inline-error" id="authError" role="alert">${escapeHtml(initialError)}</div>
-        <button class="modal-primary" id="authSubmit" type="submit">เข้าสู่ระบบ</button>
-        <button class="modal-link" id="resetPassword" type="button">ลืมรหัสผ่าน</button>
-      </form>
-      <p class="login-help">ยังไม่มีบัญชี? ติดต่อผู้ดูแลระบบของหน่วยงาน</p>`;
-    const errorBox = content.querySelector('#authError');
-    content.querySelector('#toggleAuthPassword').addEventListener('click', event => {
-      const password = content.querySelector('#authPassword');
-      const visible = password.type === 'text';
-      password.type = visible ? 'password' : 'text';
-      event.currentTarget.textContent = visible ? 'แสดง' : 'ซ่อน';
-      event.currentTarget.setAttribute('aria-label', visible ? 'แสดงรหัสผ่าน' : 'ซ่อนรหัสผ่าน');
-    });
-    content.querySelector('#authForm').addEventListener('submit', async event => {
-      event.preventDefault();
-      if (!client) return;
-      const form = event.currentTarget;
-      if (!form.reportValidity()) return;
-      const email = content.querySelector('#authEmail').value.trim();
-      const password = content.querySelector('#authPassword').value;
-      const button = content.querySelector('#authSubmit');
-      button.disabled = true;
-      button.textContent = 'กำลังเข้าสู่ระบบ…';
-      errorBox.textContent = '';
-      const response = await client.auth.signInWithPassword({ email, password });
-      if (response.error) {
-        errorBox.textContent = authErrorMessage(response.error);
-        button.disabled = false;
-        button.textContent = 'เข้าสู่ระบบ';
-        return;
-      }
-      const accepted = await applySession(response.data.session, { showGate: false });
-      button.disabled = false;
-      button.textContent = 'เข้าสู่ระบบ';
-      if (!accepted) {
-        errorBox.textContent = 'บัญชีนี้ไม่มีสิทธิ์เข้าใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
-        return;
-      }
-      closeModal(true);
-      toast('เข้าสู่ระบบสำเร็จ', 'success');
-    });
-    content.querySelector('#resetPassword').addEventListener('click', async () => {
-      const email = content.querySelector('#authEmail').value.trim();
-      if (!email) {
-        errorBox.textContent = 'กรุณากรอกอีเมลก่อนขอลิงก์ตั้งรหัสผ่านใหม่';
-        content.querySelector('#authEmail').focus();
-        return;
-      }
-      const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
-      if (error) errorBox.textContent = authErrorMessage(error);
-      else toast('ส่งลิงก์ตั้งรหัสผ่านใหม่แล้ว กรุณาตรวจสอบอีเมล', 'success');
-    });
-    openModal('เข้าสู่ระบบ Permission Out', 'ระบบวิเคราะห์เส้นทางสำหรับผู้ได้รับอนุญาต', content, false, cloudRequired);
+    const target = new URL('/login/', location.origin);
+    target.searchParams.set('returnTo', `${location.pathname}${location.search}`);
+    if (initialError) target.searchParams.set('reason', 'session_expired');
+    location.replace(target);
   }
 
   function updateAccountUI() {
@@ -1327,7 +1252,7 @@
       await applySession(data.session, { showGate: false });
       client.auth.onAuthStateChange((_event, session) => {
         window.setTimeout(() => applySession(session, { showGate: true }).catch(error => {
-          toast(authErrorMessage(error), 'error');
+          toast(error.message || 'ตรวจสอบเซสชันไม่สำเร็จ', 'error');
         }), 0);
       });
     } else {
@@ -1339,8 +1264,11 @@
         showConfigurationRequired();
       }
     }
+    if (client && !currentUser && cloudRequired) {
+      showAuth();
+      return;
+    }
     await Promise.all([initializePeaLayers(), initializeBaseCatalog(), initializeCompareCatalog(), initializeBillingFormula()]);
-    if (client && !currentUser && cloudRequired) showAuth();
   }
   initialize().catch(error => { updateAccountUI(); toast(`เริ่มระบบ Cloud ไม่สำเร็จ: ${error.message}`, 'error'); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

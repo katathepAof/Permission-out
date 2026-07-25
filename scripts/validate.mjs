@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 const production = await readFile(resolve(root, 'production.js'), 'utf8');
@@ -11,6 +11,8 @@ const adminData = await readFile(resolve(root, 'admin-data.js'), 'utf8');
 const uxRefresh = await readFile(resolve(root, 'ux-refresh.js'), 'utf8');
 const mod2Html = await readFile(resolve(root, 'mod2.html'), 'utf8');
 const mod2Js = await readFile(resolve(root, 'mod2.js'), 'utf8');
+const loginHtml = await readFile(resolve(root, 'login.html'), 'utf8');
+const loginJs = await readFile(resolve(root, 'login.js'), 'utf8');
 const workerSource = await readFile(resolve(root, 'src/worker.js'), 'utf8');
 const privateAccessMigration = await readFile(resolve(root, 'supabase/migrations/20260726120000_private_mod1_access.sql'), 'utf8');
 const uploadScripts = await Promise.all([
@@ -77,13 +79,21 @@ if (!mod2Js.includes('function canManageMod2Comments()') || !mod2Js.includes("da
 if (!workerSource.includes("requireModuleAccess(request, env, 'mod2', 'update')")) {
   throw new Error('MOD 2 comment management must use MOD 2 update permission');
 }
-if (!production.includes('storage: window.sessionStorage') || !mod2Js.includes('storage: window.sessionStorage')) {
+if (!loginJs.includes('storage: window.sessionStorage')) {
   throw new Error('Authentication must use browser-session storage');
 }
-if (!mod2Js.includes('signInWithPassword') || !mod2Js.includes('getSession') || !mod2Js.includes('loadSites')) {
-  throw new Error('MOD 2 authentication or data loader is missing');
+if (!production.includes("new URL('/login/'") || !mod2Js.includes("new URL('/login/'")) {
+  throw new Error('All modules must use the central login route');
 }
-if (!production.includes('signInWithPassword') || production.includes('client.auth.signUp(') || !production.includes('loadCurrentProfile')) throw new Error('Managed login flow is missing or public signup is enabled');
+if (production.includes('authErrorMessage(') || mod2Js.includes('authErrorMessage(')) {
+  throw new Error('Module-specific authentication UI helpers must not remain after centralization');
+}
+if (!loginHtml.includes('id="loginForm"') || !loginHtml.includes('id="recoveryForm"') || !loginJs.includes('signInWithPassword') || !loginJs.includes('resetPasswordForEmail') || !loginJs.includes('safeReturnTo')) {
+  throw new Error('Central login or password recovery flow is incomplete');
+}
+if (loginJs.includes('client.auth.signUp(') || !production.includes('loadCurrentProfile') || !mod2Js.includes('loadSites')) {
+  throw new Error('Managed login flow is missing or public signup is enabled');
+}
 for (const marker of ['permissionOutOpenAdminUsers', '/api/admin/users', 'admin-user-form', 'isActive']) {
   if (!adminUsers.includes(marker)) throw new Error(`Admin user marker is missing: ${marker}`);
 }
@@ -94,5 +104,5 @@ for (const marker of ['workflow-nav', 'dataset-drawer', 'workspace-view-tabs', '
   if (!uxRefresh.includes(marker)) throw new Error(`UX refresh marker is missing: ${marker}`);
 }
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match => match[1]).filter(Boolean);
-for (const source of [...inlineScripts, production, adminUsers, adminData, uxRefresh, mod2Js]) new Function(source);
+for (const source of [...inlineScripts, production, adminUsers, adminData, uxRefresh, mod2Js, loginJs]) new Function(source);
 console.log('Validation passed');

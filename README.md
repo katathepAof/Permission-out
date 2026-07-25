@@ -11,6 +11,7 @@
 - คำนวณเสา, diameter, อัตราค่าพาดสาย, surcharge และยอดรวมแบบ real-time
 - Export CSV, KML และ KMZ ตามตัวกรอง พร้อมรหัส/ชื่อ/ประเภทพื้นที่ PEA ของแต่ละเส้นทาง และแนบ Polygon พื้นที่ PEA ใน KML/KMZ
 - ระบบบัญชี Supabase Auth และสิทธิ์ Admin สำหรับจัดการผู้ใช้งาน
+- หน้าเข้าสู่ระบบกลางที่ `/login/` รองรับการส่งกลับด้วย `returnTo`, ตรวจสิทธิ์ตามโมดูล และจัดการลืม/ตั้งรหัสผ่านใหม่จากจุดเดียว
 - โครงสร้างแบบหลายโมดูล โดย MOD 1 ใช้วิเคราะห์ PEA/UFM และสามารถเพิ่ม MOD 2 โดยใช้ Supabase project เดียวกันได้
 - Supabase-required ใน Production: Cloudflare Worker สร้าง runtime config จาก Variables and Secrets และหน้าแอปจะแจ้งเตือนหากตั้งค่าไม่ครบ
 - PWA/offline shell, responsive UI, print layout และ security headers
@@ -117,6 +118,7 @@ npx wrangler deploy
 - `Permission_Out.html` — แกนวิเคราะห์และหน้าหลัก
 - `production.js` / `production.css` — MOD 1, Supabase datasets, auth และ UI production
 - `mod2.html` / `mod2.js` / `mod2.css` — MOD 2 Site Facility map, filters, dashboard และ CSV export
+- `login.html` / `login.js` / `login.css` — Central Login สำหรับทุกโมดูลและ password recovery
 - `admin-users.js` / `admin-users.css` — หน้าจัดการผู้ใช้สำหรับ Admin
 - `admin-data.js` / `admin-data.css` — อัปโหลด Staging, ตรวจ Diff, Publish และ Rollback ข้อมูล PEA/UFM
 - `supabase/schema.sql` — ตาราง, indexes, triggers, grants และ RLS policies
