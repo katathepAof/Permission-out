@@ -1241,6 +1241,7 @@ table.report td.num{
         <input type="file" id="fileBase" class="base-catalog-source" accept=".kml,.kmz" multiple tabindex="-1" aria-hidden="true">
         <div class="base-catalog-tools">
           <input type="search" id="baseCatalogSearch" placeholder="ค้นหาชื่อไฟล์ KMZ…" autocomplete="off">
+          <button type="button" class="local-file-trigger" data-file-input="fileBase">นำเข้าไฟล์</button>
           <button type="button" id="baseCatalogSelectAll">เลือกที่แสดง</button>
           <button type="button" id="baseCatalogClear">ล้าง</button>
         </div>
@@ -1263,6 +1264,7 @@ table.report td.num{
         <input type="file" id="fileCompare" class="base-catalog-source" accept=".kml,.kmz" multiple tabindex="-1" aria-hidden="true">
         <div class="base-catalog-tools">
           <input type="search" id="compareCatalogSearch" placeholder="ค้นหาชื่อไฟล์ UFM…" autocomplete="off">
+          <button type="button" class="local-file-trigger" data-file-input="fileCompare">นำเข้าไฟล์</button>
           <button type="button" id="compareCatalogSelectAll">เลือกที่แสดง</button>
           <button type="button" id="compareCatalogClear">ล้าง</button>
         </div>
@@ -1270,16 +1272,6 @@ table.report td.num{
         <div class="tag" id="tagCompare" hidden></div>
       </div>
     </div>
-
-    <fieldset class="import-type-filter" id="importTypeFilter">
-      <legend>ประเภทข้อมูลที่จะนำเข้า</legend>
-      <p>เลือกเฉพาะประเภทเส้นทางที่ต้องการนำไปวิเคราะห์และแสดงในรายงาน</p>
-      <div class="import-type-options">
-        <label><input type="checkbox" name="importCategory" value="network" checked><span><strong>Network</strong><small>โครงข่ายและเส้นทางหลัก</small></span></label>
-        <label><input type="checkbox" name="importCategory" value="ready-access" checked><span><strong>Ready Access</strong><small>เส้นทางพร้อมให้บริการ</small></span></label>
-        <label><input type="checkbox" name="importCategory" value="customer" checked><span><strong>Customer</strong><small>เส้นทางเชื่อมต่อลูกค้า</small></span></label>
-      </div>
-    </fieldset>
 
     <div class="row">
       <div class="field">
@@ -1509,6 +1501,12 @@ table.report td.num{
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="same" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0e9f6e;"></span> Same</label>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="remove" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#7c3aed;"></span> Remove</label>
   </div>
+  <div class="report-category-row" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
+    <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">ประเภทข้อมูล:</span>
+    <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="categoryFilter" value="network" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#1e5ba8;"></span> Network</label>
+    <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="categoryFilter" value="ready-access" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0e9f6e;"></span> Ready Access</label>
+    <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="categoryFilter" value="customer" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#b7791f;"></span> Customer</label>
+  </div>
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
     <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">ความสัมพันธ์เส้นทาง:</span>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="overlapFilter" value="partial" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#d97706;"></span> ทับกันบางส่วน</label>
@@ -1730,6 +1728,7 @@ const LARGE_RESULT_THRESHOLD = 1500;
 const REPORT_ROW_LIMIT = 300;
 let aggregateResultMode = false;
 let aggregateSelectionLayer = null;
+let aggregateRenderer = null;
 let provinceBuildToken = 0;
 
 const fileBase = document.getElementById('fileBase');
@@ -1747,16 +1746,26 @@ const GROUP_TAGS = { BASE: tagBase, COMPARE: tagCompare };
 const GROUP_COLORS = { BASE: '#e07b39', COMPARE: '#3a7bd5' };
 const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเทียบ' };
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
+window.permissionOutCompareFiles = window.permissionOutCompareFiles || [];
 window.permissionOutBaseDatasetIds = window.permissionOutBaseDatasetIds || [];
 window.permissionOutCompareDatasetIds = window.permissionOutCompareDatasetIds || [];
 window.permissionOutRolesSwapped = window.permissionOutRolesSwapped === true;
+
+document.querySelectorAll('.local-file-trigger').forEach(button => {
+  button.addEventListener('click', () => {
+    const input = document.getElementById(button.dataset.fileInput || '');
+    if (input && !input.disabled) input.click();
+  });
+});
 function sourceRolesAreSwapped() {
   return window.permissionOutRolesSwapped === true;
 }
 function filesForGroup(groupKey) {
-  return groupKey === 'BASE' && Array.isArray(window.permissionOutBaseFiles)
+  const inputFiles = Array.from(GROUP_INPUTS[groupKey]?.files || []);
+  const stagedFiles = groupKey === 'BASE'
     ? window.permissionOutBaseFiles
-    : Array.from(GROUP_INPUTS[groupKey].files);
+    : window.permissionOutCompareFiles;
+  return Array.isArray(stagedFiles) && stagedFiles.length ? stagedFiles : inputFiles;
 }
 function selectedBaseDatasetCount() {
   return Array.isArray(window.permissionOutBaseDatasetIds) ? window.permissionOutBaseDatasetIds.length : 0;
@@ -1974,6 +1983,13 @@ function pickExtField(ext, regexes) {
   return null;
 }
 
+function normalizeImportCategory(value) {
+  const text = String(value || '').normalize('NFKC').trim().toLocaleLowerCase('en-US');
+  if (/ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(text)) return 'ready-access';
+  if (/customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(text)) return 'customer';
+  return 'network';
+}
+
 function detectImportCategory(...values) {
   const text = values.flatMap(value => {
     if (value && typeof value === 'object') {
@@ -1981,9 +1997,7 @@ function detectImportCategory(...values) {
     }
     return [value];
   }).filter(Boolean).join(' ').normalize('NFKC').toLocaleLowerCase('en-US');
-  if (/ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(text)) return 'ready-access';
-  if (/customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(text)) return 'customer';
-  return 'network';
+  return normalizeImportCategory(text);
 }
 
 function placemarkFolderPath(pm) {
@@ -2094,7 +2108,7 @@ function parseGxCoords(node) {
   return out;
 }
 
-function parseKML(text) {
+function parseKML(text, sourceName = '') {
   const parser = new DOMParser();
   const xml = parser.parseFromString(text, 'text/xml');
   if (xml.getElementsByTagName('parsererror').length > 0) throw new Error('ไม่สามารถอ่านไฟล์ KML ได้ (รูปแบบไฟล์ผิดพลาด)');
@@ -2120,7 +2134,7 @@ function parseKML(text) {
       const identifierCandidate = placemarkIdentifierFromData(pm, ext, description) || '';
       const identifier = /^\d{2}[A-Z]{2,}[A-Z0-9-]{4,}$/i.test(identifierCandidate) ? identifierCandidate : '';
       const name = identifier || originalName || identifierCandidate || '(ไม่ระบุชื่อ)';
-      const importCategory = detectImportCategory(ext, description, originalName, placemarkFolderPath(pm));
+      const importCategory = detectImportCategory(ext, description, originalName, placemarkFolderPath(pm), sourceName);
       let diameterInfo = extractDiameter(pm, name, description);
       let source = diameterInfo.value !== null ? 'file' : null;
       let type = null, core = null;
@@ -2273,6 +2287,7 @@ function initMap() {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
   }).addTo(map);
   layerGroup = L.layerGroup().addTo(map);
+  aggregateRenderer = L.canvas({ padding: 0.35 });
   searchableLayers = [];
   hideSearchResults();
   if (!mapResizeBound) {
@@ -2336,6 +2351,11 @@ FILE_GROUPS.forEach(groupKey => {
   const tag = GROUP_TAGS[groupKey];
   const box = GROUP_BOXES[groupKey];
   input.addEventListener('change', async (event) => {
+    const directFiles = Array.from(event.target.files || []);
+    if (directFiles.length) {
+      if (groupKey === 'BASE') window.permissionOutBaseFiles = directFiles;
+      else window.permissionOutCompareFiles = directFiles;
+    }
     const selectedFiles = filesForGroup(groupKey);
     if (!selectedFiles.length) {
       tag.textContent = '';
@@ -2370,7 +2390,7 @@ async function previewGroup(groupKey) {
     const color = GROUP_COLORS[groupKey];
     const label = GROUP_LABELS[groupKey];
     const texts = await Promise.all(files.map(f => readKmlOrKmzText(f)));
-    const lines = texts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = files[i] ? files[i].name : ''; return l; }));
+    const lines = texts.flatMap((t, i) => parseKML(t, files[i]?.name || '').map(l => { l.sourceFile = files[i] ? files[i].name : ''; return l; }));
 
     const group = L.layerGroup();
     const bounds = [];
@@ -2486,7 +2506,7 @@ function renderAggregateResults(segments, fitBounds = false) {
       opacity: status === 'remove' ? 0.78 : 0.9,
       dashArray: status === 'remove' ? '6,7' : null,
       interactive: false,
-      renderer: L.canvas({ padding: 0.35 })
+      renderer: aggregateRenderer || undefined
     }).addTo(layerGroup);
   });
   if (fitBounds && bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
@@ -2498,7 +2518,8 @@ function aggregateSegmentIsVisible(seg, filters) {
     seg,
     filters.provinces,
     filters.overlaps,
-    filters.cableStatuses
+    filters.cableStatuses,
+    filters.categories
   );
 }
 
@@ -2507,7 +2528,8 @@ function currentAggregateFilters() {
     statuses: getActiveStatuses(),
     provinces: getSelectedProvinces(),
     overlaps: getActiveOverlaps(),
-    cableStatuses: getSelectedCableStatuses()
+    cableStatuses: getSelectedCableStatuses(),
+    categories: getActiveCategories()
   };
 }
 
@@ -2834,13 +2856,15 @@ function getSelectedProvinces() {
   const container = document.getElementById('provinceFilter');
   return container ? Array.from(container.querySelectorAll('.provinceFilterOption:checked')).map(o => o.value) : ['__ALL__'];
 }
-function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinces(), activeOverlaps = getActiveOverlaps(), selectedCableStatuses = getSelectedCableStatuses()) {
+function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinces(), activeOverlaps = getActiveOverlaps(), selectedCableStatuses = getSelectedCableStatuses(), activeCategories = getActiveCategories()) {
   const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
   const provOk = showAllProv || selectedProvinces.includes(getSegProvince(seg));
   const overlapOk = activeOverlaps[OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none'];
   const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
   const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(seg));
-  return provOk && overlapOk && cableStatusOk;
+  const category = normalizeImportCategory(seg.importCategory);
+  const categoryOk = activeCategories[category] === true;
+  return provOk && overlapOk && cableStatusOk && categoryOk;
 }
 function applyProvinceFilter(fitMapToSelection = false) {
   const selectedProvinces = getSelectedProvinces();
@@ -2849,10 +2873,11 @@ function applyProvinceFilter(fitMapToSelection = false) {
   const active = getActiveStatuses();
   const activeOverlaps = getActiveOverlaps();
   const selectedCableStatuses = getSelectedCableStatuses();
+  const activeCategories = getActiveCategories();
   const matching = [];
   state.segmentsB.forEach(seg => {
     const statusOk = active[STATUS_META[seg.status] ? seg.status : 'new'];
-    const match = statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses);
+    const match = statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses, activeCategories);
     if (match) matching.push(seg);
     if (!aggregateResultMode && seg._mapLayer && typeof layerGroup !== 'undefined' && layerGroup) {
       if (match) {
@@ -2879,6 +2904,16 @@ function applyProvinceFilter(fitMapToSelection = false) {
   const showAllStatus = selectedStatuses.length === 0 || selectedStatuses.includes('__ALL__');
   const statusCnt = document.getElementById('cableStatusFilterCount');
   if (statusCnt) statusCnt.textContent = showAllStatus ? 'ทุก Status' : `เลือก: ${selectedStatuses.filter(s => s !== '__ALL__').join(', ')}`;
+  const mapStatus = document.getElementById('mapStatus');
+  if (mapStatus && state.segmentsB.length) {
+    const selectedCategoryLabels = {
+      network: 'Network',
+      'ready-access': 'Ready Access',
+      customer: 'Customer'
+    };
+    const categoryText = Object.keys(activeCategories).filter(key => activeCategories[key]).map(key => selectedCategoryLabels[key]).join(', ') || 'ไม่มีประเภทที่เลือก';
+    mapStatus.textContent = `แสดง ${shown.toLocaleString('th-TH')} จาก ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง · ประเภทข้อมูล: ${categoryText}`;
+  }
   recomputeAll();
 }
 
@@ -2908,6 +2943,7 @@ document.getElementById('clearProvinceSelection').addEventListener('click', () =
   applyProvinceFilter(true);
 });
 document.querySelectorAll('.statusFilter').forEach(cb => cb.addEventListener('change', onStatusFilterChange));
+document.querySelectorAll('.categoryFilter').forEach(cb => cb.addEventListener('change', onStatusFilterChange));
 document.querySelectorAll('.overlapFilter').forEach(cb => cb.addEventListener('change', () => applyProvinceFilter()));
 document.getElementById('selectAllCableStatus').addEventListener('click', () => {
   document.querySelectorAll('.cableStatusOption').forEach(o => { o.checked = o.value === '__ALL__'; });
@@ -2925,6 +2961,13 @@ function getActiveStatuses() {
   boxes.forEach(b => { if (b.checked) active[b.value] = true; });
   return active;
 }
+function getActiveCategories() {
+  const boxes = document.querySelectorAll('.categoryFilter');
+  if (!boxes.length) return { network: true, 'ready-access': true, customer: true };
+  const active = { network: false, 'ready-access': false, customer: false };
+  boxes.forEach(box => { if (box.checked) active[box.value] = true; });
+  return active;
+}
 function getActiveOverlaps() {
   const active = { partial: false, none: false, full: false };
   document.querySelectorAll('.overlapFilter').forEach(cb => { active[cb.value] = cb.checked; });
@@ -2938,6 +2981,7 @@ function recomputeAll() {
   const selectedProvinces = getSelectedProvinces();
   const activeOverlaps = getActiveOverlaps();
   const selectedCableStatuses = getSelectedCableStatuses();
+  const activeCategories = getActiveCategories();
 
   let totalPoles = 0;
   const cost = { new: 0, same: 0, remove: 0 };
@@ -2952,7 +2996,7 @@ function recomputeAll() {
     const segKm = billing.km;
     const poles = billing.poles;
     const segCost = billing.cost;
-    const inReportScope = segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses);
+    const inReportScope = segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses, activeCategories);
     const included = active[st] && inReportScope;
     if (!included) {
       if (polesEl) polesEl.textContent = '—';
@@ -3010,12 +3054,6 @@ async function runAnalysis() {
   }
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = Math.max(1, parseFloat(document.getElementById('interval').value) || 5);
-  const selectedImportCategories = new Set(Array.from(document.querySelectorAll('input[name="importCategory"]:checked')).map(input => input.value));
-  if (!selectedImportCategories.size) {
-    errBox.textContent = 'กรุณาเลือกประเภทข้อมูลที่จะนำเข้าอย่างน้อย 1 ประเภท';
-    errBox.style.display = 'block';
-    return;
-  }
   const dedupeEnabled = document.querySelector('input[name="reportOverlapMode"]:checked')?.value === 'dedupe';
 
   const btn = document.getElementById('analyzeBtn');
@@ -3045,16 +3083,14 @@ async function runAnalysis() {
         : Promise.resolve([])
     ]);
 
-    const allPeaLines = optimizedPeaLines.concat(peaTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = peaFiles[i] ? peaFiles[i].name : ''; return l; })));
-    const allUfmLines = optimizedUfmLines.concat(ufmTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = ufmFiles[i] ? ufmFiles[i].name : ''; return l; })));
-    const peaLines = allPeaLines.filter(line => selectedImportCategories.has(line.importCategory || 'network'));
-    const ufmLines = allUfmLines.filter(line => selectedImportCategories.has(line.importCategory || 'network'));
+    const allPeaLines = optimizedPeaLines.concat(peaTexts.flatMap((t, i) => parseKML(t, peaFiles[i]?.name || '').map(l => { l.sourceFile = peaFiles[i] ? peaFiles[i].name : ''; return l; })));
+    const allUfmLines = optimizedUfmLines.concat(ufmTexts.flatMap((t, i) => parseKML(t, ufmFiles[i]?.name || '').map(l => { l.sourceFile = ufmFiles[i] ? ufmFiles[i].name : ''; return l; })));
+    const peaLines = allPeaLines;
+    const ufmLines = allUfmLines;
     let linesA = sourceRolesAreSwapped() ? ufmLines : peaLines;
     let linesB = sourceRolesAreSwapped() ? peaLines : ufmLines;
 
-    const sourceCountA = sourceRolesAreSwapped() ? allUfmLines.length : allPeaLines.length;
-    const sourceCountB = sourceRolesAreSwapped() ? allPeaLines.length : allUfmLines.length;
-    const rawCountA = linesA.length; // จำนวนเส้นหลังผ่านตัวกรอง (ก่อนตัดซ้ำ)
+    const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้ทั้งหมด (ก่อนตัดซ้ำ)
     const rawCountB = linesB.length;
 
     // ตัดเส้นทับซ้อนเฉพาะเมื่อผู้ใช้เปิดสวิตช์ — ค่าเริ่มต้นปิด เพื่อให้ import ครบทุกเส้น
@@ -3102,11 +3138,8 @@ async function runAnalysis() {
     const cSame = state.segmentsB.filter(s => s.status === 'same').length;
     const breakdown = singleFileMode ? '' : ` (New ${cNew} / Same ${cSame} / Remove ${cRem})`;
     const noteParts = [];
-    const categoryLabels = { network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' };
-    const categoryNote = Array.from(selectedImportCategories).map(category => categoryLabels[category]).join(', ');
-    if (hasBase) noteParts.push(`นำเข้าฐาน ${rawCountA}/${sourceCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
-    if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB}/${sourceCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
-    noteParts.push(`ประเภท ${categoryNote}`);
+    if (hasBase) noteParts.push(`นำเข้าฐาน ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
+    if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
     noteParts.push(dedupeEnabled ? 'รายงาน: ตัดเส้นทับกัน' : 'รายงาน: แสดงเส้นทับกัน');
     const importNote = noteParts.join(' · ');
     document.getElementById('execMeta').textContent = `${dateStr} · ${timeStr} · ${importNote} · ${state.segmentsB.length} ช่วง${breakdown} · ${elapsedMs.toLocaleString('th-TH')} มิลลิวินาที`;
@@ -3200,7 +3233,7 @@ async function exportCSV() {
   rows.push(['ความละเอียดการสุ่มจุด (ม.)', interval]);
   rows.push(['เสาต่อระยะทาง (ต้น/กม.)', polesPerKm]);
   rows.push(['อัตราค่าบริการพาดสาย (บาท/เส้น/มม./ต้น)', rateB]);
-  rows.push(['ประเภทข้อมูลที่นำเข้า', Array.from(new Set(exportSegments.map(segment => segment.importCategory || 'network'))).join(', ') || '-']);
+  rows.push(['ประเภทข้อมูลที่เลือกในรายงาน', Array.from(new Set(exportSegments.map(segment => segment.importCategory || 'network'))).join(', ') || '-']);
   rows.push(['รูปแบบรายงาน', document.querySelector('input[name="reportOverlapMode"]:checked')?.value === 'dedupe' ? 'ตัดเส้นที่ทับกัน' : 'ไม่ตัดเส้นที่ทับกัน']);
   rows.push(['จังหวัดที่เลือกสำหรับส่งออก', provinceLabel]);
   rows.push(['Status (จากไฟล์) ที่เลือกสำหรับส่งออก', cableStatusLabel]);
@@ -3475,6 +3508,7 @@ document.querySelectorAll('input[name="reportOverlapMode"]').forEach(radio => {
 function clearAll() {
   // Reset file inputs
   window.permissionOutBaseFiles = [];
+  window.permissionOutCompareFiles = [];
   window.permissionOutBaseDatasetIds = [];
   window.permissionOutBaseDatasetNames = [];
   window.permissionOutCompareDatasetIds = [];
@@ -3490,6 +3524,7 @@ function clearAll() {
   // Reset analysis state
   state = { totalA: 0, totalB: 0, nonOverlapB: 0, segmentsB: [], removedA: 0, removedB: 0 };
   previews = { BASE: null, COMPARE: null };
+  document.querySelectorAll('.categoryFilter').forEach(input => { input.checked = true; });
 
   // Reset map
   if (coordMarker && map) { try { map.removeLayer(coordMarker); } catch (e) { /* ignore */ } coordMarker = null; }

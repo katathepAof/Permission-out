@@ -276,7 +276,7 @@
   }
 
   function compactLineToApp(line, item) {
-    const properties = propertiesWithDescriptionFields(line.p || {});
+    const properties = propertiesWithDescriptionFields(line.p || line.properties || {});
     const originalName = String(line.n || properties.name || '');
     const identifier = routeIdentifier(properties);
     const name = String(identifier || originalName || 'ไม่ระบุชื่อ');
@@ -303,12 +303,29 @@
     const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier;
     const measured = propertyValue(properties, [/^measured$/i, /ระยะ.*วัด/i]);
     const calculated = propertyValue(properties, [/^calculated$/i, /ระยะ.*คำนวณ/i]);
-    const categoryText = `${Object.keys(properties).join(' ')} ${Object.values(properties).join(' ')} ${originalName}`.normalize('NFKC').toLocaleLowerCase('en-US');
-    const importCategory = /ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(categoryText)
-      ? 'ready-access'
-      : /customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(categoryText) ? 'customer' : 'network';
+    const categoryText = [
+      line.importCategory,
+      line.import_category,
+      line.category,
+      properties.import_category,
+      properties.importCategory,
+      properties.category,
+      Object.keys(properties).join(' '),
+      Object.values(properties).join(' '),
+      originalName,
+      item?.category,
+      item?.group,
+      item?.name,
+      item?.sourceName,
+      item?.canonicalName
+    ].filter(Boolean).join(' ');
+    const importCategory = typeof normalizeImportCategory === 'function'
+      ? normalizeImportCategory(categoryText)
+      : /ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(categoryText)
+        ? 'ready-access'
+        : /customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(categoryText) ? 'customer' : 'network';
     return {
-      coords: line.c,
+      coords: Array.isArray(line.c) ? line.c : line.coords,
       name,
       diameter,
       unit: diameter !== null ? 'mm' : null,
@@ -321,7 +338,8 @@
       importCategory,
       sourceMetadata: { code: sourceCode, originalName, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
-      sourceFile: item.name
+      sourceFile: item?.name || line.sourceFile || '',
+      sourceDatasetId: item?.id || line.sourceDatasetId || ''
     };
   }
 
@@ -831,7 +849,7 @@
         threshold: numeric('threshold', 20), interval: numeric('interval', 5),
         polesPerKm: numeric('polesPerKm', 29), rateB: numeric('rateB', 2.8),
         surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked),
-        importCategories: Array.from(document.querySelectorAll('input[name="importCategory"]:checked')).map(input => input.value),
+        reportCategories: Array.from(document.querySelectorAll('.categoryFilter:checked')).map(input => input.value),
         sourceRolesSwapped: window.permissionOutRolesSwapped === true
       },
       sourceFiles: {
@@ -877,9 +895,10 @@
     applyValue('surchargePct', s.surchargePct);
     if (document.getElementById('dedupeToggle')) document.getElementById('dedupeToggle').checked = Boolean(s.dedupe);
     window.permissionOutSyncOverlapMode?.();
-    if (Array.isArray(s.importCategories)) {
-      const selectedCategories = new Set(s.importCategories);
-      document.querySelectorAll('input[name="importCategory"]').forEach(input => {
+    const savedReportCategories = Array.isArray(s.reportCategories) ? s.reportCategories : s.importCategories;
+    if (Array.isArray(savedReportCategories)) {
+      const selectedCategories = new Set(savedReportCategories);
+      document.querySelectorAll('.categoryFilter').forEach(input => {
         input.checked = selectedCategories.has(input.value);
       });
     }
@@ -1190,7 +1209,7 @@
 
   titleInput?.addEventListener('input', markDirty);
   ['threshold','interval','polesPerKm','rateB','surchargePct','dedupeToggle'].forEach(id => document.getElementById(id)?.addEventListener('change', markDirty));
-  document.querySelectorAll('input[name="importCategory"],input[name="reportOverlapMode"]').forEach(input => input.addEventListener('change', markDirty));
+  document.querySelectorAll('.categoryFilter,input[name="reportOverlapMode"]').forEach(input => input.addEventListener('change', markDirty));
   const debounceUi = (callback, delay = 140) => {
     let timer = 0;
     return (...args) => {

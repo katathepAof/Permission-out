@@ -280,8 +280,16 @@
     return source?.textContent?.replace(/\s+/g, ' ').trim() || '';
   }
   function updateSelectionSummary() {
-    const baseCount = Number.parseInt(q('#baseCatalogCount')?.textContent || '0', 10) || 0;
-    const compareCount = Number.parseInt(q('#compareCatalogCount')?.textContent || '0', 10) || 0;
+    const baseDatasetCount = Number.parseInt(q('#baseCatalogCount')?.textContent || '0', 10) || 0;
+    const compareDatasetCount = Number.parseInt(q('#compareCatalogCount')?.textContent || '0', 10) || 0;
+    const baseFileCount = Array.isArray(window.permissionOutBaseFiles)
+      ? window.permissionOutBaseFiles.length
+      : (q('#fileBase')?.files?.length || 0);
+    const compareFileCount = Array.isArray(window.permissionOutCompareFiles)
+      ? window.permissionOutCompareFiles.length
+      : (q('#fileCompare')?.files?.length || 0);
+    const baseCount = baseDatasetCount + baseFileCount;
+    const compareCount = compareDatasetCount + compareFileCount;
     const baseStatus = q('#baseCatalogStatus')?.textContent?.trim() || 'ยังไม่ได้เลือกชุดข้อมูล';
     const compareStatus = q('#compareCatalogStatus')?.textContent?.trim() || 'ยังไม่ได้เลือกชุดข้อมูล';
     q('#uxBaseCount').textContent = baseCount.toLocaleString('th-TH');

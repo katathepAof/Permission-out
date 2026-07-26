@@ -20,7 +20,7 @@ const uploadScripts = await Promise.all([
   'scripts/upload-uih-data.mjs',
   'scripts/upload-ufm-data.mjs'
 ].map(file => readFile(resolve(root, file), 'utf8')));
-for (const id of ['peaDatasetStatus', 'ufmDatasetStatus', 'accountBtn', 'analyzeBtn', 'swapSourceRoles', 'reportBody', 'map', 'peaLayerTrigger', 'peaLayerList', 'baseCatalogSearch', 'baseCatalogList', 'compareCatalogSearch', 'compareCatalogList', 'importTypeFilter', 'dedupeToggle']) {
+for (const id of ['peaDatasetStatus', 'ufmDatasetStatus', 'accountBtn', 'analyzeBtn', 'swapSourceRoles', 'reportBody', 'map', 'peaLayerTrigger', 'peaLayerList', 'baseCatalogSearch', 'baseCatalogList', 'compareCatalogSearch', 'compareCatalogList', 'dedupeToggle']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`Missing required element: ${id}`);
 }
 if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis lifecycle event is missing');
@@ -28,11 +28,14 @@ if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('bill
   throw new Error('Shared UI/export billing logic is missing');
 }
 if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
-for (const marker of ['value="network"', 'value="ready-access"', 'value="customer"', 'name="reportOverlapMode"', 'function detectImportCategory(', "line.importCategory || 'network'"]) {
+for (const marker of ['class="categoryFilter" value="network"', 'class="categoryFilter" value="ready-access"', 'class="categoryFilter" value="customer"', 'name="reportOverlapMode"', 'function normalizeImportCategory(', 'function detectImportCategory(', 'function parseKML(text, sourceName', "line.importCategory || 'network'", 'function getActiveCategories()', 'window.permissionOutCompareFiles', 'renderer: aggregateRenderer']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 import/report filter marker is missing: ${marker}`);
 }
-if (!production.includes('importCategory') || !production.includes('importCategories: Array.from')) {
-  throw new Error('Optimized MOD 1 data or saved projects do not preserve import filters');
+if (!production.includes('importCategory') || !production.includes('reportCategories: Array.from') || !production.includes('item?.category') || !production.includes('Array.isArray(line.c) ? line.c : line.coords')) {
+  throw new Error('Optimized MOD 1 data or saved projects do not preserve report category filters');
+}
+if (!uxRefresh.includes('window.permissionOutBaseFiles') || !uxRefresh.includes('window.permissionOutCompareFiles')) {
+  throw new Error('MOD 1 workflow readiness must include locally imported files');
 }
 if (!html.includes('costFiltered') || !html.includes('เส้นที่ตรงกับตัวกรองในการ์ด 4')) {
   throw new Error('Card-4-filtered billing is missing');
