@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="/vendor/leaflet.css">
   <link rel="stylesheet" href="/production.css?v=20260723-modules">
   <link rel="stylesheet" href="/admin-users.css?v=20260724-user-permissions">
-  <link rel="stylesheet" href="/mod2.css?v=20260726-sidebar-tab">
+  <link rel="stylesheet" href="/mod2.css?v=20260726-legend-toggle">
 </head>
 <body class="mod2-body">
   <header class="app-shellbar" aria-label="แถบจัดการระบบ">
@@ -180,7 +180,21 @@
           <strong>กำลังโหลดข้อมูล MOD 2</strong>
           <small id="loadingDetail">กำลังตรวจสอบเซสชัน…</small>
         </div>
-        <div class="map-legend" id="mapLegend"></div>
+        <div class="map-legend" id="mapLegend" hidden>
+          <button type="button" class="map-legend-toggle" id="mapLegendToggle" aria-expanded="false" aria-controls="mapLegendPanel">
+            <span class="map-legend-preview" id="mapLegendPreview" aria-hidden="true"></span>
+            <span>ประเภท Site</span>
+            <strong id="mapLegendCount">0</strong>
+            <span class="map-legend-caret" aria-hidden="true">⌃</span>
+          </button>
+          <section class="map-legend-panel" id="mapLegendPanel" aria-label="คำอธิบายสีประเภท Site" hidden>
+            <header>
+              <strong>ประเภท Site</strong>
+              <small id="mapLegendSummary">0 ประเภท</small>
+            </header>
+            <div class="map-legend-items" id="mapLegendItems"></div>
+          </section>
+        </div>
       </div>
     </section>
   </main>
@@ -203,7 +217,7 @@
   <script src="/vendor/leaflet.js"></script>
   <script src="/bootstrap.js"></script>
   <script src="/vendor/supabase.js"></script>
-  <script src="/mod2.js?v=20260726-sidebar-tab"></script>
+  <script src="/mod2.js?v=20260726-legend-toggle"></script>
   <script src="/admin-users.js?v=20260724-user-permissions"></script>
 </body>
 </html>

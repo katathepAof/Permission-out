@@ -99,6 +99,9 @@ for (const marker of ['sidebar-overview', 'sidebar-metric-primary', 'sidebar-met
 for (const marker of ['id="sidebarToggle"', 'id="mod2Sidebar"', 'function setSidebarCollapsed(', 'function restoreSidebarState()', 'permission-out:mod2-sidebar-collapsed', 'map.invalidateSize']) {
   if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`Collapsible MOD 2 sidebar marker is missing: ${marker}`);
 }
+for (const marker of ['id="mapLegendToggle"', 'id="mapLegendPanel"', 'id="mapLegendItems"', 'function setLegendExpanded(', 'function restoreLegendState()', 'permission-out:mod2-legend-expanded']) {
+  if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`Collapsible MOD 2 legend marker is missing: ${marker}`);
+}
 if (mod2Html.includes('class="metric-grid"')) throw new Error('Legacy MOD 2 metric card row must not remain in the map workspace');
 for (const marker of ['function bindLazySitePopup(', 'window.requestAnimationFrame(() =>', 'map.flyToBounds(', 'function updateActiveFilters(', 'resetAllFilters({']) {
   if (!mod2Js.includes(marker)) throw new Error(`Smooth MOD 2 map UX marker is missing: ${marker}`);

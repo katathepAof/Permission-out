@@ -74,6 +74,12 @@
     mapLoading: document.getElementById('mapLoading'),
     loadingDetail: document.getElementById('loadingDetail'),
     mapLegend: document.getElementById('mapLegend'),
+    mapLegendToggle: document.getElementById('mapLegendToggle'),
+    mapLegendPanel: document.getElementById('mapLegendPanel'),
+    mapLegendItems: document.getElementById('mapLegendItems'),
+    mapLegendPreview: document.getElementById('mapLegendPreview'),
+    mapLegendCount: document.getElementById('mapLegendCount'),
+    mapLegendSummary: document.getElementById('mapLegendSummary'),
     clusterBtn: document.getElementById('clusterBtn'),
     heatBtn: document.getElementById('heatBtn'),
     fitBtn: document.getElementById('fitBtn'),
@@ -209,6 +215,25 @@
       collapsed = window.sessionStorage.getItem('permission-out:mod2-sidebar-collapsed') === 'true';
     } catch { /* use expanded state */ }
     setSidebarCollapsed(collapsed, { persist: false });
+  }
+
+  function setLegendExpanded(expanded, { persist = true } = {}) {
+    const isExpanded = Boolean(expanded);
+    elements.mapLegendToggle?.setAttribute('aria-expanded', String(isExpanded));
+    if (elements.mapLegendPanel) elements.mapLegendPanel.hidden = !isExpanded;
+    if (persist) {
+      try {
+        window.sessionStorage.setItem('permission-out:mod2-legend-expanded', String(isExpanded));
+      } catch { /* storage may be unavailable */ }
+    }
+  }
+
+  function restoreLegendState() {
+    let expanded = false;
+    try {
+      expanded = window.sessionStorage.getItem('permission-out:mod2-legend-expanded') === 'true';
+    } catch { /* use collapsed state */ }
+    setLegendExpanded(expanded, { persist: false });
   }
 
   async function loadProfile(user) {
@@ -1061,18 +1086,37 @@
     for (const site of state.filtered) {
       if (site.grade) counts.set(site.grade, (counts.get(site.grade) || 0) + 1);
     }
+    const sortedEntries = [...counts.entries()].sort((left, right) => right[1] - left[1]);
     const fragment = document.createDocumentFragment();
-    for (const [grade, count] of [...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 12)) {
+    for (const [grade, count] of sortedEntries) {
       const item = document.createElement('span');
       item.className = 'legend-item';
       const dot = document.createElement('i');
       dot.style.background = gradeColor(grade);
       const label = document.createElement('span');
-      label.textContent = `${grade} ${count.toLocaleString('th-TH')}`;
-      item.append(dot, label);
+      label.textContent = grade;
+      label.title = grade;
+      const value = document.createElement('b');
+      value.textContent = count.toLocaleString('th-TH');
+      item.append(dot, label, value);
       fragment.appendChild(item);
     }
-    elements.mapLegend.replaceChildren(fragment);
+    elements.mapLegendItems?.replaceChildren(fragment);
+    if (elements.mapLegendCount) elements.mapLegendCount.textContent = counts.size.toLocaleString('th-TH');
+    if (elements.mapLegendSummary) {
+      const total = sortedEntries.reduce((sum, [, count]) => sum + count, 0);
+      elements.mapLegendSummary.textContent = `${counts.size.toLocaleString('th-TH')} ประเภท · ${total.toLocaleString('th-TH')} Sites`;
+    }
+    if (elements.mapLegendPreview) {
+      const preview = document.createDocumentFragment();
+      sortedEntries.slice(0, 3).forEach(([grade]) => {
+        const dot = document.createElement('i');
+        dot.style.background = gradeColor(grade);
+        preview.appendChild(dot);
+      });
+      elements.mapLegendPreview.replaceChildren(preview);
+    }
+    if (elements.mapLegend) elements.mapLegend.hidden = counts.size === 0;
   }
 
   function fitAll() {
@@ -1338,6 +1382,9 @@
   elements.sidebarToggle?.addEventListener('click', () => {
     setSidebarCollapsed(!elements.workspace?.classList.contains('is-sidebar-collapsed'));
   });
+  elements.mapLegendToggle?.addEventListener('click', () => {
+    setLegendExpanded(elements.mapLegendToggle.getAttribute('aria-expanded') !== 'true');
+  });
   function setMapFocus(focused, persist = true) {
     document.body.classList.toggle('mod2-map-focus', focused);
     elements.mapFocusToggle.setAttribute('aria-pressed', String(focused));
@@ -1372,6 +1419,11 @@
     }
   });
   document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && elements.mapLegendToggle?.getAttribute('aria-expanded') === 'true') {
+      setLegendExpanded(false);
+      elements.mapLegendToggle.focus();
+      return;
+    }
     if (event.key === 'Escape' && document.body.classList.contains('mod2-map-focus')) {
       setMapFocus(false);
     }
@@ -1392,6 +1444,7 @@
 
   async function initialize() {
     restoreSidebarState();
+    restoreLegendState();
     updateAccountUi();
     if (!client) {
       setHealth('ตั้งค่าไม่ครบ', 'error');
