@@ -207,8 +207,8 @@
 
   q('#baseCatalogSearch')?.setAttribute('placeholder', 'ค้นหาชุดข้อมูล PEA…');
   q('#compareCatalogSearch')?.setAttribute('placeholder', 'ค้นหาชุดข้อมูล UFM…');
-  if (q('#baseCatalogSelectAll')) q('#baseCatalogSelectAll').textContent = 'เลือกผลค้นหา';
-  if (q('#compareCatalogSelectAll')) q('#compareCatalogSelectAll').textContent = 'เลือกผลค้นหา';
+  if (q('#baseCatalogSelectAll')) q('#baseCatalogSelectAll').textContent = 'เลือกเป็นฐาน';
+  if (q('#compareCatalogSelectAll')) q('#compareCatalogSelectAll').textContent = 'เลือกเป็นเปรียบเทียบ';
   if (q('#baseCatalogClear')) q('#baseCatalogClear').textContent = 'ล้างทั้งหมด';
   if (q('#compareCatalogClear')) q('#compareCatalogClear').textContent = 'ล้างทั้งหมด';
 
@@ -280,8 +280,12 @@
     return source?.textContent?.replace(/\s+/g, ' ').trim() || '';
   }
   function updateSelectionSummary() {
-    const baseDatasetCount = Number.parseInt(q('#baseCatalogCount')?.textContent || '0', 10) || 0;
-    const compareDatasetCount = Number.parseInt(q('#compareCatalogCount')?.textContent || '0', 10) || 0;
+    const baseDatasetCount = Array.isArray(window.permissionOutBaseDatasetIds)
+      ? window.permissionOutBaseDatasetIds.length
+      : 0;
+    const compareDatasetCount = Array.isArray(window.permissionOutCompareDatasetIds)
+      ? window.permissionOutCompareDatasetIds.length
+      : 0;
     const baseFileCount = Array.isArray(window.permissionOutBaseFiles)
       ? window.permissionOutBaseFiles.length
       : (q('#fileBase')?.files?.length || 0);
@@ -290,8 +294,15 @@
       : (q('#fileCompare')?.files?.length || 0);
     const baseCount = baseDatasetCount + baseFileCount;
     const compareCount = compareDatasetCount + compareFileCount;
-    const baseStatus = q('#baseCatalogStatus')?.textContent?.trim() || 'ยังไม่ได้เลือกชุดข้อมูล';
-    const compareStatus = q('#compareCatalogStatus')?.textContent?.trim() || 'ยังไม่ได้เลือกชุดข้อมูล';
+    const sourceSummary = (names, fileCount) => {
+      const selectedNames = Array.isArray(names) ? names : [];
+      const total = selectedNames.length + fileCount;
+      if (!total) return 'ยังไม่ได้เลือกชุดข้อมูล';
+      const preview = selectedNames.slice(0, 2).join(' · ');
+      return `${total.toLocaleString('th-TH')} รายการ${preview ? ` · ${preview}${selectedNames.length > 2 ? '…' : ''}` : ' · ไฟล์นำเข้า'}`;
+    };
+    const baseStatus = sourceSummary(window.permissionOutBaseDatasetNames, baseFileCount);
+    const compareStatus = sourceSummary(window.permissionOutCompareDatasetNames, compareFileCount);
     q('#uxBaseCount').textContent = baseCount.toLocaleString('th-TH');
     q('#uxCompareCount').textContent = compareCount.toLocaleString('th-TH');
     q('#uxBaseSummary').textContent = baseStatus;

@@ -53,7 +53,12 @@ if (csvSection.includes("placemarkCode(seg) || '-'")) {
   throw new Error('CSV export must leave missing Placemark codes blank');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
-if (!html.includes('sourceRolesAreSwapped() ? ufmLines : peaLines') || !html.includes('applyProvinceFilter(true)')) throw new Error('Source-role swap or province map focus is missing');
+if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
+  throw new Error('Logical PEA/UFM dataset grouping or province map focus is missing');
+}
+for (const marker of ['peaCompareCatalogSelected', 'ufmBaseCatalogSelected', 'baseCatalogSelectCompare', 'compareCatalogSelectBase']) {
+  if (!`${html}\n${production}`.includes(marker)) throw new Error(`Dual-source MOD 1 role selection is missing: ${marker}`);
+}
 if (!html.includes('<th>Status จากไฟล์</th>') || !html.includes('source_measured') || !production.includes('propertiesWithDescriptionFields') || !production.includes('function routeIdentifier(properties)')) throw new Error('UFM source metadata or Placemark identifier resolution is missing');
 if (!production.includes('permissionOutResolvePeaAreas') || !production.includes('/api/data/billing-formula')) throw new Error('PEA spatial resolver or protected billing formula loader is missing');
 if (production.includes('/storage/v1/object/public/permission-out-data') || !production.includes('/api/data/assets/')) {
@@ -72,6 +77,12 @@ if (!html.includes('admin-data.css') || !html.includes('admin-data.js')) throw n
 if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new Error('Module navigation is missing');
 for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
+}
+for (const marker of ['id="opexReport"', 'id="opexMonthly"', 'id="opexYearly"', 'function updateOpexReport()', "const exportSites = isAdmin() ? state.sites : state.filtered"]) {
+  if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`MOD 2 OPEX or permission-aware export marker is missing: ${marker}`);
+}
+if (!workerSource.includes("if (access.role !== 'admin')") || !workerSource.includes("if (key.toLocaleLowerCase('en-US') === 'opex')")) {
+  throw new Error('MOD 2 API must redact OPEX for non-admin users');
 }
 if (!mod2Js.includes('function syncSiteSearch(') || !mod2Js.includes('handleSiteSearchKeydown')) {
   throw new Error('MOD 2 map/sidebar search synchronization is missing');

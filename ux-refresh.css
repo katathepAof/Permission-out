@@ -664,10 +664,13 @@ body.ux-enhanced #billingCard #exportCsvBtn{
   padding:8px 10px;
   font-size:.78rem;
 }
+.dataset-drawer-body .base-catalog-option.has-role-choices{grid-template-columns:minmax(0,1fr) auto}
+.dataset-drawer-body .base-catalog-option.has-role-choices>em{grid-column:1}
+.dataset-drawer-body .catalog-role-choices{grid-column:2;grid-row:1/span 2}
 .dataset-drawer-body .base-catalog-option input{width:18px;height:18px;}
 .dataset-drawer-body .base-catalog-option em{font-size:.68rem;}
 .dataset-drawer-body .base-catalog-group{padding:8px 10px;font-size:.68rem;}
-.dataset-drawer-body .base-catalog-tools{grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px;}
+.dataset-drawer-body .base-catalog-tools{grid-template-columns:minmax(0,1fr) auto auto auto auto;gap:8px;}
 .dataset-drawer-body .base-catalog-tools input,
 .dataset-drawer-body .base-catalog-tools button{
   min-height:44px;

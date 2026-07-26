@@ -65,6 +65,17 @@
     metricCustomers: document.getElementById('metricCustomers'),
     metricNodes: document.getElementById('metricNodes'),
     metricOwners: document.getElementById('metricOwners'),
+    opexReport: document.getElementById('opexReport'),
+    opexReportScope: document.getElementById('opexReportScope'),
+    opexPeriod: document.getElementById('opexPeriod'),
+    opexGroupBy: document.getElementById('opexGroupBy'),
+    opexMonthly: document.getElementById('opexMonthly'),
+    opexYearly: document.getElementById('opexYearly'),
+    opexAverage: document.getElementById('opexAverage'),
+    opexSiteCount: document.getElementById('opexSiteCount'),
+    opexGroupHeading: document.getElementById('opexGroupHeading'),
+    opexAmountHeading: document.getElementById('opexAmountHeading'),
+    opexReportBody: document.getElementById('opexReportBody'),
     mapSubtitle: document.getElementById('mapSubtitle'),
     mapLoading: document.getElementById('mapLoading'),
     loadingDetail: document.getElementById('loadingDetail'),
@@ -437,6 +448,50 @@
     elements.mapSubtitle.textContent = `แสดง ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites`;
     elements.mapSearchCount.textContent = sites.length.toLocaleString('th-TH');
     elements.mapSearchCount.setAttribute('aria-label', `พบ ${sites.length.toLocaleString('th-TH')} ไซต์`);
+    updateOpexReport();
+  }
+
+  function formatBaht(value) {
+    return new Intl.NumberFormat('th-TH', {
+      style: 'currency',
+      currency: 'THB',
+      maximumFractionDigits: 2
+    }).format(Number(value) || 0);
+  }
+
+  function updateOpexReport() {
+    const visible = isAdmin();
+    elements.opexReport.hidden = !visible;
+    if (!visible) return;
+    const sites = state.filtered;
+    const monthly = sites.reduce((sum, site) => sum + (Number(site.opex) || 0), 0);
+    const yearly = monthly * 12;
+    const periodMultiplier = elements.opexPeriod.value === 'year' ? 12 : 1;
+    const groupKey = elements.opexGroupBy.value;
+    const groupLabels = { province: 'จังหวัด', regional: 'Regional', area: 'UIH Area', owner: 'Owner' };
+    const grouped = new Map();
+    for (const site of sites) {
+      const label = site[groupKey] || 'ไม่ระบุ';
+      const current = grouped.get(label) || { count: 0, monthly: 0 };
+      current.count += 1;
+      current.monthly += Number(site.opex) || 0;
+      grouped.set(label, current);
+    }
+    elements.opexMonthly.textContent = formatBaht(monthly);
+    elements.opexYearly.textContent = formatBaht(yearly);
+    elements.opexAverage.textContent = formatBaht(sites.length ? monthly / sites.length : 0);
+    elements.opexSiteCount.textContent = `${sites.length.toLocaleString('th-TH')} sites`;
+    elements.opexReportScope.textContent = `คำนวณจาก ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites ตามตัวกรองปัจจุบัน`;
+    elements.opexGroupHeading.textContent = groupLabels[groupKey] || groupKey;
+    elements.opexAmountHeading.textContent = elements.opexPeriod.value === 'year' ? 'OPEX รายปี' : 'OPEX รายเดือน';
+    const rows = [...grouped.entries()].sort((left, right) => right[1].monthly - left[1].monthly);
+    elements.opexReportBody.innerHTML = rows.length
+      ? rows.map(([label, values]) => {
+        const amount = values.monthly * periodMultiplier;
+        const share = monthly > 0 ? (values.monthly / monthly) * 100 : 0;
+        return `<tr><td>${escapeHtml(label)}</td><td>${values.count.toLocaleString('th-TH')}</td><td>${escapeHtml(formatBaht(amount))}</td><td>${share.toLocaleString('th-TH', { maximumFractionDigits: 1 })}%</td></tr>`;
+      }).join('')
+      : '<tr><td colspan="4" class="opex-empty">ไม่มีข้อมูลตามตัวกรองที่เลือก</td></tr>';
   }
 
   const STANDARD_SITE_PROPERTIES = new Set([
@@ -512,7 +567,7 @@
     ];
     const operationRows = [
       ['จำนวนลูกค้า', site.customers, { number: true }],
-      ['OPEX', site.opex, { currency: true }],
+      ...(isAdmin() ? [['OPEX', site.opex, { currency: true }]] : []),
       ['หมายเหตุ', site.remark]
     ];
     const extras = extraPopupProperties(site);
@@ -924,19 +979,20 @@
   }
 
   function exportCsv() {
-    if (!state.filtered.length) {
+    const exportSites = isAdmin() ? state.sites : state.filtered;
+    if (!exportSites.length) {
       toast('ไม่มีข้อมูลสำหรับส่งออก', 'error');
       return;
     }
     const headers = [
       'Site Code', 'Site Name', 'Type of Digit', 'Site Grade', 'Regional', 'UIH Area',
       'District', 'Province', 'Latitude', 'Longitude', 'Customers', 'Node Equipment',
-      'Owner', 'Opex', 'Remark'
+      'Owner', ...(isAdmin() ? ['Opex'] : []), 'Remark'
     ];
-    const rows = state.filtered.map(site => [
+    const rows = exportSites.map(site => [
       site.siteCode, site.siteName, site.type, site.grade, site.regional, site.area,
       site.district, site.province, site.latitude, site.longitude, site.customers,
-      site.nodeEquipment, site.owner, site.opex, site.remark
+      site.nodeEquipment, site.owner, ...(isAdmin() ? [site.opex] : []), site.remark
     ]);
     const csv = `\uFEFF${[headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -945,7 +1001,7 @@
     anchor.download = `MOD2_Site_Facility_${new Date().toISOString().slice(0, 10)}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
-    toast(`ส่งออก ${state.filtered.length.toLocaleString('th-TH')} sites แล้ว`, 'success');
+    toast(`ส่งออก ${exportSites.length.toLocaleString('th-TH')} sites ${isAdmin() ? '(ข้อมูลทั้งหมดสำหรับ Admin)' : '(เฉพาะข้อมูลที่มองเห็น)'} แล้ว`, 'success');
   }
 
   async function applySession(session, { showGate = true, reloadData = false } = {}) {
@@ -986,6 +1042,8 @@
   for (const select of Object.values(filterElements)) {
     select.addEventListener('change', () => applyFilters());
   }
+  elements.opexPeriod.addEventListener('change', updateOpexReport);
+  elements.opexGroupBy.addEventListener('change', updateOpexReport);
 
   function syncSiteSearch(value) {
     elements.siteSearch.value = value;

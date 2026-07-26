@@ -1216,11 +1216,11 @@ table.report td.num{
     </h2>
     <div class="source-role-switch" aria-label="กำหนดบทบาทชุดข้อมูล">
       <div>
-        <span class="source-role-pill is-base" id="baseRoleSummary">ฐาน: PEA</span>
+        <span class="source-role-pill is-base" id="baseRoleSummary">ชุดฐาน: PEA + UFM</span>
         <span class="source-role-arrow" aria-hidden="true">→</span>
-        <span class="source-role-pill is-compare" id="compareRoleSummary">เปรียบเทียบ: UFM</span>
+        <span class="source-role-pill is-compare" id="compareRoleSummary">ชุดเปรียบเทียบ: PEA + UFM</span>
       </div>
-      <button type="button" id="swapSourceRoles" aria-pressed="false" title="สลับ PEA และ UFM ระหว่างชุดฐานกับชุดเปรียบเทียบ">⇄ สลับฐาน / เปรียบเทียบ</button>
+      <button type="button" id="swapSourceRoles" title="สลับรายการจากคลังข้อมูลระหว่างชุดฐานกับชุดเปรียบเทียบ">⇄ สลับรายการจากคลัง</button>
     </div>
     <div class="grid2">
       <div class="fileBox" id="boxBase">
@@ -1233,7 +1233,7 @@ table.report td.num{
             </svg>
           </div>
           <div>
-            <strong id="peaCatalogRoleLabel">PEA · ชุดฐาน</strong>
+            <strong id="peaCatalogRoleLabel">คลังข้อมูล PEA</strong>
             <small id="baseCatalogStatus">กำลังโหลดรายการจาก Supabase…</small>
           </div>
           <span id="baseCatalogCount" class="base-catalog-count">0</span>
@@ -1242,10 +1242,11 @@ table.report td.num{
         <div class="base-catalog-tools">
           <input type="search" id="baseCatalogSearch" placeholder="ค้นหาชื่อไฟล์ KMZ…" autocomplete="off">
           <button type="button" class="local-file-trigger" data-file-input="fileBase">นำเข้าไฟล์</button>
-          <button type="button" id="baseCatalogSelectAll">เลือกที่แสดง</button>
+          <button type="button" id="baseCatalogSelectAll">เลือกเป็นฐาน</button>
+          <button type="button" id="baseCatalogSelectCompare">เลือกเป็นเปรียบเทียบ</button>
           <button type="button" id="baseCatalogClear">ล้าง</button>
         </div>
-        <div id="baseCatalogList" class="base-catalog-list" role="group" aria-label="เลือกไฟล์ฐาน KMZ จาก PEA"></div>
+        <div id="baseCatalogList" class="base-catalog-list" role="group" aria-label="เลือกข้อมูล PEA ให้ชุดฐานหรือชุดเปรียบเทียบ"></div>
         <div class="tag" id="tagBase" hidden></div>
       </div>
       <div class="fileBox" id="boxCompare">
@@ -1256,7 +1257,7 @@ table.report td.num{
             </svg>
           </div>
           <div>
-            <strong id="ufmCatalogRoleLabel">UFM · ชุดเปรียบเทียบ</strong>
+            <strong id="ufmCatalogRoleLabel">คลังข้อมูล UFM</strong>
             <small id="compareCatalogStatus">กำลังโหลดรายการจาก Supabase…</small>
           </div>
           <span id="compareCatalogCount" class="base-catalog-count">0</span>
@@ -1265,10 +1266,11 @@ table.report td.num{
         <div class="base-catalog-tools">
           <input type="search" id="compareCatalogSearch" placeholder="ค้นหาชื่อไฟล์ UFM…" autocomplete="off">
           <button type="button" class="local-file-trigger" data-file-input="fileCompare">นำเข้าไฟล์</button>
-          <button type="button" id="compareCatalogSelectAll">เลือกที่แสดง</button>
+          <button type="button" id="compareCatalogSelectAll">เลือกเป็นเปรียบเทียบ</button>
+          <button type="button" id="compareCatalogSelectBase">เลือกเป็นฐาน</button>
           <button type="button" id="compareCatalogClear">ล้าง</button>
         </div>
-        <div id="compareCatalogList" class="base-catalog-list" role="group" aria-label="เลือกไฟล์เปรียบเทียบจาก UFM"></div>
+        <div id="compareCatalogList" class="base-catalog-list" role="group" aria-label="เลือกข้อมูล UFM ให้ชุดฐานหรือชุดเปรียบเทียบ"></div>
         <div class="tag" id="tagCompare" hidden></div>
       </div>
     </div>
@@ -1749,7 +1751,7 @@ window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
 window.permissionOutCompareFiles = window.permissionOutCompareFiles || [];
 window.permissionOutBaseDatasetIds = window.permissionOutBaseDatasetIds || [];
 window.permissionOutCompareDatasetIds = window.permissionOutCompareDatasetIds || [];
-window.permissionOutRolesSwapped = window.permissionOutRolesSwapped === true;
+window.permissionOutRolesSwapped = false;
 
 document.querySelectorAll('.local-file-trigger').forEach(button => {
   button.addEventListener('click', () => {
@@ -1758,7 +1760,7 @@ document.querySelectorAll('.local-file-trigger').forEach(button => {
   });
 });
 function sourceRolesAreSwapped() {
-  return window.permissionOutRolesSwapped === true;
+  return false;
 }
 function filesForGroup(groupKey) {
   const inputFiles = Array.from(GROUP_INPUTS[groupKey]?.files || []);
@@ -1774,33 +1776,25 @@ function selectedCompareDatasetCount() {
   return Array.isArray(window.permissionOutCompareDatasetIds) ? window.permissionOutCompareDatasetIds.length : 0;
 }
 function hasBaseSources() {
-  return sourceRolesAreSwapped()
-    ? filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0
-    : filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0;
+  return filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0;
 }
 function hasCompareSources() {
-  return sourceRolesAreSwapped()
-    ? filesForGroup('BASE').length > 0 || selectedBaseDatasetCount() > 0
-    : filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0;
+  return filesForGroup('COMPARE').length > 0 || selectedCompareDatasetCount() > 0;
 }
 function physicalSourceNames(groupKey) {
-  if (groupKey === 'BASE' && Array.isArray(window.permissionOutBaseDatasetNames) && window.permissionOutBaseDatasetNames.length) {
-    return window.permissionOutBaseDatasetNames;
-  }
-  if (groupKey === 'COMPARE' && Array.isArray(window.permissionOutCompareDatasetNames) && window.permissionOutCompareDatasetNames.length) {
-    return window.permissionOutCompareDatasetNames;
-  }
-  return filesForGroup(groupKey).map(file => file.name);
+  const datasetNames = groupKey === 'BASE'
+    ? window.permissionOutBaseDatasetNames
+    : window.permissionOutCompareDatasetNames;
+  return [
+    ...(Array.isArray(datasetNames) ? datasetNames : []),
+    ...filesForGroup(groupKey).map(file => file.name)
+  ];
 }
 function sourceNamesForGroup(groupKey) {
-  const physicalGroup = sourceRolesAreSwapped()
-    ? (groupKey === 'BASE' ? 'COMPARE' : 'BASE')
-    : groupKey;
-  return physicalSourceNames(physicalGroup);
+  return physicalSourceNames(groupKey);
 }
 
 function updateSourceRoleUI() {
-  const swapped = sourceRolesAreSwapped();
   GROUP_LABELS.BASE = 'ฐาน';
   GROUP_LABELS.COMPARE = 'เปรียบเทียบ';
   const peaLabel = document.getElementById('peaCatalogRoleLabel');
@@ -1808,15 +1802,12 @@ function updateSourceRoleUI() {
   const baseSummary = document.getElementById('baseRoleSummary');
   const compareSummary = document.getElementById('compareRoleSummary');
   const swapButton = document.getElementById('swapSourceRoles');
-  if (peaLabel) peaLabel.textContent = swapped ? 'PEA · ชุดเปรียบเทียบ' : 'PEA · ชุดฐาน';
-  if (ufmLabel) ufmLabel.textContent = swapped ? 'UFM · ชุดฐาน' : 'UFM · ชุดเปรียบเทียบ';
-  if (baseSummary) baseSummary.textContent = `ฐาน: ${swapped ? 'UFM' : 'PEA'}`;
-  if (compareSummary) compareSummary.textContent = `เปรียบเทียบ: ${swapped ? 'PEA' : 'UFM'}`;
-  if (swapButton) swapButton.setAttribute('aria-pressed', String(swapped));
-  boxBase?.classList.toggle('is-base-role', !swapped);
-  boxBase?.classList.toggle('is-compare-role', swapped);
-  boxCompare?.classList.toggle('is-base-role', swapped);
-  boxCompare?.classList.toggle('is-compare-role', !swapped);
+  if (peaLabel) peaLabel.textContent = 'คลังข้อมูล PEA';
+  if (ufmLabel) ufmLabel.textContent = 'คลังข้อมูล UFM';
+  if (baseSummary) baseSummary.textContent = `ชุดฐาน: ${(selectedBaseDatasetCount() + filesForGroup('BASE').length).toLocaleString('th-TH')} รายการ`;
+  if (compareSummary) compareSummary.textContent = `ชุดเปรียบเทียบ: ${(selectedCompareDatasetCount() + filesForGroup('COMPARE').length).toLocaleString('th-TH')} รายการ`;
+  boxBase?.classList.add('is-base-role');
+  boxCompare?.classList.add('is-compare-role');
 }
 // รวมชื่อไฟล์ในฝั่งหนึ่งเป็นข้อความสั้นๆ สำหรับ tag
 function fileListLabel(files) {
@@ -2357,6 +2348,7 @@ FILE_GROUPS.forEach(groupKey => {
       else window.permissionOutCompareFiles = directFiles;
     }
     const selectedFiles = filesForGroup(groupKey);
+    updateSourceRoleUI();
     if (!selectedFiles.length) {
       tag.textContent = '';
       box.classList.remove('hasFile');
@@ -3069,26 +3061,32 @@ async function runAnalysis() {
     const t0 = performance.now();
     const singleFileMode = hasBase !== hasCompare; // มีไฟล์แค่ฝั่งฐานหรือฝั่งเปรียบเทียบเพียงฝั่งเดียว
 
-    // อ่านและรวมไฟล์ฐาน (A + B) เป็นชุดเดียว และไฟล์เปรียบเทียบ (C + D) เป็นอีกชุดหนึ่ง
-    const peaFiles = filesForGroup('BASE');
-    const ufmFiles = filesForGroup('COMPARE');
-    const [peaTexts, ufmTexts, optimizedPeaLines, optimizedUfmLines] = await Promise.all([
-      Promise.all(peaFiles.map(f => readKmlOrKmzText(f))),
-      Promise.all(ufmFiles.map(f => readKmlOrKmzText(f))),
-      selectedBaseDatasetCount() && typeof window.permissionOutLoadBaseLines === 'function'
-        ? window.permissionOutLoadBaseLines()
+    // ฐานและเปรียบเทียบเป็นชุดตรรกะอิสระ แต่ละชุดรวมได้ทั้ง PEA, UFM และไฟล์ที่นำเข้าเอง
+    const baseFiles = filesForGroup('BASE');
+    const compareFiles = filesForGroup('COMPARE');
+    const [baseTexts, compareTexts, optimizedBaseLines, optimizedCompareLines] = await Promise.all([
+      Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
+      Promise.all(compareFiles.map(f => readKmlOrKmzText(f))),
+      selectedBaseDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
+        ? window.permissionOutLoadGroupLines('BASE')
         : Promise.resolve([]),
-      selectedCompareDatasetCount() && typeof window.permissionOutLoadCompareLines === 'function'
-        ? window.permissionOutLoadCompareLines()
+      selectedCompareDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
+        ? window.permissionOutLoadGroupLines('COMPARE')
         : Promise.resolve([])
     ]);
 
-    const allPeaLines = optimizedPeaLines.concat(peaTexts.flatMap((t, i) => parseKML(t, peaFiles[i]?.name || '').map(l => { l.sourceFile = peaFiles[i] ? peaFiles[i].name : ''; return l; })));
-    const allUfmLines = optimizedUfmLines.concat(ufmTexts.flatMap((t, i) => parseKML(t, ufmFiles[i]?.name || '').map(l => { l.sourceFile = ufmFiles[i] ? ufmFiles[i].name : ''; return l; })));
-    const peaLines = allPeaLines;
-    const ufmLines = allUfmLines;
-    let linesA = sourceRolesAreSwapped() ? ufmLines : peaLines;
-    let linesB = sourceRolesAreSwapped() ? peaLines : ufmLines;
+    let linesA = optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
+      parseKML(text, baseFiles[index]?.name || '').map(line => {
+        line.sourceFile = baseFiles[index]?.name || '';
+        return line;
+      })
+    ));
+    let linesB = optimizedCompareLines.concat(compareTexts.flatMap((text, index) =>
+      parseKML(text, compareFiles[index]?.name || '').map(line => {
+        line.sourceFile = compareFiles[index]?.name || '';
+        return line;
+      })
+    ));
 
     const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้ทั้งหมด (ก่อนตัดซ้ำ)
     const rawCountB = linesB.length;
@@ -3481,7 +3479,7 @@ document.getElementById('exportKmzBtn').addEventListener('click', () => {
 const swapSourceRolesButton = document.getElementById('swapSourceRoles');
 swapSourceRolesButton?.addEventListener('click', async () => {
   if (swapSourceRolesButton.disabled) return;
-  window.permissionOutRolesSwapped = !sourceRolesAreSwapped();
+  window.permissionOutSwapLogicalSelections?.();
   updateSourceRoleUI();
   if (hasBaseSources() || hasCompareSources()) {
     swapSourceRolesButton.disabled = true;

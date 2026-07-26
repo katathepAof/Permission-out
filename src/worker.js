@@ -836,7 +836,7 @@ function mod2BboxParam(searchParams) {
 }
 
 async function activeMod2Sites(request, env) {
-  const { supabase } = await requireModuleAccess(request, env, 'mod2', 'view');
+  const { supabase, access } = await requireModuleAccess(request, env, 'mod2', 'view');
   const url = new URL(request.url);
   const afterId = Math.max(0, Number.parseInt(url.searchParams.get('after') || '0', 10) || 0);
   const limit = Math.max(1, Math.min(1000, Number.parseInt(url.searchParams.get('limit') || '500', 10) || 500));
@@ -854,12 +854,27 @@ async function activeMod2Sites(request, env) {
     p_owners: mod2ListParam(url.searchParams, 'owner')
   });
   if (result.error) throw result.error;
-  return jsonResponse(result.data || {
+  const payload = result.data || {
     type: 'FeatureCollection',
     features: [],
     nextAfter: null,
     count: 0
-  });
+  };
+  if (access.role !== 'admin') {
+    for (const feature of payload.features || []) {
+      const properties = feature?.properties;
+      if (!properties || typeof properties !== 'object') continue;
+      for (const key of Object.keys(properties)) {
+        if (key.toLocaleLowerCase('en-US') === 'opex') delete properties[key];
+      }
+      if (properties.extra_properties && typeof properties.extra_properties === 'object') {
+        for (const key of Object.keys(properties.extra_properties)) {
+          if (key.toLocaleLowerCase('en-US') === 'opex') delete properties.extra_properties[key];
+        }
+      }
+    }
+  }
+  return jsonResponse(payload);
 }
 
 function cleanMod2SiteId(value) {
@@ -892,7 +907,7 @@ async function activeMod2Site(supabase, id) {
   return { site: siteResult.data, dataset: datasetResult.data };
 }
 
-function mod2SiteFeature(site) {
+function mod2SiteFeature(site, includeOpex = false) {
   return {
     type: 'Feature',
     id: site.id,
@@ -914,7 +929,7 @@ function mod2SiteFeature(site) {
       customers: Number(site.customers || 0),
       node_equipment: site.node_equipment,
       owner: site.owner,
-      opex: Number(site.opex || 0),
+      ...(includeOpex ? { opex: Number(site.opex || 0) } : {}),
       remark: site.remark
     }
   };
@@ -1088,7 +1103,7 @@ async function listMod2CommentNotifications(request, env) {
 }
 
 async function updateMod2Site(request, env, siteId) {
-  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
+  const { supabase, user, access } = await requireModuleAccess(request, env, 'mod2', 'update');
   const id = cleanMod2SiteId(siteId);
   const { site, dataset } = await activeMod2Site(supabase, id);
   const payload = await requestJson(request, 20_000);
@@ -1128,7 +1143,7 @@ async function updateMod2Site(request, env, siteId) {
     actor_id: user.id
   });
   if (audit.error) throw audit.error;
-  return jsonResponse({ site: mod2SiteFeature(result.data) });
+  return jsonResponse({ site: mod2SiteFeature(result.data, access.role === 'admin') });
 }
 
 async function deleteMod2Site(request, env, siteId) {

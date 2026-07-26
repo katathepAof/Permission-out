@@ -45,6 +45,7 @@
   const baseCatalogStatus = document.getElementById('baseCatalogStatus');
   const baseCatalogCount = document.getElementById('baseCatalogCount');
   const baseCatalogSelected = new Set();
+  const peaCompareCatalogSelected = new Set();
   const baseAnalysisCache = new Map();
   let baseCatalogManifest = null;
   const compareCatalogList = document.getElementById('compareCatalogList');
@@ -52,6 +53,7 @@
   const compareCatalogStatus = document.getElementById('compareCatalogStatus');
   const compareCatalogCount = document.getElementById('compareCatalogCount');
   const compareCatalogSelected = new Set();
+  const ufmBaseCatalogSelected = new Set();
   const compareAnalysisCache = new Map();
   let compareCatalogManifest = null;
   const DEFAULT_BILLING_FORMULA = Object.freeze({
@@ -183,15 +185,59 @@
     return baseCatalogManifest.items.filter(item => !query || `${item.name} ${item.group}`.toLocaleLowerCase('th').includes(query));
   }
 
+  function selectedCatalogItems(manifest, selected) {
+    return (manifest?.items || []).filter(item => selected.has(item.id));
+  }
+
+  function syncLogicalDatasetSelections() {
+    const peaBase = selectedCatalogItems(baseCatalogManifest, baseCatalogSelected);
+    const peaCompare = selectedCatalogItems(baseCatalogManifest, peaCompareCatalogSelected);
+    const ufmBase = selectedCatalogItems(compareCatalogManifest, ufmBaseCatalogSelected);
+    const ufmCompare = selectedCatalogItems(compareCatalogManifest, compareCatalogSelected);
+    window.permissionOutBaseDatasetIds = [
+      ...peaBase.map(item => `pea:${item.id}`),
+      ...ufmBase.map(item => `ufm:${item.id}`)
+    ];
+    window.permissionOutCompareDatasetIds = [
+      ...peaCompare.map(item => `pea:${item.id}`),
+      ...ufmCompare.map(item => `ufm:${item.id}`)
+    ];
+    window.permissionOutBaseDatasetNames = [
+      ...peaBase.map(item => `PEA · ${item.name}`),
+      ...ufmBase.map(item => `UFM · ${item.name}`)
+    ];
+    window.permissionOutCompareDatasetNames = [
+      ...peaCompare.map(item => `PEA · ${item.name}`),
+      ...ufmCompare.map(item => `UFM · ${item.name}`)
+    ];
+    if (typeof updateSourceRoleUI === 'function') updateSourceRoleUI();
+  }
+
   function updateBaseCatalogSummary(message = '') {
-    if (baseCatalogCount) baseCatalogCount.textContent = baseCatalogSelected.size.toLocaleString('th-TH');
+    const selectedCount = baseCatalogSelected.size + peaCompareCatalogSelected.size;
+    if (baseCatalogCount) baseCatalogCount.textContent = selectedCount.toLocaleString('th-TH');
     if (!baseCatalogStatus) return;
     const selectedLines = baseCatalogManifest?.items
-      .filter(item => baseCatalogSelected.has(item.id))
+      .filter(item => baseCatalogSelected.has(item.id) || peaCompareCatalogSelected.has(item.id))
       .reduce((sum, item) => sum + (item.lineCount || item.placemarkCount || 0), 0) || 0;
     baseCatalogStatus.textContent = message || (baseCatalogManifest
-      ? `เลือก ${baseCatalogSelected.size.toLocaleString('th-TH')} จาก ${baseCatalogManifest.fileCount.toLocaleString('th-TH')} ชุดข้อมูล${selectedLines ? ` · ${selectedLines.toLocaleString('th-TH')} เส้น` : ''}`
+      ? `ฐาน ${baseCatalogSelected.size.toLocaleString('th-TH')} · เปรียบเทียบ ${peaCompareCatalogSelected.size.toLocaleString('th-TH')}${selectedLines ? ` · ${selectedLines.toLocaleString('th-TH')} เส้น` : ''}`
       : 'ยังไม่พบรายการไฟล์');
+  }
+
+  function roleChoice(item, role, selected, onChange) {
+    const label = document.createElement('label');
+    label.className = `catalog-role-choice is-${role.toLowerCase()}`;
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = item.id;
+    input.checked = selected.has(item.id);
+    input.setAttribute('aria-label', `${role === 'BASE' ? 'ชุดฐาน' : 'ชุดเปรียบเทียบ'} ${item.name}`);
+    input.addEventListener('change', () => onChange(input.checked));
+    const text = document.createElement('span');
+    text.textContent = role === 'BASE' ? 'ฐาน' : 'เปรียบเทียบ';
+    label.append(input, text);
+    return label;
   }
 
   function renderBaseCatalog() {
@@ -212,21 +258,25 @@
         heading.textContent = currentGroup;
         fragment.appendChild(heading);
       }
-      const label = document.createElement('label');
-      label.className = 'base-catalog-option';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = item.id;
-      input.checked = baseCatalogSelected.has(item.id);
-      input.addEventListener('change', () => {
-        if (input.checked) baseCatalogSelected.add(item.id); else baseCatalogSelected.delete(item.id);
-        window.permissionOutBaseDatasetIds = Array.from(baseCatalogSelected);
-        window.permissionOutBaseDatasetNames = (baseCatalogManifest?.items || []).filter(entry => baseCatalogSelected.has(entry.id)).map(entry => entry.name);
-        updateBaseCatalogSummary();
-      });
+      const label = document.createElement('div');
+      label.className = 'base-catalog-option has-role-choices';
       const name = document.createElement('span'); name.textContent = item.name;
       const size = document.createElement('em'); size.textContent = `${(item.lineCount || item.placemarkCount || 0).toLocaleString('th-TH')} เส้น`;
-      label.append(input, name, size);
+      const roles = document.createElement('span');
+      roles.className = 'catalog-role-choices';
+      roles.append(
+        roleChoice(item, 'BASE', baseCatalogSelected, checked => {
+          if (checked) baseCatalogSelected.add(item.id); else baseCatalogSelected.delete(item.id);
+          syncLogicalDatasetSelections();
+          updateBaseCatalogSummary();
+        }),
+        roleChoice(item, 'COMPARE', peaCompareCatalogSelected, checked => {
+          if (checked) peaCompareCatalogSelected.add(item.id); else peaCompareCatalogSelected.delete(item.id);
+          syncLogicalDatasetSelections();
+          updateBaseCatalogSummary();
+        })
+      );
+      label.append(name, size, roles);
       fragment.appendChild(label);
     }
     baseCatalogList.appendChild(fragment);
@@ -359,20 +409,20 @@
     return request;
   }
 
-  async function loadSelectedBaseLines() {
-    const selectedItems = (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id));
+  async function loadSelectedPeaLines(selected, roleLabel) {
+    const selectedItems = selectedCatalogItems(baseCatalogManifest, selected);
     const box = document.getElementById('boxBase');
     box?.classList.toggle('is-loading', selectedItems.length > 0);
     baseCatalogList?.setAttribute('aria-busy', String(selectedItems.length > 0));
     try {
       if (!selectedItems.length) return [];
-      updateBaseCatalogSummary(`กำลังอ่าน ${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูลแบบ optimized…`);
+      updateBaseCatalogSummary(`กำลังอ่าน PEA ฝั่ง${roleLabel} ${selectedItems.length.toLocaleString('th-TH')} ชุด…`);
       const payloads = [];
       for (let offset = 0; offset < selectedItems.length; offset += 3) {
         payloads.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchBaseAnalysis)));
       }
       const lines = payloads.flatMap((payload, index) => (payload.lines || []).map(line => compactLineToApp(line, selectedItems[index])));
-      updateBaseCatalogSummary(`${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูล · พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
+      updateBaseCatalogSummary(`PEA ฝั่ง${roleLabel}พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
       return lines;
     } catch (error) {
       updateBaseCatalogSummary('อ่านข้อมูล optimized ไม่สำเร็จ');
@@ -386,7 +436,7 @@
 
   window.permissionOutBaseDatasetIds = [];
   window.permissionOutBaseDatasetNames = [];
-  window.permissionOutLoadBaseLines = loadSelectedBaseLines;
+  window.permissionOutLoadBaseLines = () => loadSelectedPeaLines(baseCatalogSelected, 'ฐาน');
 
   async function initializeBaseCatalog() {
     if (!baseCatalogList || !baseFileInput || !cloudEnabled) {
@@ -420,20 +470,19 @@
   }
 
   function updateCompareCatalogSummary(message = '') {
-    if (compareCatalogCount) compareCatalogCount.textContent = compareCatalogSelected.size.toLocaleString('th-TH');
+    const selectedCount = ufmBaseCatalogSelected.size + compareCatalogSelected.size;
+    if (compareCatalogCount) compareCatalogCount.textContent = selectedCount.toLocaleString('th-TH');
     if (!compareCatalogStatus) return;
     const selectedLines = compareCatalogManifest?.items
-      .filter(item => compareCatalogSelected.has(item.id))
+      .filter(item => ufmBaseCatalogSelected.has(item.id) || compareCatalogSelected.has(item.id))
       .reduce((sum, item) => sum + (item.lineCount || item.featureCount || 0), 0) || 0;
     compareCatalogStatus.textContent = message || (compareCatalogManifest
-      ? `เลือก ${compareCatalogSelected.size.toLocaleString('th-TH')} จาก ${compareCatalogManifest.fileCount.toLocaleString('th-TH')} ชุดข้อมูล${selectedLines ? ` · ${selectedLines.toLocaleString('th-TH')} เส้น` : ''}`
+      ? `ฐาน ${ufmBaseCatalogSelected.size.toLocaleString('th-TH')} · เปรียบเทียบ ${compareCatalogSelected.size.toLocaleString('th-TH')}${selectedLines ? ` · ${selectedLines.toLocaleString('th-TH')} เส้น` : ''}`
       : 'ยังไม่พบรายการไฟล์');
   }
 
   function syncCompareSelection() {
-    window.permissionOutCompareDatasetIds = Array.from(compareCatalogSelected);
-    window.permissionOutCompareDatasetNames = (compareCatalogManifest?.items || [])
-      .filter(item => compareCatalogSelected.has(item.id)).map(item => item.name);
+    syncLogicalDatasetSelections();
   }
 
   function renderCompareCatalog() {
@@ -446,20 +495,25 @@
     }
     const fragment = document.createDocumentFragment();
     for (const item of items) {
-      const label = document.createElement('label');
-      label.className = 'base-catalog-option';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = item.id;
-      input.checked = compareCatalogSelected.has(item.id);
-      input.addEventListener('change', () => {
-        if (input.checked) compareCatalogSelected.add(item.id); else compareCatalogSelected.delete(item.id);
-        syncCompareSelection();
-        updateCompareCatalogSummary();
-      });
+      const label = document.createElement('div');
+      label.className = 'base-catalog-option has-role-choices';
       const name = document.createElement('span'); name.textContent = item.name;
       const size = document.createElement('em'); size.textContent = `${(item.lineCount || item.featureCount || 0).toLocaleString('th-TH')} เส้น`;
-      label.append(input, name, size);
+      const roles = document.createElement('span');
+      roles.className = 'catalog-role-choices';
+      roles.append(
+        roleChoice(item, 'BASE', ufmBaseCatalogSelected, checked => {
+          if (checked) ufmBaseCatalogSelected.add(item.id); else ufmBaseCatalogSelected.delete(item.id);
+          syncCompareSelection();
+          updateCompareCatalogSummary();
+        }),
+        roleChoice(item, 'COMPARE', compareCatalogSelected, checked => {
+          if (checked) compareCatalogSelected.add(item.id); else compareCatalogSelected.delete(item.id);
+          syncCompareSelection();
+          updateCompareCatalogSummary();
+        })
+      );
+      label.append(name, size, roles);
       fragment.appendChild(label);
     }
     compareCatalogList.appendChild(fragment);
@@ -481,20 +535,20 @@
     return request;
   }
 
-  async function loadSelectedCompareLines() {
-    const selectedItems = (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id));
+  async function loadSelectedUfmLines(selected, roleLabel) {
+    const selectedItems = selectedCatalogItems(compareCatalogManifest, selected);
     const box = document.getElementById('boxCompare');
     box?.classList.toggle('is-loading', selectedItems.length > 0);
     compareCatalogList?.setAttribute('aria-busy', String(selectedItems.length > 0));
     try {
       if (!selectedItems.length) return [];
-      updateCompareCatalogSummary(`กำลังอ่าน ${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูลแบบ optimized…`);
+      updateCompareCatalogSummary(`กำลังอ่าน UFM ฝั่ง${roleLabel} ${selectedItems.length.toLocaleString('th-TH')} ชุด…`);
       const payloads = [];
       for (let offset = 0; offset < selectedItems.length; offset += 3) {
         payloads.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchCompareAnalysis)));
       }
       const lines = payloads.flatMap((payload, index) => (payload.lines || []).map(line => compactLineToApp(line, selectedItems[index])));
-      updateCompareCatalogSummary(`${selectedItems.length.toLocaleString('th-TH')} ชุดข้อมูล · พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
+      updateCompareCatalogSummary(`UFM ฝั่ง${roleLabel}พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
       return lines;
     } catch (error) {
       updateCompareCatalogSummary('อ่านข้อมูล optimized ไม่สำเร็จ');
@@ -508,7 +562,31 @@
 
   window.permissionOutCompareDatasetIds = [];
   window.permissionOutCompareDatasetNames = [];
-  window.permissionOutLoadCompareLines = loadSelectedCompareLines;
+  window.permissionOutLoadCompareLines = () => loadSelectedUfmLines(compareCatalogSelected, 'เปรียบเทียบ');
+  window.permissionOutLoadGroupLines = async groupKey => {
+    const isBase = groupKey === 'BASE';
+    const [peaLines, ufmLines] = await Promise.all([
+      loadSelectedPeaLines(isBase ? baseCatalogSelected : peaCompareCatalogSelected, isBase ? 'ฐาน' : 'เปรียบเทียบ'),
+      loadSelectedUfmLines(isBase ? ufmBaseCatalogSelected : compareCatalogSelected, isBase ? 'ฐาน' : 'เปรียบเทียบ')
+    ]);
+    return peaLines.concat(ufmLines);
+  };
+  window.permissionOutSwapLogicalSelections = () => {
+    const swapSets = (left, right) => {
+      const leftValues = [...left];
+      left.clear();
+      for (const value of right) left.add(value);
+      right.clear();
+      for (const value of leftValues) right.add(value);
+    };
+    swapSets(baseCatalogSelected, peaCompareCatalogSelected);
+    swapSets(ufmBaseCatalogSelected, compareCatalogSelected);
+    syncLogicalDatasetSelections();
+    renderBaseCatalog();
+    renderCompareCatalog();
+    updateBaseCatalogSummary();
+    updateCompareCatalogSummary();
+  };
 
   async function initializeCompareCatalog() {
     if (!compareCatalogList || !cloudEnabled) {
@@ -850,15 +928,11 @@
         polesPerKm: numeric('polesPerKm', 29), rateB: numeric('rateB', 2.8),
         surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked),
         reportCategories: Array.from(document.querySelectorAll('.categoryFilter:checked')).map(input => input.value),
-        sourceRolesSwapped: window.permissionOutRolesSwapped === true
+        sourceRolesSwapped: false
       },
       sourceFiles: {
-        base: window.permissionOutRolesSwapped === true
-          ? (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id)).map(item => item.name)
-          : (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name),
-        compare: window.permissionOutRolesSwapped === true
-          ? (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name)
-          : (compareCatalogManifest?.items || []).filter(item => compareCatalogSelected.has(item.id)).map(item => item.name)
+        base: [...(window.permissionOutBaseDatasetNames || []), ...(window.permissionOutBaseFiles || []).map(file => file.name)],
+        compare: [...(window.permissionOutCompareDatasetNames || []), ...(window.permissionOutCompareFiles || []).map(file => file.name)]
       },
       result: {
         totalA: state?.totalA || 0, totalB: state?.totalB || 0,
@@ -902,7 +976,7 @@
         input.checked = selectedCategories.has(input.value);
       });
     }
-    window.permissionOutRolesSwapped = Boolean(s.sourceRolesSwapped);
+    window.permissionOutRolesSwapped = false;
     if (typeof updateSourceRoleUI === 'function') updateSourceRoleUI();
     state = {
       totalA: data.result.totalA || 0, totalB: data.result.totalB || 0,
@@ -1225,26 +1299,34 @@
   compareCatalogSearch?.addEventListener('input', debounceUi(renderCompareCatalog));
   document.getElementById('baseCatalogSelectAll')?.addEventListener('click', () => {
     for (const item of filteredBaseCatalogItems()) baseCatalogSelected.add(item.id);
-    window.permissionOutBaseDatasetIds = Array.from(baseCatalogSelected);
-    window.permissionOutBaseDatasetNames = (baseCatalogManifest?.items || []).filter(item => baseCatalogSelected.has(item.id)).map(item => item.name);
+    syncLogicalDatasetSelections();
+    renderBaseCatalog(); updateBaseCatalogSummary();
+  });
+  document.getElementById('baseCatalogSelectCompare')?.addEventListener('click', () => {
+    for (const item of filteredBaseCatalogItems()) peaCompareCatalogSelected.add(item.id);
+    syncLogicalDatasetSelections();
     renderBaseCatalog(); updateBaseCatalogSummary();
   });
   document.getElementById('baseCatalogClear')?.addEventListener('click', () => {
-    baseCatalogSelected.clear(); window.permissionOutBaseDatasetIds = []; window.permissionOutBaseDatasetNames = [];
+    baseCatalogSelected.clear(); peaCompareCatalogSelected.clear(); syncLogicalDatasetSelections();
     renderBaseCatalog(); updateBaseCatalogSummary();
   });
   document.getElementById('compareCatalogSelectAll')?.addEventListener('click', () => {
     for (const item of filteredCompareCatalogItems()) compareCatalogSelected.add(item.id);
     syncCompareSelection(); renderCompareCatalog(); updateCompareCatalogSummary();
   });
+  document.getElementById('compareCatalogSelectBase')?.addEventListener('click', () => {
+    for (const item of filteredCompareCatalogItems()) ufmBaseCatalogSelected.add(item.id);
+    syncCompareSelection(); renderCompareCatalog(); updateCompareCatalogSummary();
+  });
   document.getElementById('compareCatalogClear')?.addEventListener('click', () => {
-    compareCatalogSelected.clear(); syncCompareSelection(); renderCompareCatalog(); updateCompareCatalogSummary();
+    compareCatalogSelected.clear(); ufmBaseCatalogSelected.clear(); syncCompareSelection(); renderCompareCatalog(); updateCompareCatalogSummary();
   });
   window.addEventListener('permissionout:cleared', () => {
-    baseCatalogSelected.clear(); window.permissionOutBaseDatasetIds = []; window.permissionOutBaseDatasetNames = [];
+    baseCatalogSelected.clear(); peaCompareCatalogSelected.clear();
     if (baseCatalogSearch) baseCatalogSearch.value = '';
     renderBaseCatalog(); updateBaseCatalogSummary();
-    compareCatalogSelected.clear(); syncCompareSelection();
+    compareCatalogSelected.clear(); ufmBaseCatalogSelected.clear(); syncCompareSelection();
     if (compareCatalogSearch) compareCatalogSearch.value = '';
     renderCompareCatalog(); updateCompareCatalogSummary();
   });
