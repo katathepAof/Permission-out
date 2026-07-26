@@ -61,6 +61,12 @@ if (!csvSection.includes("'รหัส Placemark', 'ชื่อ Placemark'") |
 if (csvSection.includes("placemarkCode(seg) || '-'")) {
   throw new Error('CSV export must leave missing Placemark codes blank');
 }
+for (const marker of ['function buildExportOverlapGroups(', "'กลุ่มเส้นทับกัน'", '`ทับกัน ${groupIndex + 1}`', 'exportOverlapGroups.get(seg)']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 same-road-side export grouping marker is missing: ${marker}`);
+}
+if (!html.includes('name="overlap_group"') || !html.includes('same_road_side_group_count')) {
+  throw new Error('KML/KMZ same-road-side export grouping is missing');
+}
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
   throw new Error('Logical PEA/UFM dataset grouping or province map focus is missing');

@@ -3264,6 +3264,102 @@ function activeBillingFormula() {
   return window.permissionOutBillingFormula || { code: 'permission_fee', version: 1, source: 'local-fallback' };
 }
 
+// Assign one stable export label to every connected group of routes that follows
+// the same corridor/road side. A short route can join a longer route when at
+// least 60% of the short route is within the configured overlap distance.
+function buildExportOverlapGroups(segments, threshold, interval) {
+  const labels = new Map();
+  if (!Array.isArray(segments) || segments.length < 2) return labels;
+
+  const distanceMeters = Math.max(0.5, Number(threshold) || 20);
+  const sampleInterval = Math.max(2, Math.min(Number(interval) || 5, 15));
+  const cellSizeDeg = Math.max(distanceMeters * 1.5, 30) / 111320;
+  const grid = new Map();
+  const parent = segments.map((_, index) => index);
+  const rank = segments.map(() => 0);
+
+  const find = value => {
+    let root = value;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[value] !== value) {
+      const next = parent[value];
+      parent[value] = root;
+      value = next;
+    }
+    return root;
+  };
+  const union = (left, right) => {
+    let rootLeft = find(left), rootRight = find(right);
+    if (rootLeft === rootRight) return;
+    if (rank[rootLeft] < rank[rootRight]) [rootLeft, rootRight] = [rootRight, rootLeft];
+    parent[rootRight] = rootLeft;
+    if (rank[rootLeft] === rank[rootRight]) rank[rootLeft]++;
+  };
+
+  segments.forEach((segment, ownerIndex) => {
+    const coords = segment.coords || [];
+    for (let coordIndex = 0; coordIndex < coords.length - 1; coordIndex++) {
+      const p1 = coords[coordIndex], p2 = coords[coordIndex + 1];
+      const edge = { ownerIndex, p1, p2 };
+      const minCellX = Math.floor(Math.min(p1[0], p2[0]) / cellSizeDeg);
+      const maxCellX = Math.floor(Math.max(p1[0], p2[0]) / cellSizeDeg);
+      const minCellY = Math.floor(Math.min(p1[1], p2[1]) / cellSizeDeg);
+      const maxCellY = Math.floor(Math.max(p1[1], p2[1]) / cellSizeDeg);
+      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+        for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+          const key = `${cellX},${cellY}`;
+          const edges = grid.get(key) || [];
+          edges.push(edge);
+          grid.set(key, edges);
+        }
+      }
+    }
+  });
+
+  segments.forEach((segment, segmentIndex) => {
+    const samples = sampleLine(segment.coords || [], sampleInterval);
+    if (!samples.length) return;
+    const hitsByOwner = new Map();
+    samples.forEach(sample => {
+      const cellX = Math.floor(sample.coord[0] / cellSizeDeg);
+      const cellY = Math.floor(sample.coord[1] / cellSizeDeg);
+      const nearbyOwners = new Set();
+      for (let offsetX = -1; offsetX <= 1; offsetX++) {
+        for (let offsetY = -1; offsetY <= 1; offsetY++) {
+          const edges = grid.get(`${cellX + offsetX},${cellY + offsetY}`) || [];
+          for (const edge of edges) {
+            if (edge.ownerIndex === segmentIndex || nearbyOwners.has(edge.ownerIndex)) continue;
+            if (pointToSegmentMeters(sample.coord, edge.p1, edge.p2) <= distanceMeters) {
+              nearbyOwners.add(edge.ownerIndex);
+            }
+          }
+        }
+      }
+      nearbyOwners.forEach(ownerIndex => {
+        hitsByOwner.set(ownerIndex, (hitsByOwner.get(ownerIndex) || 0) + 1);
+      });
+    });
+    hitsByOwner.forEach((hitCount, ownerIndex) => {
+      if (hitCount / samples.length >= 0.6) union(segmentIndex, ownerIndex);
+    });
+  });
+
+  const membersByRoot = new Map();
+  segments.forEach((_, index) => {
+    const root = find(index);
+    const members = membersByRoot.get(root) || [];
+    members.push(index);
+    membersByRoot.set(root, members);
+  });
+  const overlapGroups = Array.from(membersByRoot.values())
+    .filter(members => members.length > 1)
+    .sort((left, right) => left[0] - right[0]);
+  overlapGroups.forEach((members, groupIndex) => {
+    members.forEach(memberIndex => labels.set(segments[memberIndex], `ทับกัน ${groupIndex + 1}`));
+  });
+  return labels;
+}
+
 async function exportCSV() {
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
   const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm').value)) || 29;
@@ -3283,6 +3379,8 @@ async function exportCSV() {
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
   await ensurePeaAreasForExport(exportSegments);
+  const exportOverlapGroups = buildExportOverlapGroups(exportSegments, threshold, interval);
+  const overlapGroupCount = new Set(exportOverlapGroups.values()).size;
   const formula = activeBillingFormula();
 
   const rows = [];
@@ -3316,26 +3414,29 @@ async function exportCSV() {
   rows.push(['จำนวนเสารวมที่คิดค่าบริการ (ต้น)', exportSegments.reduce((sum, seg) => sum + billingForSegment(seg, rateB, polesPerKm).poles, 0)]);
   const overlappingSegments = exportSegments.filter(seg => ['partial', 'full'].includes(seg.overlapType));
   rows.push(['จำนวนช่วงที่มีเส้นทับกัน (ช่วง)', overlappingSegments.length]);
+  rows.push(['จำนวนกลุ่มเส้นถนนเดียวกันฝั่งเดียวกัน', overlapGroupCount]);
+  rows.push(['จำนวนช่วงที่อยู่ในกลุ่มทับกัน', exportOverlapGroups.size]);
   if (state.removedA > 0 || state.removedB > 0) {
     rows.push(['เส้นทางซ้ำที่ตัดออกในไฟล์ฐาน A/B (เส้น)', state.removedA]);
     rows.push(['เส้นทางซ้ำที่ตัดออกในไฟล์เปรียบเทียบ C/D (เส้น)', state.removedB]);
   }
   rows.push([]);
-  rows.push(['รายละเอียดเส้นที่ทับกัน']);
-  rows.push(['ลำดับ', 'รหัส Placemark', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
-  if (overlappingSegments.length === 0) {
+  rows.push(['รายละเอียดกลุ่มเส้นถนนเดียวกันฝั่งเดียวกัน']);
+  rows.push(['ลำดับ', 'กลุ่มเส้นทับกัน', 'รหัส Placemark', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
+  const groupedSegments = exportSegments.filter(seg => exportOverlapGroups.has(seg));
+  if (groupedSegments.length === 0) {
     rows.push(['-', 'ไม่พบเส้นที่ทับกันตามตัวกรองที่เลือก']);
   } else {
-    overlappingSegments.forEach((seg, index) => {
+    groupedSegments.forEach((seg, index) => {
       const st = STATUS_META[seg.status] || STATUS_META.new;
-      rows.push([index + 1, placemarkCode(seg), placemarkName(seg), seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
+      rows.push([index + 1, exportOverlapGroups.get(seg), placemarkCode(seg), placemarkName(seg), seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
     });
   }
   rows.push([]);
   rows.push([]);
   rows.push(['รายละเอียดช่วง (New = ฐาน A+B, Remove = เปรียบเทียบ C+D, Same = เหมือนกัน) พร้อมสถานะและความสัมพันธ์เส้นทาง']);
   rows.push(['ขอบเขตการคิดค่าบริการ', 'เส้นที่ตรงกับตัวกรองในการ์ด 4 (ค่าเริ่มต้นคือทุกเส้นที่ Import)']);
-  rows.push(['ลำดับ', 'ชื่อไฟล์', 'รหัส Placemark', 'ชื่อ Placemark', 'จังหวัด', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)']);
+  rows.push(['ลำดับ', 'ชื่อไฟล์', 'รหัส Placemark', 'ชื่อ Placemark', 'กลุ่มเส้นทับกัน', 'จังหวัด', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)']);
 
   const costByStatus = { new: 0, same: 0, remove: 0 };
   let filteredSubtotal = 0;
@@ -3356,7 +3457,7 @@ async function exportCSV() {
     costByStatus[st] += cost;
     filteredSubtotal += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
-    rows.push([i + 1, srcFile, placemarkCode(seg), placemarkName(seg), province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
+    rows.push([i + 1, srcFile, placemarkCode(seg), placemarkName(seg), exportOverlapGroups.get(seg) || '', province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
   });
 
   const detailStartIndex = rows.length - exportSegments.length;
@@ -3454,6 +3555,12 @@ function buildSelectedKml(segments, peaFeatures = []) {
   const surcharge = subtotal * surchargePct / 100;
   const total = subtotal + surcharge;
   const formula = activeBillingFormula();
+  const overlapGroups = buildExportOverlapGroups(
+    segments,
+    parseFloat(document.getElementById('threshold').value) || 20,
+    parseFloat(document.getElementById('interval').value) || 5
+  );
+  const overlapGroupCount = new Set(overlapGroups.values()).size;
   const styles = Object.entries(STATUS_META).map(([key, meta]) =>
     `<Style id="${key}"><LineStyle><color>ff${meta.color.slice(1).match(/../g).reverse().join('')}</color><width>5</width></LineStyle></Style>`
   ).join('');
@@ -3470,6 +3577,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="pea_assignment_method"><value>${xmlEscape(peaAreaExportValue(seg, 'assignmentMethod'))}</value></Data>` +
       `<Data name="status"><value>${xmlEscape(status.th)}</value></Data>` +
       `<Data name="relationship"><value>${xmlEscape(overlap.th)}</value></Data>` +
+      `<Data name="overlap_group"><value>${xmlEscape(overlapGroups.get(seg) || '')}</value></Data>` +
       `<Data name="import_category"><value>${xmlEscape(seg.importCategory || 'network')}</value></Data>` +
       `<Data name="source_file"><value>${xmlEscape(seg.sourceFile || '')}</value></Data>` +
       `<Data name="source_status"><value>${xmlEscape(seg.cableStatus || '')}</value></Data>` +
@@ -3492,6 +3600,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
     `<Data name="segment_count"><value>${segments.length}</value></Data>` +
     `<Data name="overlapping_segment_count"><value>${segments.filter(seg => ['partial', 'full'].includes(seg.overlapType)).length}</value></Data>` +
+    `<Data name="same_road_side_group_count"><value>${overlapGroupCount}</value></Data>` +
     `<Data name="calculation_formula"><value>${xmlEscape(`${formula.code} v${formula.version}`)}</value></Data>` +
     `<Data name="poles_per_km"><value>${polesPerKm}</value></Data>` +
     `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
