@@ -65,17 +65,6 @@
     metricCustomers: document.getElementById('metricCustomers'),
     metricNodes: document.getElementById('metricNodes'),
     metricOwners: document.getElementById('metricOwners'),
-    opexReport: document.getElementById('opexReport'),
-    opexReportScope: document.getElementById('opexReportScope'),
-    opexPeriod: document.getElementById('opexPeriod'),
-    opexGroupBy: document.getElementById('opexGroupBy'),
-    opexMonthly: document.getElementById('opexMonthly'),
-    opexYearly: document.getElementById('opexYearly'),
-    opexAverage: document.getElementById('opexAverage'),
-    opexSiteCount: document.getElementById('opexSiteCount'),
-    opexGroupHeading: document.getElementById('opexGroupHeading'),
-    opexAmountHeading: document.getElementById('opexAmountHeading'),
-    opexReportBody: document.getElementById('opexReportBody'),
     mapSubtitle: document.getElementById('mapSubtitle'),
     mapLoading: document.getElementById('mapLoading'),
     loadingDetail: document.getElementById('loadingDetail'),
@@ -84,6 +73,7 @@
     heatBtn: document.getElementById('heatBtn'),
     fitBtn: document.getElementById('fitBtn'),
     mapFocusToggle: document.getElementById('mapFocusToggle'),
+    opexReportBtn: document.getElementById('opexReportBtn'),
     exportBtn: document.getElementById('exportBtn'),
     modalBackdrop: document.getElementById('modalBackdrop'),
     modalTitle: document.getElementById('modalTitle'),
@@ -448,7 +438,7 @@
     elements.mapSubtitle.textContent = `แสดง ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites`;
     elements.mapSearchCount.textContent = sites.length.toLocaleString('th-TH');
     elements.mapSearchCount.setAttribute('aria-label', `พบ ${sites.length.toLocaleString('th-TH')} ไซต์`);
-    updateOpexReport();
+    elements.opexReportBtn.hidden = !isAdmin();
   }
 
   function formatBaht(value) {
@@ -459,15 +449,52 @@
     }).format(Number(value) || 0);
   }
 
-  function updateOpexReport() {
-    const visible = isAdmin();
-    elements.opexReport.hidden = !visible;
-    if (!visible) return;
+  function opexReportContent() {
+    const content = document.createElement('div');
+    content.className = 'opex-report-popup';
+    content.innerHTML = `
+      <div class="opex-report-controls">
+        <label>ช่วงรายงาน
+          <select data-opex-period>
+            <option value="month">รายเดือน</option>
+            <option value="year">รายปี</option>
+          </select>
+        </label>
+        <label>จัดกลุ่มตาม
+          <select data-opex-group>
+            <option value="province">จังหวัด</option>
+            <option value="regional">Regional</option>
+            <option value="area">UIH Area</option>
+            <option value="owner">Owner</option>
+          </select>
+        </label>
+      </div>
+      <p class="opex-report-scope" data-opex-scope></p>
+      <div class="opex-summary-grid">
+        <article><span>OPEX รายเดือน</span><strong data-opex-monthly>—</strong><small>รวมตามตัวกรองปัจจุบัน</small></article>
+        <article><span>OPEX รายปี</span><strong data-opex-yearly>—</strong><small>ประมาณการ 12 เดือน</small></article>
+        <article><span>เฉลี่ยต่อไซต์ / เดือน</span><strong data-opex-average>—</strong><small data-opex-site-count>0 sites</small></article>
+      </div>
+      <div class="opex-table-wrap">
+        <table>
+          <thead><tr><th data-opex-group-heading>จังหวัด</th><th>จำนวนไซต์</th><th data-opex-amount-heading>OPEX รายเดือน</th><th>สัดส่วน</th></tr></thead>
+          <tbody data-opex-body></tbody>
+        </table>
+      </div>`;
+    const period = content.querySelector('[data-opex-period]');
+    const groupBy = content.querySelector('[data-opex-group]');
+    const render = () => renderOpexReport(content, period.value, groupBy.value);
+    period.addEventListener('change', render);
+    groupBy.addEventListener('change', render);
+    render();
+    return content;
+  }
+
+  function renderOpexReport(content, period, groupKey) {
     const sites = state.filtered;
     const monthly = sites.reduce((sum, site) => sum + (Number(site.opex) || 0), 0);
     const yearly = monthly * 12;
-    const periodMultiplier = elements.opexPeriod.value === 'year' ? 12 : 1;
-    const groupKey = elements.opexGroupBy.value;
+    const periodMultiplier = period === 'year' ? 12 : 1;
     const groupLabels = { province: 'จังหวัด', regional: 'Regional', area: 'UIH Area', owner: 'Owner' };
     const grouped = new Map();
     for (const site of sites) {
@@ -477,21 +504,31 @@
       current.monthly += Number(site.opex) || 0;
       grouped.set(label, current);
     }
-    elements.opexMonthly.textContent = formatBaht(monthly);
-    elements.opexYearly.textContent = formatBaht(yearly);
-    elements.opexAverage.textContent = formatBaht(sites.length ? monthly / sites.length : 0);
-    elements.opexSiteCount.textContent = `${sites.length.toLocaleString('th-TH')} sites`;
-    elements.opexReportScope.textContent = `คำนวณจาก ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites ตามตัวกรองปัจจุบัน`;
-    elements.opexGroupHeading.textContent = groupLabels[groupKey] || groupKey;
-    elements.opexAmountHeading.textContent = elements.opexPeriod.value === 'year' ? 'OPEX รายปี' : 'OPEX รายเดือน';
+    content.querySelector('[data-opex-monthly]').textContent = formatBaht(monthly);
+    content.querySelector('[data-opex-yearly]').textContent = formatBaht(yearly);
+    content.querySelector('[data-opex-average]').textContent = formatBaht(sites.length ? monthly / sites.length : 0);
+    content.querySelector('[data-opex-site-count]').textContent = `${sites.length.toLocaleString('th-TH')} sites`;
+    content.querySelector('[data-opex-scope]').textContent = `คำนวณจาก ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites ตามตัวกรองปัจจุบัน`;
+    content.querySelector('[data-opex-group-heading]').textContent = groupLabels[groupKey] || groupKey;
+    content.querySelector('[data-opex-amount-heading]').textContent = period === 'year' ? 'OPEX รายปี' : 'OPEX รายเดือน';
     const rows = [...grouped.entries()].sort((left, right) => right[1].monthly - left[1].monthly);
-    elements.opexReportBody.innerHTML = rows.length
+    content.querySelector('[data-opex-body]').innerHTML = rows.length
       ? rows.map(([label, values]) => {
         const amount = values.monthly * periodMultiplier;
         const share = monthly > 0 ? (values.monthly / monthly) * 100 : 0;
         return `<tr><td>${escapeHtml(label)}</td><td>${values.count.toLocaleString('th-TH')}</td><td>${escapeHtml(formatBaht(amount))}</td><td>${share.toLocaleString('th-TH', { maximumFractionDigits: 1 })}%</td></tr>`;
       }).join('')
       : '<tr><td colspan="4" class="opex-empty">ไม่มีข้อมูลตามตัวกรองที่เลือก</td></tr>';
+  }
+
+  function openOpexReport() {
+    if (!isAdmin()) return;
+    openModal(
+      'รายงาน OPEX',
+      'ข้อมูลรายเดือนและรายปีตามตัวกรองบนแผนที่',
+      opexReportContent(),
+      true
+    );
   }
 
   const STANDARD_SITE_PROPERTIES = new Set([
@@ -567,7 +604,10 @@
     ];
     const operationRows = [
       ['จำนวนลูกค้า', site.customers, { number: true }],
-      ...(isAdmin() ? [['OPEX', site.opex, { currency: true }]] : []),
+      ...(isAdmin() ? [
+        ['OPEX รายเดือน', site.opex, { currency: true }],
+        ['OPEX รายปี', (Number(site.opex) || 0) * 12, { currency: true }]
+      ] : []),
       ['หมายเหตุ', site.remark]
     ];
     const extras = extraPopupProperties(site);
@@ -1042,8 +1082,7 @@
   for (const select of Object.values(filterElements)) {
     select.addEventListener('change', () => applyFilters());
   }
-  elements.opexPeriod.addEventListener('change', updateOpexReport);
-  elements.opexGroupBy.addEventListener('change', updateOpexReport);
+  elements.opexReportBtn.addEventListener('click', openOpexReport);
 
   function syncSiteSearch(value) {
     elements.siteSearch.value = value;

@@ -78,7 +78,7 @@ if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new
 for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
 }
-for (const marker of ['id="opexReport"', 'id="opexMonthly"', 'id="opexYearly"', 'function updateOpexReport()', "const exportSites = isAdmin() ? state.sites : state.filtered"]) {
+for (const marker of ['id="opexReportBtn"', 'function openOpexReport()', 'function renderOpexReport(', 'data-opex-monthly', 'data-opex-yearly', "const exportSites = isAdmin() ? state.sites : state.filtered"]) {
   if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`MOD 2 OPEX or permission-aware export marker is missing: ${marker}`);
 }
 if (!workerSource.includes("if (access.role !== 'admin')") || !workerSource.includes("if (key.toLocaleLowerCase('en-US') === 'opex')")) {

@@ -143,43 +143,6 @@
         </article>
       </div>
 
-      <section class="opex-report" id="opexReport" aria-labelledby="opexReportTitle" hidden>
-        <header class="opex-report-head">
-          <div>
-            <span class="eyebrow">ADMIN REPORT</span>
-            <h2 id="opexReportTitle">รายงาน OPEX ตามตัวกรอง</h2>
-            <p id="opexReportScope">คำนวณจากไซต์ที่แสดงบนแผนที่</p>
-          </div>
-          <div class="opex-report-controls">
-            <label>ช่วงรายงาน
-              <select id="opexPeriod">
-                <option value="month">รายเดือน</option>
-                <option value="year">รายปี</option>
-              </select>
-            </label>
-            <label>จัดกลุ่มตาม
-              <select id="opexGroupBy">
-                <option value="province">จังหวัด</option>
-                <option value="regional">Regional</option>
-                <option value="area">UIH Area</option>
-                <option value="owner">Owner</option>
-              </select>
-            </label>
-          </div>
-        </header>
-        <div class="opex-summary-grid">
-          <article><span>OPEX รายเดือน</span><strong id="opexMonthly">—</strong><small>รวมตามตัวกรองปัจจุบัน</small></article>
-          <article><span>OPEX รายปี</span><strong id="opexYearly">—</strong><small>ประมาณการ 12 เดือน</small></article>
-          <article><span>เฉลี่ยต่อไซต์ / เดือน</span><strong id="opexAverage">—</strong><small id="opexSiteCount">0 sites</small></article>
-        </div>
-        <div class="opex-table-wrap">
-          <table>
-            <thead><tr><th id="opexGroupHeading">จังหวัด</th><th>จำนวนไซต์</th><th id="opexAmountHeading">OPEX รายเดือน</th><th>สัดส่วน</th></tr></thead>
-            <tbody id="opexReportBody"></tbody>
-          </table>
-        </div>
-      </section>
-
       <div class="map-card">
         <div class="map-toolbar">
           <div class="map-toolbar-copy">
@@ -200,6 +163,7 @@
               <span aria-hidden="true">⛶</span>
               <span class="map-focus-toggle-text">เต็มจอ</span>
             </button>
+            <button type="button" id="opexReportBtn" hidden>OPEX Report</button>
             <button type="button" id="exportBtn">Export CSV</button>
           </div>
         </div>
