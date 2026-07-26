@@ -303,6 +303,10 @@
     const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier;
     const measured = propertyValue(properties, [/^measured$/i, /ระยะ.*วัด/i]);
     const calculated = propertyValue(properties, [/^calculated$/i, /ระยะ.*คำนวณ/i]);
+    const categoryText = `${Object.keys(properties).join(' ')} ${Object.values(properties).join(' ')} ${originalName}`.normalize('NFKC').toLocaleLowerCase('en-US');
+    const importCategory = /ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(categoryText)
+      ? 'ready-access'
+      : /customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(categoryText) ? 'customer' : 'network';
     return {
       coords: line.c,
       name,
@@ -314,6 +318,7 @@
       cableType,
       rawType,
       cableStatus,
+      importCategory,
       sourceMetadata: { code: sourceCode, originalName, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item.name
@@ -826,6 +831,7 @@
         threshold: numeric('threshold', 20), interval: numeric('interval', 5),
         polesPerKm: numeric('polesPerKm', 29), rateB: numeric('rateB', 2.8),
         surchargePct: numeric('surchargePct', 5), dedupe: Boolean(document.getElementById('dedupeToggle')?.checked),
+        importCategories: Array.from(document.querySelectorAll('input[name="importCategory"]:checked')).map(input => input.value),
         sourceRolesSwapped: window.permissionOutRolesSwapped === true
       },
       sourceFiles: {
@@ -870,6 +876,13 @@
     applyValue('polesPerKm', s.polesPerKm); applyValue('rateB', s.rateB);
     applyValue('surchargePct', s.surchargePct);
     if (document.getElementById('dedupeToggle')) document.getElementById('dedupeToggle').checked = Boolean(s.dedupe);
+    window.permissionOutSyncOverlapMode?.();
+    if (Array.isArray(s.importCategories)) {
+      const selectedCategories = new Set(s.importCategories);
+      document.querySelectorAll('input[name="importCategory"]').forEach(input => {
+        input.checked = selectedCategories.has(input.value);
+      });
+    }
     window.permissionOutRolesSwapped = Boolean(s.sourceRolesSwapped);
     if (typeof updateSourceRoleUI === 'function') updateSourceRoleUI();
     state = {
@@ -1177,6 +1190,7 @@
 
   titleInput?.addEventListener('input', markDirty);
   ['threshold','interval','polesPerKm','rateB','surchargePct','dedupeToggle'].forEach(id => document.getElementById(id)?.addEventListener('change', markDirty));
+  document.querySelectorAll('input[name="importCategory"],input[name="reportOverlapMode"]').forEach(input => input.addEventListener('change', markDirty));
   const debounceUi = (callback, delay = 140) => {
     let timer = 0;
     return (...args) => {

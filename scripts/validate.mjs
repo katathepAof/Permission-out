@@ -20,7 +20,7 @@ const uploadScripts = await Promise.all([
   'scripts/upload-uih-data.mjs',
   'scripts/upload-ufm-data.mjs'
 ].map(file => readFile(resolve(root, file), 'utf8')));
-for (const id of ['peaDatasetStatus', 'ufmDatasetStatus', 'accountBtn', 'analyzeBtn', 'swapSourceRoles', 'reportBody', 'map', 'peaLayerTrigger', 'peaLayerList', 'baseCatalogSearch', 'baseCatalogList', 'compareCatalogSearch', 'compareCatalogList']) {
+for (const id of ['peaDatasetStatus', 'ufmDatasetStatus', 'accountBtn', 'analyzeBtn', 'swapSourceRoles', 'reportBody', 'map', 'peaLayerTrigger', 'peaLayerList', 'baseCatalogSearch', 'baseCatalogList', 'compareCatalogSearch', 'compareCatalogList', 'importTypeFilter', 'dedupeToggle']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`Missing required element: ${id}`);
 }
 if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis lifecycle event is missing');
@@ -28,6 +28,12 @@ if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('bill
   throw new Error('Shared UI/export billing logic is missing');
 }
 if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
+for (const marker of ['value="network"', 'value="ready-access"', 'value="customer"', 'name="reportOverlapMode"', 'function detectImportCategory(', "line.importCategory || 'network'"]) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 import/report filter marker is missing: ${marker}`);
+}
+if (!production.includes('importCategory') || !production.includes('importCategories: Array.from')) {
+  throw new Error('Optimized MOD 1 data or saved projects do not preserve import filters');
+}
 if (!html.includes('costFiltered') || !html.includes('เส้นที่ตรงกับตัวกรองในการ์ด 4')) {
   throw new Error('Card-4-filtered billing is missing');
 }
@@ -75,6 +81,9 @@ if (!workerSource.includes('async function adminMod2Comment') || !workerSource.i
 }
 if (!mod2Js.includes('function canManageMod2Comments()') || !mod2Js.includes("data-action=\"edit\"") || !mod2Js.includes("`/api/mod2/comments/${item.id}`")) {
   throw new Error('MOD 2 admin comment controls are missing');
+}
+for (const marker of ['sourceProperties', 'extraPopupProperties', 'facility-popup-metrics', 'facility-popup-extra', 'ตำแหน่งและพื้นที่', 'ข้อมูลการดำเนินงาน']) {
+  if (!mod2Js.includes(marker)) throw new Error(`MOD 2 extensible popup marker is missing: ${marker}`);
 }
 if (!workerSource.includes("requireModuleAccess(request, env, 'mod2', 'update')")) {
   throw new Error('MOD 2 comment management must use MOD 2 update permission');

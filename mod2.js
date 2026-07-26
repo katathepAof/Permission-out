@@ -291,6 +291,11 @@
 
   function featureToSite(feature) {
     const properties = feature?.properties || {};
+    const futureProperties = properties.extra_properties && typeof properties.extra_properties === 'object' && !Array.isArray(properties.extra_properties)
+      ? properties.extra_properties
+      : {};
+    const sourceProperties = { ...properties, ...futureProperties };
+    delete sourceProperties.extra_properties;
     const coordinates = feature?.geometry?.coordinates || [];
     return {
       id: feature.id,
@@ -308,7 +313,8 @@
       nodeEquipment: String(properties.node_equipment || ''),
       owner: String(properties.owner || ''),
       opex: Number(properties.opex || 0),
-      remark: String(properties.remark || '')
+      remark: String(properties.remark || ''),
+      sourceProperties
     };
   }
 
@@ -428,23 +434,116 @@
     elements.mapSubtitle.textContent = `แสดง ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites`;
   }
 
+  const STANDARD_SITE_PROPERTIES = new Set([
+    'site_code', 'site_name', 'type_of_digit', 'site_grade', 'regional', 'uih_area',
+    'district', 'province', 'latitude', 'longitude', 'customers', 'node_equipment',
+    'owner', 'opex', 'remark'
+  ]);
+
+  function hasPopupValue(value) {
+    return value !== '' && value !== null && value !== undefined &&
+      (!Array.isArray(value) || value.length > 0) &&
+      (typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length > 0);
+  }
+
+  function popupValue(value, options = {}) {
+    if (!hasPopupValue(value)) return '—';
+    if (options.currency) {
+      const amount = Number(value);
+      return Number.isFinite(amount)
+        ? new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 2 }).format(amount)
+        : String(value);
+    }
+    if (options.number) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number.toLocaleString('th-TH') : String(value);
+    }
+    if (typeof value === 'boolean') return value ? 'ใช่' : 'ไม่ใช่';
+    if (Array.isArray(value)) return value.map(item => popupValue(item)).join(', ');
+    if (typeof value === 'object') return Object.entries(value)
+      .map(([key, item]) => `${popupFieldLabel(key)}: ${popupValue(item)}`).join(' · ');
+    return String(value);
+  }
+
+  function popupFieldLabel(key) {
+    const labels = {
+      site_code: 'Site Code', site_name: 'ชื่อไซต์', type_of_digit: 'ประเภทไซต์',
+      site_grade: 'Site Grade', regional: 'Regional', uih_area: 'UIH Area',
+      district: 'อำเภอ / เขต', province: 'จังหวัด', latitude: 'Latitude',
+      longitude: 'Longitude', customers: 'จำนวนลูกค้า', node_equipment: 'Node Equipment',
+      owner: 'ผู้รับผิดชอบ', opex: 'OPEX', remark: 'หมายเหตุ'
+    };
+    if (labels[key]) return labels[key];
+    return String(key).replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+  }
+
+  function popupRows(rows) {
+    const available = rows.filter(([, value]) => hasPopupValue(value));
+    if (!available.length) return '<p class="facility-popup-empty">ไม่มีข้อมูลในหมวดนี้</p>';
+    return `<dl>${available.map(([label, value, options]) =>
+      `<div class="facility-popup-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(popupValue(value, options))}</dd></div>`
+    ).join('')}</dl>`;
+  }
+
+  function extraPopupProperties(site) {
+    return Object.entries(site.sourceProperties || {})
+      .filter(([key, value]) => !STANDARD_SITE_PROPERTIES.has(key) && hasPopupValue(value))
+      .sort(([left], [right]) => left.localeCompare(right, 'th'));
+  }
+
   function popupContent(site) {
-    const rows = [
-      ['Province', site.province],
-      ['Regional / Area', [site.regional, site.area].filter(Boolean).join(' · ')],
+    const locationRows = [
+      ['จังหวัด', site.province],
+      ['อำเภอ / เขต', site.district],
+      ['Regional', site.regional],
+      ['UIH Area', site.area],
+      ['พิกัด', `${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`]
+    ];
+    const networkRows = [
+      ['ประเภทไซต์', site.type],
       ['Site Grade', site.grade],
-      ['Type of Digit', site.type],
-      ['Owner', site.owner],
-      ['Customers', site.customers.toLocaleString('th-TH')],
-      ['Node Equipment', site.nodeEquipment]
-    ].filter(([, value]) => value !== '' && value != null);
+      ['Node Equipment', site.nodeEquipment],
+      ['ผู้รับผิดชอบ', site.owner]
+    ];
+    const operationRows = [
+      ['จำนวนลูกค้า', site.customers, { number: true }],
+      ['OPEX', site.opex, { currency: true }],
+      ['หมายเหตุ', site.remark]
+    ];
+    const extras = extraPopupProperties(site);
     const popup = document.createElement('div');
     popup.className = 'facility-popup';
     popup.innerHTML = `
-      <div class="facility-popup-code">${escapeHtml(site.siteCode)}</div>
-      <h3>${escapeHtml(site.siteName || '—')}</h3>
-      <dl>${rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('')}</dl>
-      <div class="facility-popup-section">
+      <header class="facility-popup-header">
+        <div class="facility-popup-identity">
+          <div class="facility-popup-kicker"><span>Site Facility</span>${site.grade ? `<b style="--grade-color:${escapeHtml(gradeColor(site.grade))}">${escapeHtml(site.grade)}</b>` : ''}</div>
+          <div class="facility-popup-code">${escapeHtml(site.siteCode)}</div>
+          <h3>${escapeHtml(site.siteName || 'ไม่ระบุชื่อไซต์')}</h3>
+          <p>${escapeHtml([site.district, site.province].filter(Boolean).join(' · ') || 'ยังไม่มีข้อมูลพื้นที่')}</p>
+        </div>
+      </header>
+      <div class="facility-popup-metrics" aria-label="ข้อมูลสำคัญ">
+        <div><span>ลูกค้า</span><strong>${escapeHtml(popupValue(site.customers, { number: true }))}</strong></div>
+        <div><span>Site Grade</span><strong>${escapeHtml(site.grade || '—')}</strong></div>
+        <div><span>ประเภทไซต์</span><strong>${escapeHtml(site.type || '—')}</strong></div>
+      </div>
+      <section class="facility-popup-info">
+        <h4><span aria-hidden="true">⌖</span> ตำแหน่งและพื้นที่</h4>
+        ${popupRows(locationRows)}
+      </section>
+      <section class="facility-popup-info">
+        <h4><span aria-hidden="true">◇</span> โครงข่ายและการดูแล</h4>
+        ${popupRows(networkRows)}
+      </section>
+      <section class="facility-popup-info">
+        <h4><span aria-hidden="true">▤</span> ข้อมูลการดำเนินงาน</h4>
+        ${popupRows(operationRows)}
+      </section>
+      ${extras.length ? `<details class="facility-popup-extra">
+        <summary>ข้อมูลเพิ่มเติม <span>${extras.length.toLocaleString('th-TH')} รายการ</span></summary>
+        ${popupRows(extras.map(([key, value]) => [popupFieldLabel(key), value]))}
+      </details>` : ''}
+      <div class="facility-popup-section facility-popup-comments-section">
         <div class="facility-comment-heading">
           <strong>ความคิดเห็น</strong>
           <button type="button" aria-label="โหลดความคิดเห็นล่าสุด">รีเฟรช</button>
@@ -644,7 +743,7 @@
           stroke: false,
           fillColor: gradeColor(site.grade),
           fillOpacity: .22 + ratio * .38
-        }).bindPopup(popupContent(site), { maxWidth: 300 }).addTo(siteLayer);
+        }).bindPopup(popupContent(site), { minWidth: 300, maxWidth: 420 }).addTo(siteLayer);
       }
       return;
     }
@@ -656,7 +755,7 @@
       if (group.length === 1) {
         const site = group[0];
         L.marker([site.latitude, site.longitude], { icon: markerIcon(site) })
-          .bindPopup(popupContent(site), { maxWidth: 300 })
+          .bindPopup(popupContent(site), { minWidth: 300, maxWidth: 420 })
           .addTo(siteLayer);
         continue;
       }
@@ -702,7 +801,7 @@
 
   function focusSite(site) {
     map.setView([site.latitude, site.longitude], 15);
-    L.popup({ maxWidth: 300 })
+    L.popup({ minWidth: 300, maxWidth: 420 })
       .setLatLng([site.latitude, site.longitude])
       .setContent(popupContent(site))
       .openOn(map);

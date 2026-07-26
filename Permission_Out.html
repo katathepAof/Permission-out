@@ -1271,6 +1271,16 @@ table.report td.num{
       </div>
     </div>
 
+    <fieldset class="import-type-filter" id="importTypeFilter">
+      <legend>ประเภทข้อมูลที่จะนำเข้า</legend>
+      <p>เลือกเฉพาะประเภทเส้นทางที่ต้องการนำไปวิเคราะห์และแสดงในรายงาน</p>
+      <div class="import-type-options">
+        <label><input type="checkbox" name="importCategory" value="network" checked><span><strong>Network</strong><small>โครงข่ายและเส้นทางหลัก</small></span></label>
+        <label><input type="checkbox" name="importCategory" value="ready-access" checked><span><strong>Ready Access</strong><small>เส้นทางพร้อมให้บริการ</small></span></label>
+        <label><input type="checkbox" name="importCategory" value="customer" checked><span><strong>Customer</strong><small>เส้นทางเชื่อมต่อลูกค้า</small></span></label>
+      </div>
+    </fieldset>
+
     <div class="row">
       <div class="field">
         <label>ระยะทับกัน (ม.)</label>
@@ -1284,12 +1294,19 @@ table.report td.num{
         <label>เสา/กม.</label>
         <input type="number" id="polesPerKm" value="29" min="1" step="1">
       </div>
-      <div class="field" style="justify-content:flex-end;">
-        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;">
-          <input type="checkbox" id="dedupeToggle">
-          <span>ตัดเส้นทับซ้อนอัตโนมัติ</span>
-        </label>
-        <span style="font-size:.7rem; color:var(--ink-mute);">ปิดไว้ = นำเข้าครบทุกเส้น</span>
+      <div class="field report-overlap-field">
+        <span class="field-label">รูปแบบรายงาน</span>
+        <input type="checkbox" id="dedupeToggle" hidden aria-hidden="true">
+        <div class="report-overlap-options" role="radiogroup" aria-label="การจัดการเส้นที่ทับกัน">
+          <label>
+            <input type="radio" name="reportOverlapMode" value="keep" checked>
+            <span><strong>ไม่ตัดเส้นที่ทับกัน</strong><small>แสดงทุกเส้นจากไฟล์ต้นทาง</small></span>
+          </label>
+          <label>
+            <input type="radio" name="reportOverlapMode" value="dedupe">
+            <span><strong>ตัดเส้นที่ทับกัน</strong><small>ตัดเส้นซ้ำก่อนสร้างรายงาน</small></span>
+          </label>
+        </div>
       </div>
       <button class="primary" id="analyzeBtn">วิเคราะห์เส้นทาง</button>
       <button type="button" class="secondary" id="clearBtn">ล้างข้อมูล</button>
@@ -1957,6 +1974,31 @@ function pickExtField(ext, regexes) {
   return null;
 }
 
+function detectImportCategory(...values) {
+  const text = values.flatMap(value => {
+    if (value && typeof value === 'object') {
+      return [...Object.keys(value), ...Object.values(value)];
+    }
+    return [value];
+  }).filter(Boolean).join(' ').normalize('NFKC').toLocaleLowerCase('en-US');
+  if (/ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(text)) return 'ready-access';
+  if (/customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(text)) return 'customer';
+  return 'network';
+}
+
+function placemarkFolderPath(pm) {
+  const names = [];
+  let current = pm?.parentElement;
+  while (current) {
+    if (current.localName === 'Folder') {
+      const ownName = Array.from(current.children || []).find(child => child.localName === 'name');
+      if (ownName?.textContent?.trim()) names.unshift(ownName.textContent.trim());
+    }
+    current = current.parentElement;
+  }
+  return names.join(' / ');
+}
+
 function placemarkIdentifierFromData(pm, ext, description) {
   const values = [...Object.values(ext), description || '', pm.getAttribute('id') || ''];
   for (const value of values) {
@@ -2078,6 +2120,7 @@ function parseKML(text) {
       const identifierCandidate = placemarkIdentifierFromData(pm, ext, description) || '';
       const identifier = /^\d{2}[A-Z]{2,}[A-Z0-9-]{4,}$/i.test(identifierCandidate) ? identifierCandidate : '';
       const name = identifier || originalName || identifierCandidate || '(ไม่ระบุชื่อ)';
+      const importCategory = detectImportCategory(ext, description, originalName, placemarkFolderPath(pm));
       let diameterInfo = extractDiameter(pm, name, description);
       let source = diameterInfo.value !== null ? 'file' : null;
       let type = null, core = null;
@@ -2108,14 +2151,14 @@ function parseKML(text) {
       const coordTags = pm.getElementsByTagName('coordinates');
       for (const tag of coordTags) {
         const coords = parseCoordText(tag.textContent);
-        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', sourceMetadata, extKeys: extKeys || '' });
+        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', importCategory, sourceMetadata, extKeys: extKeys || '' });
       }
       // รองรับ gx:Track / gx:MultiTrack (พิกัดอยู่ใน <gx:coord>lon lat alt</gx:coord>) — เดิมถูกข้ามทำให้เส้นหาย
       let trackEls = pm.getElementsByTagName('gx:Track');
       if (!trackEls.length) trackEls = pm.getElementsByTagNameNS('*', 'Track');
       for (const track of trackEls) {
         const coords = parseGxCoords(track);
-        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', sourceMetadata, extKeys: extKeys || '' });
+        if (coords.length >= 2) lines.push({ coords, diameter: diameterInfo.value, unit: diameterInfo.unit, name, type, core, diameterSource: source, cableType: cableType || '', rawType: rawType || '', cableStatus: cableStatus || '', importCategory, sourceMetadata, extKeys: extKeys || '' });
       }
     }
   }
@@ -2157,7 +2200,7 @@ function segmentsFromLinesDirect(lines, status) {
     if (line.coords.length < 2) continue;
     const segLen = lineLengthMeters(line.coords);
     totalLength += segLen;
-    segments.push({ coords: line.coords, length: segLen, status, overlapType: 'none', diameter: line.diameter, unit: line.unit, name: line.name, type: line.type, core: line.core, diameterSource: line.diameterSource, sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '' });
+    segments.push({ coords: line.coords, length: segLen, status, overlapType: 'none', diameter: line.diameter, unit: line.unit, name: line.name, type: line.type, core: line.core, diameterSource: line.diameterSource, sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', importCategory: line.importCategory || 'network', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '' });
   }
   return { segments };
 }
@@ -2195,7 +2238,7 @@ function analyzeDiff(linesBase, linesCompare, threshold, interval) {
             coords: cur.coords, length: segLen, status: cur.status,
             diameter: line.diameter, unit: line.unit, name: line.name,
             type: line.type, core: line.core, diameterSource: line.diameterSource,
-            sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '',
+            sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', importCategory: line.importCategory || 'network', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '',
             overlapType
           });
         }
@@ -2967,7 +3010,13 @@ async function runAnalysis() {
   }
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = Math.max(1, parseFloat(document.getElementById('interval').value) || 5);
-  const dedupeEnabled = document.getElementById('dedupeToggle').checked;
+  const selectedImportCategories = new Set(Array.from(document.querySelectorAll('input[name="importCategory"]:checked')).map(input => input.value));
+  if (!selectedImportCategories.size) {
+    errBox.textContent = 'กรุณาเลือกประเภทข้อมูลที่จะนำเข้าอย่างน้อย 1 ประเภท';
+    errBox.style.display = 'block';
+    return;
+  }
+  const dedupeEnabled = document.querySelector('input[name="reportOverlapMode"]:checked')?.value === 'dedupe';
 
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
@@ -2996,12 +3045,16 @@ async function runAnalysis() {
         : Promise.resolve([])
     ]);
 
-    const peaLines = optimizedPeaLines.concat(peaTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = peaFiles[i] ? peaFiles[i].name : ''; return l; })));
-    const ufmLines = optimizedUfmLines.concat(ufmTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = ufmFiles[i] ? ufmFiles[i].name : ''; return l; })));
+    const allPeaLines = optimizedPeaLines.concat(peaTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = peaFiles[i] ? peaFiles[i].name : ''; return l; })));
+    const allUfmLines = optimizedUfmLines.concat(ufmTexts.flatMap((t, i) => parseKML(t).map(l => { l.sourceFile = ufmFiles[i] ? ufmFiles[i].name : ''; return l; })));
+    const peaLines = allPeaLines.filter(line => selectedImportCategories.has(line.importCategory || 'network'));
+    const ufmLines = allUfmLines.filter(line => selectedImportCategories.has(line.importCategory || 'network'));
     let linesA = sourceRolesAreSwapped() ? ufmLines : peaLines;
     let linesB = sourceRolesAreSwapped() ? peaLines : ufmLines;
 
-    const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้จริงจากไฟล์ฐาน (ก่อนตัดซ้ำ)
+    const sourceCountA = sourceRolesAreSwapped() ? allUfmLines.length : allPeaLines.length;
+    const sourceCountB = sourceRolesAreSwapped() ? allPeaLines.length : allUfmLines.length;
+    const rawCountA = linesA.length; // จำนวนเส้นหลังผ่านตัวกรอง (ก่อนตัดซ้ำ)
     const rawCountB = linesB.length;
 
     // ตัดเส้นทับซ้อนเฉพาะเมื่อผู้ใช้เปิดสวิตช์ — ค่าเริ่มต้นปิด เพื่อให้ import ครบทุกเส้น
@@ -3049,8 +3102,12 @@ async function runAnalysis() {
     const cSame = state.segmentsB.filter(s => s.status === 'same').length;
     const breakdown = singleFileMode ? '' : ` (New ${cNew} / Same ${cSame} / Remove ${cRem})`;
     const noteParts = [];
-    if (hasBase) noteParts.push(`นำเข้าฐาน ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
-    if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
+    const categoryLabels = { network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' };
+    const categoryNote = Array.from(selectedImportCategories).map(category => categoryLabels[category]).join(', ');
+    if (hasBase) noteParts.push(`นำเข้าฐาน ${rawCountA}/${sourceCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
+    if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB}/${sourceCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
+    noteParts.push(`ประเภท ${categoryNote}`);
+    noteParts.push(dedupeEnabled ? 'รายงาน: ตัดเส้นทับกัน' : 'รายงาน: แสดงเส้นทับกัน');
     const importNote = noteParts.join(' · ');
     document.getElementById('execMeta').textContent = `${dateStr} · ${timeStr} · ${importNote} · ${state.segmentsB.length} ช่วง${breakdown} · ${elapsedMs.toLocaleString('th-TH')} มิลลิวินาที`;
 
@@ -3143,6 +3200,8 @@ async function exportCSV() {
   rows.push(['ความละเอียดการสุ่มจุด (ม.)', interval]);
   rows.push(['เสาต่อระยะทาง (ต้น/กม.)', polesPerKm]);
   rows.push(['อัตราค่าบริการพาดสาย (บาท/เส้น/มม./ต้น)', rateB]);
+  rows.push(['ประเภทข้อมูลที่นำเข้า', Array.from(new Set(exportSegments.map(segment => segment.importCategory || 'network'))).join(', ') || '-']);
+  rows.push(['รูปแบบรายงาน', document.querySelector('input[name="reportOverlapMode"]:checked')?.value === 'dedupe' ? 'ตัดเส้นที่ทับกัน' : 'ไม่ตัดเส้นที่ทับกัน']);
   rows.push(['จังหวัดที่เลือกสำหรับส่งออก', provinceLabel]);
   rows.push(['Status (จากไฟล์) ที่เลือกสำหรับส่งออก', cableStatusLabel]);
   rows.push([]);
@@ -3310,6 +3369,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="pea_assignment_method"><value>${xmlEscape(peaAreaExportValue(seg, 'assignmentMethod'))}</value></Data>` +
       `<Data name="status"><value>${xmlEscape(status.th)}</value></Data>` +
       `<Data name="relationship"><value>${xmlEscape(overlap.th)}</value></Data>` +
+      `<Data name="import_category"><value>${xmlEscape(seg.importCategory || 'network')}</value></Data>` +
       `<Data name="source_file"><value>${xmlEscape(seg.sourceFile || '')}</value></Data>` +
       `<Data name="source_status"><value>${xmlEscape(seg.cableStatus || '')}</value></Data>` +
       `<Data name="source_type"><value>${xmlEscape(seg.rawType || seg.type || '')}</value></Data>` +
@@ -3399,6 +3459,18 @@ swapSourceRolesButton?.addEventListener('click', async () => {
 updateSourceRoleUI();
 
 document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
+function syncReportOverlapModeFromLegacy() {
+  const dedupe = Boolean(document.getElementById('dedupeToggle')?.checked);
+  const radio = document.querySelector(`input[name="reportOverlapMode"][value="${dedupe ? 'dedupe' : 'keep'}"]`);
+  if (radio) radio.checked = true;
+}
+window.permissionOutSyncOverlapMode = syncReportOverlapModeFromLegacy;
+document.querySelectorAll('input[name="reportOverlapMode"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    const legacy = document.getElementById('dedupeToggle');
+    if (legacy) legacy.checked = radio.value === 'dedupe';
+  });
+});
 
 function clearAll() {
   // Reset file inputs

@@ -261,7 +261,7 @@
   advanced.id = 'advancedSettings';
   advanced.innerHTML = `<summary><span>ตั้งค่าขั้นสูง</span><span class="advanced-settings-copy">ค่าเริ่มต้นเหมาะกับงานทั่วไป</span></summary><div class="advanced-settings-grid"></div>`;
   const advancedGrid = q('.advanced-settings-grid', advanced);
-  for (const id of ['threshold', 'interval', 'polesPerKm', 'dedupeToggle']) {
+  for (const id of ['threshold', 'interval', 'polesPerKm']) {
     const field = q(`#${id}`)?.closest('.field');
     if (field) advancedGrid.appendChild(field);
   }
