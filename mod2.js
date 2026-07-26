@@ -193,8 +193,7 @@
     if (elements.sidebarToggle) {
       const label = isCollapsed ? 'แสดง Sidebar' : 'ซ่อน Sidebar';
       elements.sidebarToggle.title = label;
-      const copy = elements.sidebarToggle.querySelector('.sidebar-toggle-label');
-      if (copy) copy.textContent = label;
+      elements.sidebarToggle.setAttribute('aria-label', label);
     }
     if (persist) {
       try {

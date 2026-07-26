@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v29-collapsible-sidebar';
-const CORE = ['/', '/mod2/', '/login/', '/production.css?v=20260723-modules', '/production.js?v=20260726-dataset-picker', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260726-dataset-picker', '/ux-refresh.js?v=20260726-dataset-picker', '/mod2.css?v=20260726-collapsible-sidebar', '/mod2.js?v=20260726-collapsible-sidebar', '/login.css?v=20260726-central-login', '/login.js?v=20260726-central-login', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v30-sidebar-tab';
+const CORE = ['/', '/mod2/', '/login/', '/production.css?v=20260723-modules', '/production.js?v=20260726-dataset-picker', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260726-dataset-picker', '/ux-refresh.js?v=20260726-dataset-picker', '/mod2.css?v=20260726-sidebar-tab', '/mod2.js?v=20260726-sidebar-tab', '/login.css?v=20260726-central-login', '/login.js?v=20260726-central-login', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
