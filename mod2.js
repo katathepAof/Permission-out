@@ -59,6 +59,11 @@
     mapSiteSearch: document.getElementById('mapSiteSearch'),
     clearMapSearch: document.getElementById('clearMapSearch'),
     mapSearchCount: document.getElementById('mapSearchCount'),
+    mapFilterBar: document.getElementById('mapFilterBar'),
+    activeFilterChips: document.getElementById('activeFilterChips'),
+    clearMapFilters: document.getElementById('clearMapFilters'),
+    mapEmptyState: document.getElementById('mapEmptyState'),
+    emptyResetFilters: document.getElementById('emptyResetFilters'),
     resetFilters: document.getElementById('resetFilters'),
     reloadBtn: document.getElementById('reloadBtn'),
     metricSites: document.getElementById('metricSites'),
@@ -106,6 +111,10 @@
   const siteLayer = L.layerGroup().addTo(map);
   let searchTimer = 0;
   let notificationTimer = 0;
+  let mapRenderFrame = 0;
+  const markerIconCache = new Map();
+  const mapCard = document.querySelector('.map-card');
+  const mapRenderer = L.canvas({ padding: .35 });
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -397,7 +406,7 @@
     }
   }
 
-  function applyFilters(autoFit = true) {
+  function applyFilters(autoFit = false) {
     const query = elements.siteSearch.value.trim().toLocaleLowerCase('th');
     const selections = Object.fromEntries(
       Object.entries(filterElements).map(([key, select]) => [key, selectedValues(select)])
@@ -420,9 +429,45 @@
       return Object.entries(selections).every(([key, values]) => !values.size || values.has(site[key]));
     });
     updateMetrics();
+    updateActiveFilters(query, selections);
     renderMap();
     renderLegend();
     if (autoFit && state.filtered.length) fitAll();
+  }
+
+  function updateActiveFilters(query, selections) {
+    const labels = {
+      regional: 'Regional',
+      area: 'UIH Area',
+      province: 'จังหวัด',
+      grade: 'Site Grade',
+      type: 'Type',
+      owner: 'Owner'
+    };
+    const chips = [];
+    if (query) chips.push({ label: 'ค้นหา', value: elements.siteSearch.value.trim() });
+    for (const [key, values] of Object.entries(selections)) {
+      for (const value of values) chips.push({ label: labels[key] || key, value });
+    }
+    elements.mapFilterBar.hidden = chips.length === 0;
+    elements.activeFilterChips.replaceChildren(...chips.map(chip => {
+      const item = document.createElement('span');
+      item.className = 'map-filter-chip';
+      const label = document.createElement('b');
+      label.textContent = chip.label;
+      const value = document.createElement('span');
+      value.textContent = chip.value;
+      item.append(label, value);
+      return item;
+    }));
+  }
+
+  function resetAllFilters({ focusSearch = false, autoFit = true } = {}) {
+    window.clearTimeout(searchTimer);
+    syncSiteSearch('');
+    for (const select of Object.values(filterElements)) select.value = '';
+    applyFilters(autoFit);
+    if (focusSearch) elements.mapSiteSearch.focus();
   }
 
   function gradeColor(grade) {
@@ -439,6 +484,7 @@
     elements.mapSearchCount.textContent = sites.length.toLocaleString('th-TH');
     elements.mapSearchCount.setAttribute('aria-label', `พบ ${sites.length.toLocaleString('th-TH')} ไซต์`);
     elements.opexReportBtn.hidden = !isAdmin();
+    elements.mapEmptyState.hidden = sites.length > 0 || !state.loaded;
   }
 
   function formatBaht(value) {
@@ -865,13 +911,16 @@
 
   function markerIcon(site) {
     const color = gradeColor(site.grade);
-    return L.divIcon({
+    if (markerIconCache.has(color)) return markerIconCache.get(color);
+    const icon = L.divIcon({
       className: '',
       html: `<span class="mod2-marker" style="width:18px;height:18px;background:${color}"></span>`,
       iconSize: [18, 18],
       iconAnchor: [9, 9],
       popupAnchor: [0, -10]
     });
+    markerIconCache.set(color, icon);
+    return icon;
   }
 
   function clusterGroups(sites) {
@@ -886,18 +935,40 @@
     return [...groups.values()];
   }
 
+  function bindLazySitePopup(layer, site) {
+    layer.bindTooltip(`${site.siteCode}${site.siteName ? ` · ${site.siteName}` : ''}`, {
+      direction: 'top',
+      offset: [0, -8],
+      opacity: .92
+    });
+    layer.bindPopup(() => popupContent(site), { minWidth: 300, maxWidth: 420 });
+    return layer;
+  }
+
   function renderMap() {
+    window.cancelAnimationFrame(mapRenderFrame);
+    mapCard?.classList.add('is-rendering');
+    mapRenderFrame = window.requestAnimationFrame(() => {
+      renderMapNow();
+      window.requestAnimationFrame(() => mapCard?.classList.remove('is-rendering'));
+    });
+  }
+
+  function renderMapNow() {
+    map.closePopup();
     siteLayer.clearLayers();
     if (state.density) {
       const maxCustomers = Math.max(1, ...state.filtered.map(site => site.customers));
       for (const site of state.filtered) {
         const ratio = Math.max(.15, site.customers / maxCustomers);
-        L.circleMarker([site.latitude, site.longitude], {
+        const layer = L.circleMarker([site.latitude, site.longitude], {
           radius: 4 + Math.sqrt(ratio) * 10,
           stroke: false,
           fillColor: gradeColor(site.grade),
-          fillOpacity: .22 + ratio * .38
-        }).bindPopup(popupContent(site), { minWidth: 300, maxWidth: 420 }).addTo(siteLayer);
+          fillOpacity: .22 + ratio * .38,
+          renderer: mapRenderer
+        });
+        bindLazySitePopup(layer, site).addTo(siteLayer);
       }
       return;
     }
@@ -908,9 +979,12 @@
     for (const group of groups) {
       if (group.length === 1) {
         const site = group[0];
-        L.marker([site.latitude, site.longitude], { icon: markerIcon(site) })
-          .bindPopup(popupContent(site), { minWidth: 300, maxWidth: 420 })
-          .addTo(siteLayer);
+        const marker = L.marker([site.latitude, site.longitude], {
+          icon: markerIcon(site),
+          title: `${site.siteCode}${site.siteName ? ` · ${site.siteName}` : ''}`,
+          riseOnHover: true
+        });
+        bindLazySitePopup(marker, site).addTo(siteLayer);
         continue;
       }
       const latitude = group.reduce((sum, site) => sum + site.latitude, 0) / group.length;
@@ -923,7 +997,7 @@
         iconAnchor: [size / 2, size / 2]
       });
       L.marker([latitude, longitude], { icon })
-        .on('click', () => map.setView([latitude, longitude], Math.min(map.getZoom() + 2, 14)))
+        .on('click', () => map.flyTo([latitude, longitude], Math.min(map.getZoom() + 2, 14), { duration: .35 }))
         .addTo(siteLayer);
     }
   }
@@ -950,11 +1024,11 @@
   function fitAll() {
     if (!state.filtered.length) return;
     const bounds = L.latLngBounds(state.filtered.map(site => [site.latitude, site.longitude]));
-    map.fitBounds(bounds, { padding: [45, 45], maxZoom: 13 });
+    map.flyToBounds(bounds, { padding: [45, 45], maxZoom: 13, duration: .45 });
   }
 
   function focusSite(site) {
-    map.setView([site.latitude, site.longitude], 15);
+    map.flyTo([site.latitude, site.longitude], 15, { duration: .45 });
     L.popup({ minWidth: 300, maxWidth: 420 })
       .setLatLng([site.latitude, site.longitude])
       .setContent(popupContent(site))
@@ -1134,7 +1208,7 @@
   }
 
   for (const select of Object.values(filterElements)) {
-    select.addEventListener('change', () => applyFilters());
+    select.addEventListener('change', () => applyFilters(false));
   }
   elements.opexReportBtn.addEventListener('click', openOpexReport);
 
@@ -1146,10 +1220,10 @@
   function scheduleSiteSearch(source) {
     syncSiteSearch(source.value);
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(() => applyFilters(false), 130);
+    searchTimer = window.setTimeout(() => applyFilters(false), 220);
   }
 
-  function clearSiteSearch(focusTarget, autoFit = true) {
+  function clearSiteSearch(focusTarget, autoFit = false) {
     window.clearTimeout(searchTimer);
     syncSiteSearch('');
     applyFilters(autoFit);
@@ -1183,25 +1257,27 @@
     clearSiteSearch(elements.mapSiteSearch);
   });
   elements.resetFilters.addEventListener('click', () => {
-    syncSiteSearch('');
-    for (const select of Object.values(filterElements)) {
-      select.value = '';
-    }
-    applyFilters();
+    resetAllFilters({ autoFit: true });
   });
+  elements.clearMapFilters.addEventListener('click', () => resetAllFilters({ focusSearch: true, autoFit: true }));
+  elements.emptyResetFilters.addEventListener('click', () => resetAllFilters({ focusSearch: true, autoFit: true }));
   elements.reloadBtn.addEventListener('click', () => loadSites(true).catch(() => {}));
   elements.clusterBtn.addEventListener('click', () => {
     state.cluster = !state.cluster;
     state.density = false;
     elements.clusterBtn.classList.toggle('is-active', state.cluster);
+    elements.clusterBtn.setAttribute('aria-pressed', String(state.cluster));
     elements.heatBtn.classList.remove('is-active');
+    elements.heatBtn.setAttribute('aria-pressed', 'false');
     renderMap();
   });
   elements.heatBtn.addEventListener('click', () => {
     state.density = !state.density;
     if (state.density) state.cluster = false;
     elements.heatBtn.classList.toggle('is-active', state.density);
+    elements.heatBtn.setAttribute('aria-pressed', String(state.density));
     elements.clusterBtn.classList.toggle('is-active', state.cluster);
+    elements.clusterBtn.setAttribute('aria-pressed', String(state.cluster));
     renderMap();
   });
   elements.fitBtn.addEventListener('click', fitAll);

@@ -75,8 +75,11 @@ if (!html.includes('ux-refresh.css') || !html.includes('ux-refresh.js')) throw n
 if (!html.includes('admin-users.css') || !html.includes('admin-users.js')) throw new Error('Admin user assets are missing');
 if (!html.includes('admin-data.css') || !html.includes('admin-data.js')) throw new Error('Admin data assets are missing');
 if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new Error('Module navigation is missing');
-for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="exportBtn"', '/api/mod2/sites']) {
+for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="mapFilterBar"', 'id="mapEmptyState"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
+}
+for (const marker of ['function bindLazySitePopup(', 'window.requestAnimationFrame(() =>', 'map.flyToBounds(', 'function updateActiveFilters(', 'resetAllFilters({']) {
+  if (!mod2Js.includes(marker)) throw new Error(`Smooth MOD 2 map UX marker is missing: ${marker}`);
 }
 for (const marker of ['id="opexReportBtn"', 'function openOpexReport()', 'function renderOpexReport(', 'data-opex-monthly', 'data-opex-yearly', "const exportSites = isAdmin() ? state.sites : state.filtered"]) {
   if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`MOD 2 OPEX or permission-aware export marker is missing: ${marker}`);
