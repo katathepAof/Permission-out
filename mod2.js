@@ -601,7 +601,7 @@
       const number = Number(value);
       return Number.isFinite(number) ? number.toLocaleString('th-TH') : String(value);
     }
-    if (typeof value === 'boolean') return value ? 'ใช่' : 'ไม่ใช่';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (Array.isArray(value)) return value.map(item => popupValue(item)).join(', ');
     if (typeof value === 'object') return Object.entries(value)
       .map(([key, item]) => `${popupFieldLabel(key)}: ${popupValue(item)}`).join(' · ');
@@ -610,11 +610,11 @@
 
   function popupFieldLabel(key) {
     const labels = {
-      site_code: 'Site Code', site_name: 'ชื่อไซต์', type_of_digit: 'ประเภทไซต์',
+      site_code: 'Site Code', site_name: 'Site Name', type_of_digit: 'Site Type',
       site_grade: 'Site Grade', regional: 'Regional', uih_area: 'UIH Area',
-      district: 'อำเภอ / เขต', province: 'จังหวัด', latitude: 'Latitude',
-      longitude: 'Longitude', customers: 'จำนวนลูกค้า', node_equipment: 'Node Equipment',
-      owner: 'ผู้รับผิดชอบ', opex: 'OPEX', remark: 'หมายเหตุ'
+      district: 'District', province: 'Province', latitude: 'Latitude',
+      longitude: 'Longitude', customers: 'Customers', node_equipment: 'Node Equipment',
+      owner: 'Owner', opex: 'OPEX', remark: 'Remark'
     };
     if (labels[key]) return labels[key];
     return String(key).replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
@@ -622,7 +622,7 @@
 
   function popupRows(rows) {
     const available = rows.filter(([, value]) => hasPopupValue(value));
-    if (!available.length) return '<p class="facility-popup-empty">ไม่มีข้อมูลในหมวดนี้</p>';
+    if (!available.length) return '<p class="facility-popup-empty">No information available</p>';
     return `<dl>${available.map(([label, value, options]) =>
       `<div class="facility-popup-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(popupValue(value, options))}</dd></div>`
     ).join('')}</dl>`;
@@ -636,25 +636,25 @@
 
   function popupContent(site) {
     const locationRows = [
-      ['จังหวัด', site.province],
-      ['อำเภอ / เขต', site.district],
-      ['Regional', site.regional],
+      ['Province', site.province],
+      ['District', site.district],
+      ['Region', site.regional],
       ['UIH Area', site.area],
-      ['พิกัด', `${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`]
+      ['Coordinates', `${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`]
     ];
     const networkRows = [
-      ['ประเภทไซต์', site.type],
+      ['Site Type', site.type],
       ['Site Grade', site.grade],
       ['Node Equipment', site.nodeEquipment],
-      ['ผู้รับผิดชอบ', site.owner]
+      ['Owner', site.owner]
     ];
     const operationRows = [
-      ['จำนวนลูกค้า', site.customers, { number: true }],
+      ['Customer Count', site.customers, { number: true }],
       ...(isAdmin() ? [
-        ['OPEX รายเดือน', site.opex, { currency: true }],
-        ['OPEX รายปี', (Number(site.opex) || 0) * 12, { currency: true }]
+        ['Monthly OPEX', site.opex, { currency: true }],
+        ['Annual OPEX', (Number(site.opex) || 0) * 12, { currency: true }]
       ] : []),
-      ['หมายเหตุ', site.remark]
+      ['Remark', site.remark]
     ];
     const extras = extraPopupProperties(site);
     const popup = document.createElement('div');
@@ -664,56 +664,56 @@
         <div class="facility-popup-identity">
           <div class="facility-popup-kicker"><span>Site Facility</span>${site.grade ? `<b style="--grade-color:${escapeHtml(gradeColor(site.grade))}">${escapeHtml(site.grade)}</b>` : ''}</div>
           <div class="facility-popup-code">${escapeHtml(site.siteCode)}</div>
-          <h3>${escapeHtml(site.siteName || 'ไม่ระบุชื่อไซต์')}</h3>
-          <p>${escapeHtml([site.district, site.province].filter(Boolean).join(' · ') || 'ยังไม่มีข้อมูลพื้นที่')}</p>
+          <h3>${escapeHtml(site.siteName || 'Unnamed site')}</h3>
+          <p>${escapeHtml([site.district, site.province].filter(Boolean).join(' · ') || 'Location not available')}</p>
         </div>
-        <div class="facility-popup-header-actions" aria-label="คำสั่งด่วน">
-          <button type="button" data-copy-value="${escapeHtml(site.siteCode)}" data-copy-label="Site Code">คัดลอก Site Code</button>
-          <button type="button" data-copy-value="${escapeHtml(`${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`)}" data-copy-label="พิกัด">คัดลอกพิกัด</button>
+        <div class="facility-popup-header-actions" aria-label="Quick actions">
+          <button type="button" data-copy-value="${escapeHtml(site.siteCode)}" data-copy-label="Site Code">Copy Site Code</button>
+          <button type="button" data-copy-value="${escapeHtml(`${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`)}" data-copy-label="coordinates">Copy Coordinates</button>
         </div>
       </header>
-      <div class="facility-popup-metrics" aria-label="ข้อมูลสำคัญ">
-        <div><span>ลูกค้า</span><strong>${escapeHtml(popupValue(site.customers, { number: true }))}</strong></div>
+      <div class="facility-popup-metrics" aria-label="Key information">
+        <div><span>Customers</span><strong>${escapeHtml(popupValue(site.customers, { number: true }))}</strong></div>
         <div><span>Site Grade</span><strong>${escapeHtml(site.grade || '—')}</strong></div>
-        <div><span>ประเภทไซต์</span><strong>${escapeHtml(site.type || '—')}</strong></div>
+        <div><span>Site Type</span><strong>${escapeHtml(site.type || '—')}</strong></div>
       </div>
       <div class="facility-popup-content">
         <div class="facility-popup-grid">
           <details class="facility-popup-group" open>
             <summary>
               <span class="facility-popup-group-icon" aria-hidden="true">⌖</span>
-              <span><strong>ตำแหน่งและพื้นที่</strong><small>${locationRows.filter(([, value]) => hasPopupValue(value)).length} รายการ</small></span>
+              <span><strong>Location & Area</strong><small>${locationRows.filter(([, value]) => hasPopupValue(value)).length} items</small></span>
             </summary>
             <div class="facility-popup-info">${popupRows(locationRows)}</div>
           </details>
           <details class="facility-popup-group" open>
             <summary>
               <span class="facility-popup-group-icon" aria-hidden="true">◇</span>
-              <span><strong>โครงข่ายและการดูแล</strong><small>${networkRows.filter(([, value]) => hasPopupValue(value)).length} รายการ</small></span>
+              <span><strong>Network & Ownership</strong><small>${networkRows.filter(([, value]) => hasPopupValue(value)).length} items</small></span>
             </summary>
             <div class="facility-popup-info">${popupRows(networkRows)}</div>
           </details>
           <details class="facility-popup-group is-wide" open>
             <summary>
               <span class="facility-popup-group-icon" aria-hidden="true">▤</span>
-              <span><strong>ข้อมูลการดำเนินงาน</strong><small>${operationRows.filter(([, value]) => hasPopupValue(value)).length} รายการ</small></span>
+              <span><strong>Operations</strong><small>${operationRows.filter(([, value]) => hasPopupValue(value)).length} items</small></span>
             </summary>
             <div class="facility-popup-info">${popupRows(operationRows)}</div>
           </details>
         </div>
         ${extras.length ? `<details class="facility-popup-extra">
-          <summary><span><strong>ข้อมูลเพิ่มเติม</strong><small>รองรับฟิลด์ข้อมูลที่เพิ่มในอนาคต</small></span><b>${extras.length.toLocaleString('th-TH')}</b></summary>
+          <summary><span><strong>Additional Information</strong><small>Automatically includes future data fields</small></span><b>${extras.length.toLocaleString('en-US')}</b></summary>
           <div class="facility-popup-extra-body">${popupRows(extras.map(([key, value]) => [popupFieldLabel(key), value]))}</div>
         </details>` : ''}
         <section class="facility-popup-section facility-popup-comments-section">
           <div class="facility-comment-heading">
-            <span><strong>ความคิดเห็น</strong><small>บันทึกการประสานงานของไซต์</small></span>
-            <button type="button" aria-label="โหลดความคิดเห็นล่าสุด">รีเฟรช</button>
+            <span><strong>Comments</strong><small>Site coordination log</small></span>
+            <button type="button" aria-label="Refresh comments">Refresh</button>
           </div>
-          <div class="facility-comments"><span class="facility-comment-empty">กำลังโหลด…</span></div>
+          <div class="facility-comments"><span class="facility-comment-empty">Loading comments…</span></div>
           <form class="facility-comment-form">
-            <input name="comment" maxlength="1000" required aria-label="เพิ่มความคิดเห็น" placeholder="เพิ่มความคิดเห็นหรือบันทึกการประสานงาน…">
-            <button type="submit">ส่ง</button>
+            <input name="comment" maxlength="1000" required aria-label="Add a comment" placeholder="Add a comment or coordination note…">
+            <button type="submit">Send</button>
           </form>
         </section>
       </div>`;
@@ -721,28 +721,28 @@
       button.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(button.dataset.copyValue);
-          toast(`คัดลอก${button.dataset.copyLabel}แล้ว`, 'success');
+          toast(`${button.dataset.copyLabel} copied`, 'success');
         } catch {
-          toast(`ไม่สามารถคัดลอก${button.dataset.copyLabel}ได้`, 'error');
+          toast(`Unable to copy ${button.dataset.copyLabel}`, 'error');
         }
       });
     });
     const comments = popup.querySelector('.facility-comments');
     const renderComments = items => {
       if (!items.length) {
-        comments.innerHTML = '<span class="facility-comment-empty">ยังไม่มีความคิดเห็น</span>';
+        comments.innerHTML = '<span class="facility-comment-empty">No comments yet</span>';
         return;
       }
       comments.innerHTML = items.map(item => `<div class="facility-comment" data-comment-id="${Number(item.id)}">
-        <b>${escapeHtml(item.authorName || 'ผู้ใช้งาน')}<time>${escapeHtml(new Date(item.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }))}${item.updatedAt !== item.createdAt ? ' · แก้ไขแล้ว' : ''}</time></b>
+        <b>${escapeHtml(item.authorName || 'User')}<time>${escapeHtml(new Date(item.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }))}${item.updatedAt !== item.createdAt ? ' · Edited' : ''}</time></b>
         <span>${escapeHtml(item.body)}</span>
-        ${canManageMod2Comments() ? '<div class="facility-comment-actions"><button type="button" data-action="edit">แก้ไข</button><button type="button" data-action="delete">ลบ</button></div>' : ''}
+        ${canManageMod2Comments() ? '<div class="facility-comment-actions"><button type="button" data-action="edit">Edit</button><button type="button" data-action="delete">Delete</button></div>' : ''}
       </div>`).join('');
       if (canManageMod2Comments()) {
         comments.querySelectorAll('.facility-comment').forEach(comment => {
           const item = items.find(entry => Number(entry.id) === Number(comment.dataset.commentId));
           comment.querySelector('[data-action="edit"]').addEventListener('click', async () => {
-            const body = window.prompt('แก้ไขความคิดเห็น', item.body);
+            const body = window.prompt('Edit comment', item.body);
             if (body === null || !body.trim() || body.trim() === item.body) return;
             try {
               await authenticatedJson(`/api/mod2/comments/${item.id}`, {
@@ -751,18 +751,18 @@
               });
               await loadComments();
               await loadCommentNotifications().catch(() => {});
-              toast('แก้ไขความคิดเห็นแล้ว', 'success');
+              toast('Comment updated', 'success');
             } catch (error) {
               toast(error.message, 'error');
             }
           });
           comment.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-            if (!window.confirm('ยืนยันการลบความคิดเห็นนี้?')) return;
+            if (!window.confirm('Delete this comment?')) return;
             try {
               await authenticatedJson(`/api/mod2/comments/${item.id}`, { method: 'DELETE' });
               await loadComments();
               await loadCommentNotifications().catch(() => {});
-              toast('ลบความคิดเห็นแล้ว', 'success');
+              toast('Comment deleted', 'success');
             } catch (error) {
               toast(error.message, 'error');
             }
@@ -811,7 +811,7 @@
     if (canUpdateMod2()) {
       const actions = document.createElement('div');
       actions.className = 'facility-admin-actions';
-      actions.innerHTML = '<button type="button" data-action="edit"><span aria-hidden="true">✎</span> แก้ไขข้อมูล</button><button type="button" class="is-danger" data-action="delete"><span aria-hidden="true">⌫</span> ลบไซต์</button>';
+      actions.innerHTML = '<button type="button" data-action="edit"><span aria-hidden="true">✎</span> Edit Site</button><button type="button" class="is-danger" data-action="delete"><span aria-hidden="true">⌫</span> Delete Site</button>';
       actions.querySelector('[data-action="edit"]').addEventListener('click', () => showSiteEditor(site));
       actions.querySelector('[data-action="delete"]').addEventListener('click', () => deleteSite(site));
       popup.appendChild(actions);

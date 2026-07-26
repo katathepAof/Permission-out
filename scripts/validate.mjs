@@ -43,6 +43,9 @@ for (const marker of ['dataset-drawer-overview', 'pickerBaseCount', 'pickerCompa
 for (const marker of ['CATALOG_RENDER_PAGE_SIZE', 'baseCatalogIndex', 'compareCatalogIndex', 'catalog-load-more']) {
   if (!`${production}\n${uxRefresh}`.includes(marker)) throw new Error(`Smooth MOD 1 dataset catalog marker is missing: ${marker}`);
 }
+for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
+  if (!html.includes(marker)) throw new Error(`Distinct MOD 1 dataset line color marker is missing: ${marker}`);
+}
 if (!html.includes('costFiltered') || !html.includes('เส้นที่ตรงกับตัวกรองในการ์ด 4')) {
   throw new Error('Card-4-filtered billing is missing');
 }
@@ -114,7 +117,7 @@ if (!workerSource.includes('async function adminMod2Comment') || !workerSource.i
 if (!mod2Js.includes('function canManageMod2Comments()') || !mod2Js.includes("data-action=\"edit\"") || !mod2Js.includes("`/api/mod2/comments/${item.id}`")) {
   throw new Error('MOD 2 admin comment controls are missing');
 }
-for (const marker of ['sourceProperties', 'extraPopupProperties', 'facility-popup-metrics', 'facility-popup-extra', 'facility-popup-grid', 'facility-popup-group', 'data-copy-value', 'ตำแหน่งและพื้นที่', 'ข้อมูลการดำเนินงาน']) {
+for (const marker of ['sourceProperties', 'extraPopupProperties', 'facility-popup-metrics', 'facility-popup-extra', 'facility-popup-grid', 'facility-popup-group', 'data-copy-value', 'Location & Area', 'Network & Ownership', 'Operations', 'Additional Information']) {
   if (!mod2Js.includes(marker)) throw new Error(`MOD 2 extensible popup marker is missing: ${marker}`);
 }
 if (!workerSource.includes("requireModuleAccess(request, env, 'mod2', 'update')")) {

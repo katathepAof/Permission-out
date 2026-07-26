@@ -706,6 +706,24 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
   display:inline-block;
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);
 }
+.dataset-color-legend{
+  display:flex;
+  flex:1 0 100%;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  padding-bottom:9px;
+  border-bottom:1px solid var(--border-soft);
+}
+.dataset-color-legend[hidden]{display:none;}
+.dataset-color-legend-label{color:var(--navy-800);font-weight:700!important;}
+.route-swatch{
+  width:22px;
+  height:0;
+  display:inline-block;
+  border-top:3px solid #52677e;
+}
+.route-swatch.is-same{border-top-style:dashed;}
+.route-swatch.is-remove{border-top:3px dotted #52677e;}
 
 /* Map search */
 .map-search-wrap{position:relative; margin-bottom:12px;}
@@ -1469,11 +1487,10 @@ table.report td.num{
       <div id="map"></div>
     </div>
     <div class="legend">
-      <span><span class="swatch" style="background:#e07b39;"></span> A · พรีวิวก่อนวิเคราะห์</span>
-      <span><span class="swatch" style="background:#3a7bd5;"></span> B · พรีวิวก่อนวิเคราะห์</span>
-      <span><span class="swatch" style="background:#1e5ba8;"></span> New · มีในฐาน ไม่มีในเปรียบเทียบ</span>
-      <span><span class="swatch" style="background:#0e9f6e;"></span> Same · เหมือนกันทั้งสองฝั่ง</span>
-      <span><span class="swatch" style="background:#7c3aed;"></span> Remove · มีในเปรียบเทียบ ไม่มีในฐาน</span>
+      <div class="dataset-color-legend" id="datasetColorLegend" hidden></div>
+      <span><span class="route-swatch"></span> New · มีในฐาน ไม่มีในเปรียบเทียบ</span>
+      <span><span class="route-swatch is-same"></span> Same · เหมือนกันทั้งสองฝั่ง</span>
+      <span><span class="route-swatch is-remove"></span> Remove · มีในเปรียบเทียบ ไม่มีในฐาน</span>
     </div>
   </div>
 
@@ -1747,6 +1764,47 @@ const GROUP_BOXES = { BASE: boxBase, COMPARE: boxCompare };
 const GROUP_TAGS = { BASE: tagBase, COMPARE: tagCompare };
 const GROUP_COLORS = { BASE: '#e07b39', COMPARE: '#3a7bd5' };
 const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเทียบ' };
+const DATASET_LINE_COLORS = [
+  '#0057B8', '#D1495B', '#00876C', '#7A3DB8', '#D96C00', '#008FB3',
+  '#C2185B', '#5B7F00', '#6D4C41', '#3949AB', '#00838F', '#AD1457',
+  '#558B2F', '#F4511E', '#512DA8', '#00796B', '#B26A00', '#1565C0',
+  '#8E24AA', '#2E7D32', '#C62828', '#00695C', '#6A1B9A', '#9A6700'
+];
+function datasetLineColor(index) {
+  if (index < DATASET_LINE_COLORS.length) return DATASET_LINE_COLORS[index];
+  const hue = ((index - DATASET_LINE_COLORS.length) * 137.508 + 23) % 360;
+  const lightness = [38, 46, 32][index % 3];
+  return `hsl(${hue.toFixed(1)} 78% ${lightness}%)`;
+}
+function applyDatasetLineColors(groups) {
+  const entries = [];
+  const colorByKey = new Map();
+  FILE_GROUPS.forEach(groupKey => {
+    const lines = groups[groupKey] || [];
+    lines.forEach(line => {
+      const identity = String(line.sourceDatasetId || line.sourceFile || GROUP_LABELS[groupKey]);
+      const key = `${groupKey}:${identity}`;
+      if (!colorByKey.has(key)) {
+        const color = datasetLineColor(colorByKey.size);
+        colorByKey.set(key, color);
+        entries.push({ key, color, groupKey, name: line.sourceFile || identity });
+      }
+      line.sourceKey = key;
+      line.sourceColor = colorByKey.get(key);
+    });
+  });
+  return entries;
+}
+function renderDatasetColorLegend(entries = []) {
+  const container = document.getElementById('datasetColorLegend');
+  if (!container) return;
+  container.hidden = entries.length === 0;
+  container.innerHTML = entries.length
+    ? `<span class="dataset-color-legend-label">สีชุดข้อมูล</span>${entries.map(entry =>
+        `<span title="${xmlEscape(`${GROUP_LABELS[entry.groupKey]} · ${entry.name}`)}"><span class="swatch" style="background:${entry.color}"></span>${xmlEscape(`${GROUP_LABELS[entry.groupKey]} · ${entry.name}`)}</span>`
+      ).join('')}`
+    : '';
+}
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
 window.permissionOutCompareFiles = window.permissionOutCompareFiles || [];
 window.permissionOutBaseDatasetIds = window.permissionOutBaseDatasetIds || [];
@@ -2205,7 +2263,7 @@ function segmentsFromLinesDirect(lines, status) {
     if (line.coords.length < 2) continue;
     const segLen = lineLengthMeters(line.coords);
     totalLength += segLen;
-    segments.push({ coords: line.coords, length: segLen, status, overlapType: 'none', diameter: line.diameter, unit: line.unit, name: line.name, type: line.type, core: line.core, diameterSource: line.diameterSource, sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', importCategory: line.importCategory || 'network', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '' });
+    segments.push({ coords: line.coords, length: segLen, status, overlapType: 'none', diameter: line.diameter, unit: line.unit, name: line.name, type: line.type, core: line.core, diameterSource: line.diameterSource, sourceFile: line.sourceFile || '', sourceDatasetId: line.sourceDatasetId || '', sourceKey: line.sourceKey || '', sourceColor: line.sourceColor || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', importCategory: line.importCategory || 'network', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '' });
   }
   return { segments };
 }
@@ -2243,7 +2301,7 @@ function analyzeDiff(linesBase, linesCompare, threshold, interval) {
             coords: cur.coords, length: segLen, status: cur.status,
             diameter: line.diameter, unit: line.unit, name: line.name,
             type: line.type, core: line.core, diameterSource: line.diameterSource,
-            sourceFile: line.sourceFile || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', importCategory: line.importCategory || 'network', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '',
+            sourceFile: line.sourceFile || '', sourceDatasetId: line.sourceDatasetId || '', sourceKey: line.sourceKey || '', sourceColor: line.sourceColor || '', cableType: line.cableType || '', rawType: line.rawType || '', cableStatus: line.cableStatus || '', importCategory: line.importCategory || 'network', sourceMetadata: line.sourceMetadata || null, extKeys: line.extKeys || '',
             overlapType
           });
         }
@@ -2357,6 +2415,7 @@ FILE_GROUPS.forEach(groupKey => {
         previews[groupKey] = null;
         searchableLayers = searchableLayers.filter(e => e.routeLabel !== groupKey);
       }
+      renderDatasetColorLegend(FILE_GROUPS.flatMap(key => previews[key]?.colorEntries || []));
       const remainingBounds = FILE_GROUPS.flatMap(k => previews[k] ? previews[k].bounds : []);
       if (remainingBounds.length && map) map.fitBounds(remainingBounds, { padding: [30, 30] });
       return;
@@ -2370,7 +2429,7 @@ FILE_GROUPS.forEach(groupKey => {
   });
 });
 
-// พรีวิวไฟล์ทั้งหมดในฝั่งหนึ่ง (ฐาน หรือ เปรียบเทียบ) รวมเป็นชั้นเดียว สีเดียว
+// พรีวิวไฟล์ทั้งหมดในฝั่งหนึ่ง โดยแต่ละชุดข้อมูลใช้สีเฉพาะของตัวเอง
 async function previewGroup(groupKey) {
   const mapStatus = document.getElementById('mapStatus');
   const files = filesForGroup(groupKey);
@@ -2379,17 +2438,21 @@ async function previewGroup(groupKey) {
     if (previews[groupKey]) { layerGroup.removeLayer(previews[groupKey].layer); previews[groupKey] = null; }
     searchableLayers = searchableLayers.filter(e => e.routeLabel !== groupKey); // ล้างรายการเก่าของฝั่งนี้
 
-    const color = GROUP_COLORS[groupKey];
     const label = GROUP_LABELS[groupKey];
     const texts = await Promise.all(files.map(f => readKmlOrKmzText(f)));
-    const lines = texts.flatMap((t, i) => parseKML(t, files[i]?.name || '').map(l => { l.sourceFile = files[i] ? files[i].name : ''; return l; }));
+    const lines = texts.flatMap((t, i) => parseKML(t, files[i]?.name || '').map(l => {
+      l.sourceFile = files[i]?.name || '';
+      l.sourceDatasetId = `local:${i}:${l.sourceFile}`;
+      return l;
+    }));
+    const colorEntries = applyDatasetLineColors({ [groupKey]: lines });
 
     const group = L.layerGroup();
     const bounds = [];
     lines.forEach(l => {
       const ll = toLatLngs(l.coords);
       const len = lineLengthMeters(l.coords);
-      const polyline = L.polyline(ll, { color, weight: 4, opacity: 0.85 })
+      const polyline = L.polyline(ll, { color: l.sourceColor || GROUP_COLORS[groupKey], weight: 4, opacity: 0.9 })
         .bindPopup(lineInfoPopup(label, l, len))
         .bindTooltip(placemarkDisplayText(l), { sticky: true })
         .addTo(group);
@@ -2397,7 +2460,8 @@ async function previewGroup(groupKey) {
       searchableLayers.push({ name: placemarkDisplayText(l), routeLabel: groupKey, layer: polyline, bounds: ll });
     });
     group.addTo(layerGroup);
-    previews[groupKey] = { layer: group, bounds };
+    previews[groupKey] = { layer: group, bounds, colorEntries };
+    renderDatasetColorLegend(FILE_GROUPS.flatMap(key => previews[key]?.colorEntries || []));
 
     const allBounds = FILE_GROUPS.flatMap(k => previews[k] ? previews[k].bounds : []);
     if (allBounds.length) map.fitBounds(allBounds, { padding: [30, 30] });
@@ -2458,10 +2522,10 @@ function drawResults(resB) {
     const isRemove = seg.status === 'remove';
     const ll = toLatLngs(seg.coords);
     const polyline = L.polyline(ll, {
-      color: m.color,
+      color: seg.sourceColor || m.color,
       weight: isRemove ? 4 : 5,
       opacity: isRemove ? 0.85 : (seg.status === 'same' ? 0.9 : 1),
-      dashArray: isRemove ? '6,7' : null
+      dashArray: isRemove ? '2,7' : (seg.status === 'same' ? '10,6' : null)
     })
       .bindPopup(() => segmentStatusPopup(seg, idx))
       .bindTooltip(placemarkDisplayText(seg), { sticky: true })
@@ -2480,23 +2544,25 @@ function renderAggregateResults(segments, fitBounds = false) {
   if (!aggregateResultMode || !layerGroup) return;
   layerGroup.clearLayers();
   aggregateSelectionLayer = null;
-  const grouped = { new: [], same: [], remove: [] };
+  const grouped = new Map();
   const bounds = L.latLngBounds();
   segments.forEach(seg => {
     const st = STATUS_META[seg.status] ? seg.status : 'new';
     const ll = toLatLngs(seg.coords);
     if (!ll.length) return;
-    grouped[st].push(ll);
+    const color = seg.sourceColor || STATUS_META[st].color;
+    const key = `${st}|${color}`;
+    if (!grouped.has(key)) grouped.set(key, { status: st, color, paths: [] });
+    grouped.get(key).paths.push(ll);
     if (fitBounds) ll.forEach(point => bounds.extend(point));
   });
-  Object.entries(grouped).forEach(([status, paths]) => {
+  grouped.forEach(({ status, color, paths }) => {
     if (!paths.length) return;
-    const m = STATUS_META[status];
     L.polyline(paths, {
-      color: m.color,
+      color,
       weight: status === 'remove' ? 3 : 4,
       opacity: status === 'remove' ? 0.78 : 0.9,
-      dashArray: status === 'remove' ? '6,7' : null,
+      dashArray: status === 'remove' ? '2,7' : (status === 'same' ? '10,6' : null),
       interactive: false,
       renderer: aggregateRenderer || undefined
     }).addTo(layerGroup);
@@ -3078,15 +3144,19 @@ async function runAnalysis() {
     let linesA = optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
       parseKML(text, baseFiles[index]?.name || '').map(line => {
         line.sourceFile = baseFiles[index]?.name || '';
+        line.sourceDatasetId = `local:${index}:${line.sourceFile}`;
         return line;
       })
     ));
     let linesB = optimizedCompareLines.concat(compareTexts.flatMap((text, index) =>
       parseKML(text, compareFiles[index]?.name || '').map(line => {
         line.sourceFile = compareFiles[index]?.name || '';
+        line.sourceDatasetId = `local:${index}:${line.sourceFile}`;
         return line;
       })
     ));
+    const datasetColorEntries = applyDatasetLineColors({ BASE: linesA, COMPARE: linesB });
+    renderDatasetColorLegend(datasetColorEntries);
 
     const rawCountA = linesA.length; // จำนวนเส้นที่อ่านได้ทั้งหมด (ก่อนตัดซ้ำ)
     const rawCountB = linesB.length;
@@ -3522,6 +3592,7 @@ function clearAll() {
   // Reset analysis state
   state = { totalA: 0, totalB: 0, nonOverlapB: 0, segmentsB: [], removedA: 0, removedB: 0 };
   previews = { BASE: null, COMPARE: null };
+  renderDatasetColorLegend([]);
   document.querySelectorAll('.categoryFilter').forEach(input => { input.checked = true; });
 
   // Reset map
