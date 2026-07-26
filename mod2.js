@@ -110,6 +110,7 @@
     type: document.getElementById('filterType'),
     owner: document.getElementById('filterOwner')
   };
+  const FILTER_CASCADE_ORDER = Object.keys(filterElements);
 
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -431,8 +432,8 @@
     }
   }
 
-  function uniqueValues(key) {
-    return [...new Set(state.sites.map(site => site[key]).filter(Boolean))]
+  function uniqueValues(key, sites = state.sites) {
+    return [...new Set(sites.map(site => site[key]).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, 'th'));
   }
 
@@ -441,21 +442,32 @@
   }
 
   function populateFilters() {
-    for (const [key, select] of Object.entries(filterElements)) {
-      const selected = selectedValues(select);
+    const upstreamSelections = {};
+    for (const key of FILTER_CASCADE_ORDER) {
+      const select = filterElements[key];
+      const selectedValue = select.value || '';
+      const candidateSites = state.sites.filter(site =>
+        Object.entries(upstreamSelections).every(([upstreamKey, value]) =>
+          !value || site[upstreamKey] === value
+        )
+      );
+      const availableValues = uniqueValues(key, candidateSites);
+      const nextValue = availableValues.includes(selectedValue) ? selectedValue : '';
       const fragment = document.createDocumentFragment();
       const allOption = document.createElement('option');
       allOption.value = '';
       allOption.textContent = 'ทั้งหมด';
       fragment.appendChild(allOption);
-      for (const value of uniqueValues(key)) {
+      for (const value of availableValues) {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
-        option.selected = selected.has(value);
+        option.selected = value === nextValue;
         fragment.appendChild(option);
       }
       select.replaceChildren(fragment);
+      select.value = nextValue;
+      upstreamSelections[key] = nextValue;
     }
   }
 
@@ -519,6 +531,7 @@
     window.clearTimeout(searchTimer);
     syncSiteSearch('');
     for (const select of Object.values(filterElements)) select.value = '';
+    populateFilters();
     applyFilters(autoFit);
     if (focusSearch) elements.mapSiteSearch.focus();
   }
@@ -1221,6 +1234,7 @@
         if (!state.filtered.some(filtered => Number(filtered.id) === Number(site.id))) {
           syncSiteSearch('');
           for (const select of Object.values(filterElements)) select.value = '';
+          populateFilters();
           applyFilters(false);
         }
         focusSite(site);
@@ -1319,7 +1333,10 @@
   }
 
   for (const select of Object.values(filterElements)) {
-    select.addEventListener('change', () => applyFilters(true));
+    select.addEventListener('change', () => {
+      populateFilters();
+      applyFilters(true);
+    });
   }
 
   function setOutputMenuExpanded(expanded) {
