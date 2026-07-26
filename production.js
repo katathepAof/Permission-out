@@ -48,6 +48,8 @@
   const peaCompareCatalogSelected = new Set();
   const baseAnalysisCache = new Map();
   let baseCatalogManifest = null;
+  let baseCatalogIndex = new Map();
+  let baseCatalogRenderLimit = 120;
   const compareCatalogList = document.getElementById('compareCatalogList');
   const compareCatalogSearch = document.getElementById('compareCatalogSearch');
   const compareCatalogStatus = document.getElementById('compareCatalogStatus');
@@ -56,6 +58,9 @@
   const ufmBaseCatalogSelected = new Set();
   const compareAnalysisCache = new Map();
   let compareCatalogManifest = null;
+  let compareCatalogIndex = new Map();
+  let compareCatalogRenderLimit = 120;
+  const CATALOG_RENDER_PAGE_SIZE = 120;
   const DEFAULT_BILLING_FORMULA = Object.freeze({
     formula_id: null,
     code: 'permission_fee',
@@ -186,6 +191,8 @@
   }
 
   function selectedCatalogItems(manifest, selected) {
+    const index = manifest === baseCatalogManifest ? baseCatalogIndex : compareCatalogIndex;
+    if (index.size) return [...selected].map(id => index.get(id)).filter(Boolean);
     return (manifest?.items || []).filter(item => selected.has(item.id));
   }
 
@@ -243,6 +250,7 @@
   function renderBaseCatalog() {
     if (!baseCatalogList) return;
     const items = filteredBaseCatalogItems();
+    const renderedItems = items.slice(0, baseCatalogRenderLimit);
     baseCatalogList.innerHTML = '';
     if (!items.length) {
       baseCatalogList.innerHTML = '<div class="base-catalog-empty">ไม่พบไฟล์ที่ตรงกับคำค้นหา</div>';
@@ -250,7 +258,7 @@
     }
     const fragment = document.createDocumentFragment();
     let currentGroup = '';
-    for (const item of items) {
+    for (const item of renderedItems) {
       if (item.group !== currentGroup) {
         currentGroup = item.group;
         const heading = document.createElement('div');
@@ -278,6 +286,17 @@
       );
       label.append(name, size, roles);
       fragment.appendChild(label);
+    }
+    if (renderedItems.length < items.length) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'catalog-load-more';
+      more.textContent = `แสดงเพิ่ม ${Math.min(CATALOG_RENDER_PAGE_SIZE, items.length - renderedItems.length).toLocaleString('th-TH')} รายการ · เหลือ ${(items.length - renderedItems.length).toLocaleString('th-TH')}`;
+      more.addEventListener('click', () => {
+        baseCatalogRenderLimit += CATALOG_RENDER_PAGE_SIZE;
+        renderBaseCatalog();
+      });
+      fragment.appendChild(more);
     }
     baseCatalogList.appendChild(fragment);
   }
@@ -452,6 +471,7 @@
       if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
       manifest = mergeManagedCatalog(manifest, await managedCatalog('pea'));
       baseCatalogManifest = manifest;
+      baseCatalogIndex = new Map(manifest.items.map(item => [item.id, item]));
       renderBaseCatalog();
       updateBaseCatalogSummary();
       setDatasetHealth(peaDatasetStatus, `${manifest.fileCount.toLocaleString('th-TH')} ชุด`, 'ready');
@@ -488,13 +508,14 @@
   function renderCompareCatalog() {
     if (!compareCatalogList) return;
     const items = filteredCompareCatalogItems();
+    const renderedItems = items.slice(0, compareCatalogRenderLimit);
     compareCatalogList.innerHTML = '';
     if (!items.length) {
       compareCatalogList.innerHTML = '<div class="base-catalog-empty">ไม่พบไฟล์ที่ตรงกับคำค้นหา</div>';
       return;
     }
     const fragment = document.createDocumentFragment();
-    for (const item of items) {
+    for (const item of renderedItems) {
       const label = document.createElement('div');
       label.className = 'base-catalog-option has-role-choices';
       const name = document.createElement('span'); name.textContent = item.name;
@@ -515,6 +536,17 @@
       );
       label.append(name, size, roles);
       fragment.appendChild(label);
+    }
+    if (renderedItems.length < items.length) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'catalog-load-more';
+      more.textContent = `แสดงเพิ่ม ${Math.min(CATALOG_RENDER_PAGE_SIZE, items.length - renderedItems.length).toLocaleString('th-TH')} รายการ · เหลือ ${(items.length - renderedItems.length).toLocaleString('th-TH')}`;
+      more.addEventListener('click', () => {
+        compareCatalogRenderLimit += CATALOG_RENDER_PAGE_SIZE;
+        renderCompareCatalog();
+      });
+      fragment.appendChild(more);
     }
     compareCatalogList.appendChild(fragment);
   }
@@ -602,6 +634,7 @@
       if (!Array.isArray(manifest.items)) throw new Error('รูปแบบ manifest ไม่ถูกต้อง');
       manifest = mergeManagedCatalog(manifest, await managedCatalog('ufm'));
       compareCatalogManifest = manifest;
+      compareCatalogIndex = new Map(manifest.items.map(item => [item.id, item]));
       renderCompareCatalog();
       updateCompareCatalogSummary();
       setDatasetHealth(ufmDatasetStatus, `${manifest.fileCount.toLocaleString('th-TH')} ชุด`, 'ready');
@@ -1295,8 +1328,14 @@
   document.getElementById('projectsBtn')?.addEventListener('click', showProjects);
   document.getElementById('newProjectBtn')?.addEventListener('click', newProject);
   document.getElementById('accountBtn').addEventListener('click', showAccount);
-  baseCatalogSearch?.addEventListener('input', debounceUi(renderBaseCatalog));
-  compareCatalogSearch?.addEventListener('input', debounceUi(renderCompareCatalog));
+  baseCatalogSearch?.addEventListener('input', debounceUi(() => {
+    baseCatalogRenderLimit = CATALOG_RENDER_PAGE_SIZE;
+    renderBaseCatalog();
+  }, 180));
+  compareCatalogSearch?.addEventListener('input', debounceUi(() => {
+    compareCatalogRenderLimit = CATALOG_RENDER_PAGE_SIZE;
+    renderCompareCatalog();
+  }, 180));
   document.getElementById('baseCatalogSelectAll')?.addEventListener('click', () => {
     for (const item of filteredBaseCatalogItems()) baseCatalogSelected.add(item.id);
     syncLogicalDatasetSelections();

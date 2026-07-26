@@ -667,39 +667,66 @@
           <h3>${escapeHtml(site.siteName || 'ไม่ระบุชื่อไซต์')}</h3>
           <p>${escapeHtml([site.district, site.province].filter(Boolean).join(' · ') || 'ยังไม่มีข้อมูลพื้นที่')}</p>
         </div>
+        <div class="facility-popup-header-actions" aria-label="คำสั่งด่วน">
+          <button type="button" data-copy-value="${escapeHtml(site.siteCode)}" data-copy-label="Site Code">คัดลอก Site Code</button>
+          <button type="button" data-copy-value="${escapeHtml(`${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`)}" data-copy-label="พิกัด">คัดลอกพิกัด</button>
+        </div>
       </header>
       <div class="facility-popup-metrics" aria-label="ข้อมูลสำคัญ">
         <div><span>ลูกค้า</span><strong>${escapeHtml(popupValue(site.customers, { number: true }))}</strong></div>
         <div><span>Site Grade</span><strong>${escapeHtml(site.grade || '—')}</strong></div>
         <div><span>ประเภทไซต์</span><strong>${escapeHtml(site.type || '—')}</strong></div>
       </div>
-      <section class="facility-popup-info">
-        <h4><span aria-hidden="true">⌖</span> ตำแหน่งและพื้นที่</h4>
-        ${popupRows(locationRows)}
-      </section>
-      <section class="facility-popup-info">
-        <h4><span aria-hidden="true">◇</span> โครงข่ายและการดูแล</h4>
-        ${popupRows(networkRows)}
-      </section>
-      <section class="facility-popup-info">
-        <h4><span aria-hidden="true">▤</span> ข้อมูลการดำเนินงาน</h4>
-        ${popupRows(operationRows)}
-      </section>
-      ${extras.length ? `<details class="facility-popup-extra">
-        <summary>ข้อมูลเพิ่มเติม <span>${extras.length.toLocaleString('th-TH')} รายการ</span></summary>
-        ${popupRows(extras.map(([key, value]) => [popupFieldLabel(key), value]))}
-      </details>` : ''}
-      <div class="facility-popup-section facility-popup-comments-section">
-        <div class="facility-comment-heading">
-          <strong>ความคิดเห็น</strong>
-          <button type="button" aria-label="โหลดความคิดเห็นล่าสุด">รีเฟรช</button>
+      <div class="facility-popup-content">
+        <div class="facility-popup-grid">
+          <details class="facility-popup-group" open>
+            <summary>
+              <span class="facility-popup-group-icon" aria-hidden="true">⌖</span>
+              <span><strong>ตำแหน่งและพื้นที่</strong><small>${locationRows.filter(([, value]) => hasPopupValue(value)).length} รายการ</small></span>
+            </summary>
+            <div class="facility-popup-info">${popupRows(locationRows)}</div>
+          </details>
+          <details class="facility-popup-group" open>
+            <summary>
+              <span class="facility-popup-group-icon" aria-hidden="true">◇</span>
+              <span><strong>โครงข่ายและการดูแล</strong><small>${networkRows.filter(([, value]) => hasPopupValue(value)).length} รายการ</small></span>
+            </summary>
+            <div class="facility-popup-info">${popupRows(networkRows)}</div>
+          </details>
+          <details class="facility-popup-group is-wide" open>
+            <summary>
+              <span class="facility-popup-group-icon" aria-hidden="true">▤</span>
+              <span><strong>ข้อมูลการดำเนินงาน</strong><small>${operationRows.filter(([, value]) => hasPopupValue(value)).length} รายการ</small></span>
+            </summary>
+            <div class="facility-popup-info">${popupRows(operationRows)}</div>
+          </details>
         </div>
-        <div class="facility-comments"><span class="facility-comment-empty">กำลังโหลด…</span></div>
-        <form class="facility-comment-form">
-          <input name="comment" maxlength="1000" required aria-label="เพิ่มความคิดเห็น" placeholder="เขียนความคิดเห็น…">
-          <button type="submit">ส่ง</button>
-        </form>
+        ${extras.length ? `<details class="facility-popup-extra">
+          <summary><span><strong>ข้อมูลเพิ่มเติม</strong><small>รองรับฟิลด์ข้อมูลที่เพิ่มในอนาคต</small></span><b>${extras.length.toLocaleString('th-TH')}</b></summary>
+          <div class="facility-popup-extra-body">${popupRows(extras.map(([key, value]) => [popupFieldLabel(key), value]))}</div>
+        </details>` : ''}
+        <section class="facility-popup-section facility-popup-comments-section">
+          <div class="facility-comment-heading">
+            <span><strong>ความคิดเห็น</strong><small>บันทึกการประสานงานของไซต์</small></span>
+            <button type="button" aria-label="โหลดความคิดเห็นล่าสุด">รีเฟรช</button>
+          </div>
+          <div class="facility-comments"><span class="facility-comment-empty">กำลังโหลด…</span></div>
+          <form class="facility-comment-form">
+            <input name="comment" maxlength="1000" required aria-label="เพิ่มความคิดเห็น" placeholder="เพิ่มความคิดเห็นหรือบันทึกการประสานงาน…">
+            <button type="submit">ส่ง</button>
+          </form>
+        </section>
       </div>`;
+    popup.querySelectorAll('[data-copy-value]').forEach(button => {
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.copyValue);
+          toast(`คัดลอก${button.dataset.copyLabel}แล้ว`, 'success');
+        } catch {
+          toast(`ไม่สามารถคัดลอก${button.dataset.copyLabel}ได้`, 'error');
+        }
+      });
+    });
     const comments = popup.querySelector('.facility-comments');
     const renderComments = items => {
       if (!items.length) {
@@ -784,7 +811,7 @@
     if (canUpdateMod2()) {
       const actions = document.createElement('div');
       actions.className = 'facility-admin-actions';
-      actions.innerHTML = '<button type="button" data-action="edit">แก้ไขข้อมูล</button><button type="button" class="is-danger" data-action="delete">ลบไซต์</button>';
+      actions.innerHTML = '<button type="button" data-action="edit"><span aria-hidden="true">✎</span> แก้ไขข้อมูล</button><button type="button" class="is-danger" data-action="delete"><span aria-hidden="true">⌫</span> ลบไซต์</button>';
       actions.querySelector('[data-action="edit"]').addEventListener('click', () => showSiteEditor(site));
       actions.querySelector('[data-action="delete"]').addEventListener('click', () => deleteSite(site));
       popup.appendChild(actions);
@@ -941,7 +968,7 @@
       offset: [0, -8],
       opacity: .92
     });
-    layer.bindPopup(() => popupContent(site), { minWidth: 300, maxWidth: 420 });
+    layer.bindPopup(() => popupContent(site), { minWidth: 340, maxWidth: 520 });
     return layer;
   }
 
@@ -1029,7 +1056,7 @@
 
   function focusSite(site) {
     map.flyTo([site.latitude, site.longitude], 15, { duration: .45 });
-    L.popup({ minWidth: 300, maxWidth: 420 })
+    L.popup({ minWidth: 340, maxWidth: 520 })
       .setLatLng([site.latitude, site.longitude])
       .setContent(popupContent(site))
       .openOn(map);

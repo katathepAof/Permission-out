@@ -192,10 +192,27 @@
       <header class="dataset-drawer-header">
         <div>
           <h2 id="datasetDrawerTitle">เลือกชุดข้อมูล</h2>
-          <p>เลือกได้หลายรายการ ใช้ช่องค้นหาเพื่อจำกัดผลลัพธ์ก่อนเลือกทั้งหมด</p>
+          <p>กำหนด PEA และ UFM ให้เป็นชุดฐานหรือชุดเปรียบเทียบได้อย่างอิสระ</p>
         </div>
         <button type="button" class="dataset-drawer-close" aria-label="ปิดตัวเลือกชุดข้อมูล">×</button>
       </header>
+      <div class="dataset-drawer-overview">
+        <div class="dataset-picker-destinations">
+          <article class="dataset-picker-destination is-base">
+            <span>ชุดฐาน</span>
+            <strong id="pickerBaseCount">0 รายการ</strong>
+            <small id="pickerBasePreview">ยังไม่ได้เลือกข้อมูล</small>
+          </article>
+          <article class="dataset-picker-destination is-compare">
+            <span>ชุดเปรียบเทียบ</span>
+            <strong id="pickerCompareCount">0 รายการ</strong>
+            <small id="pickerComparePreview">ยังไม่ได้เลือกข้อมูล</small>
+          </article>
+        </div>
+        <div class="dataset-picker-actions" id="datasetPickerActions">
+          <button type="button" id="drawerSwapDatasets">⇄ สลับรายการจากคลัง</button>
+        </div>
+      </div>
       <div class="dataset-drawer-body" id="datasetDrawerBody"></div>
       <footer class="dataset-drawer-footer">
         <span id="datasetDrawerStatus">ยังไม่ได้เลือกชุดข้อมูล</span>
@@ -211,6 +228,20 @@
   if (q('#compareCatalogSelectAll')) q('#compareCatalogSelectAll').textContent = 'เลือกเป็นเปรียบเทียบ';
   if (q('#baseCatalogClear')) q('#baseCatalogClear').textContent = 'ล้างทั้งหมด';
   if (q('#compareCatalogClear')) q('#compareCatalogClear').textContent = 'ล้างทั้งหมด';
+  const pickerActions = q('#datasetPickerActions', drawerBackdrop);
+  const baseImportButton = q('.local-file-trigger[data-file-input="fileBase"]');
+  const compareImportButton = q('.local-file-trigger[data-file-input="fileCompare"]');
+  if (baseImportButton) {
+    baseImportButton.textContent = '＋ นำเข้าไฟล์เป็นฐาน';
+    baseImportButton.title = 'นำเข้า KML/KMZ เข้าชุดฐาน';
+    pickerActions?.prepend(baseImportButton);
+  }
+  if (compareImportButton) {
+    compareImportButton.textContent = '＋ นำเข้าไฟล์เป็นเปรียบเทียบ';
+    compareImportButton.title = 'นำเข้า KML/KMZ เข้าชุดเปรียบเทียบ';
+    baseImportButton?.after(compareImportButton);
+  }
+  q('#drawerSwapDatasets', drawerBackdrop)?.addEventListener('click', () => q('#swapSourceRoles')?.click());
 
   let drawerReturnFocus = null;
   const drawer = q('.dataset-drawer', drawerBackdrop);
@@ -222,7 +253,7 @@
     drawerReturnFocus = document.activeElement;
     drawerBackdrop.classList.add('is-open');
     body.classList.add('dataset-drawer-open');
-    q('.dataset-drawer-close', drawerBackdrop).focus();
+    window.requestAnimationFrame(() => q('#baseCatalogSearch')?.focus());
   }
   function closeDatasetDrawer() {
     drawerBackdrop.classList.remove('is-open');
@@ -276,9 +307,6 @@
   readiness.innerHTML = '<span class="analysis-readiness-dot"></span><span id="analysisReadinessText">เลือกชุดข้อมูลอย่างน้อยหนึ่งฝั่งเพื่อเริ่มวิเคราะห์</span>';
   advanced.before(readiness);
 
-  function sourceRoleLabel(source) {
-    return source?.textContent?.replace(/\s+/g, ' ').trim() || '';
-  }
   function updateSelectionSummary() {
     const baseDatasetCount = Array.isArray(window.permissionOutBaseDatasetIds)
       ? window.permissionOutBaseDatasetIds.length
@@ -307,13 +335,23 @@
     q('#uxCompareCount').textContent = compareCount.toLocaleString('th-TH');
     q('#uxBaseSummary').textContent = baseStatus;
     q('#uxCompareSummary').textContent = compareStatus;
-    q('#uxBaseRole').textContent = sourceRoleLabel(q('#baseRoleSummary')) || 'ชุดฐาน';
-    q('#uxCompareRole').textContent = sourceRoleLabel(q('#compareRoleSummary')) || 'ชุดเปรียบเทียบ';
-    q('#datasetDrawerStatus').textContent = `เลือกแล้ว ${baseCount + compareCount} ชุดข้อมูล`;
+    q('#uxBaseRole').textContent = 'ชุดฐาน';
+    q('#uxCompareRole').textContent = 'ชุดเปรียบเทียบ';
+    const isComparable = baseCount > 0 && compareCount > 0;
+    q('#datasetDrawerStatus').textContent = isComparable
+      ? `พร้อมเปรียบเทียบ · ฐาน ${baseCount} · เปรียบเทียบ ${compareCount}`
+      : `เลือกแล้ว ${baseCount + compareCount} รายการ · แสดงข้อมูลฝั่งเดียวได้`;
+    q('#pickerBaseCount').textContent = `${baseCount.toLocaleString('th-TH')} รายการ`;
+    q('#pickerCompareCount').textContent = `${compareCount.toLocaleString('th-TH')} รายการ`;
+    q('#pickerBasePreview').textContent = baseStatus;
+    q('#pickerComparePreview').textContent = compareStatus;
     const isReady = baseCount + compareCount > 0;
     readiness.classList.toggle('is-ready', isReady);
+    readiness.classList.toggle('is-comparable', isComparable);
     q('#analysisReadinessText').textContent = isReady
-      ? `พร้อมวิเคราะห์ — ชุดฐาน ${baseCount} รายการ · ชุดเปรียบเทียบ ${compareCount} รายการ`
+      ? isComparable
+        ? `พร้อมเปรียบเทียบ — ชุดฐาน ${baseCount} รายการ · ชุดเปรียบเทียบ ${compareCount} รายการ`
+        : `พร้อมแสดงข้อมูลฝั่งเดียว — เลือกอีกฝั่งเมื่อต้องการเปรียบเทียบ`
       : 'เลือกชุดข้อมูลอย่างน้อยหนึ่งฝั่งเพื่อเริ่มวิเคราะห์';
     q('[data-workflow="datasets"]')?.classList.toggle('is-complete', isReady);
     q('[data-workflow="analyze"]')?.classList.toggle('is-current', isReady && !body.classList.contains('has-analysis'));
