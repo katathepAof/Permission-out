@@ -112,6 +112,9 @@ if (mod2Html.includes('class="metric-grid"')) throw new Error('Legacy MOD 2 metr
 for (const marker of ['function bindLazySitePopup(', 'window.requestAnimationFrame(() =>', 'map.flyToBounds(', 'function updateActiveFilters(', 'resetAllFilters({']) {
   if (!mod2Js.includes(marker)) throw new Error(`Smooth MOD 2 map UX marker is missing: ${marker}`);
 }
+for (const marker of ['let mapAutoFocusFrame = 0', 'function scheduleFilteredMapFocus()', "select.addEventListener('change', () => applyFilters(true))", 'state.filtered.length === 1']) {
+  if (!mod2Js.includes(marker)) throw new Error(`MOD 2 automatic filter focus marker is missing: ${marker}`);
+}
 for (const marker of ['id="opexReportBtn"', 'function openOpexReport()', 'function renderOpexReport(', 'data-opex-monthly', 'data-opex-yearly', "const exportSites = isAdmin() ? state.sites : state.filtered"]) {
   if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`MOD 2 OPEX or permission-aware export marker is missing: ${marker}`);
 }

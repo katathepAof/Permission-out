@@ -120,6 +120,7 @@
   let searchTimer = 0;
   let notificationTimer = 0;
   let mapRenderFrame = 0;
+  let mapAutoFocusFrame = 0;
   const markerIconCache = new Map();
   const mapCard = document.querySelector('.map-card');
   const mapRenderer = L.canvas({ padding: .35 });
@@ -484,7 +485,7 @@
     updateActiveFilters(query, selections);
     renderMap();
     renderLegend();
-    if (autoFit && state.filtered.length) fitAll();
+    if (autoFit && state.filtered.length) scheduleFilteredMapFocus();
   }
 
   function updateActiveFilters(query, selections) {
@@ -1124,6 +1125,19 @@
     map.flyToBounds(bounds, { padding: [45, 45], maxZoom: 13, duration: .45 });
   }
 
+  function scheduleFilteredMapFocus() {
+    if (mapAutoFocusFrame) window.cancelAnimationFrame(mapAutoFocusFrame);
+    mapAutoFocusFrame = window.requestAnimationFrame(() => {
+      mapAutoFocusFrame = 0;
+      if (state.filtered.length === 1) {
+        const [site] = state.filtered;
+        map.flyTo([site.latitude, site.longitude], 15, { duration: .35 });
+      } else if (state.filtered.length > 1) {
+        fitAll();
+      }
+    });
+  }
+
   function focusSite(site) {
     map.flyTo([site.latitude, site.longitude], 15, { duration: .45 });
     L.popup({ minWidth: 340, maxWidth: 520 })
@@ -1305,7 +1319,7 @@
   }
 
   for (const select of Object.values(filterElements)) {
-    select.addEventListener('change', () => applyFilters(false));
+    select.addEventListener('change', () => applyFilters(true));
   }
 
   function setOutputMenuExpanded(expanded) {
@@ -1329,7 +1343,7 @@
     searchTimer = window.setTimeout(() => applyFilters(false), 220);
   }
 
-  function clearSiteSearch(focusTarget, autoFit = false) {
+  function clearSiteSearch(focusTarget, autoFit = true) {
     window.clearTimeout(searchTimer);
     syncSiteSearch('');
     applyFilters(autoFit);
