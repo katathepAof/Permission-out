@@ -1115,6 +1115,14 @@ async function updateMod2Site(request, env, siteId) {
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
     throw new HttpError(400, 'Longitude ไม่ถูกต้อง', 'validation_error');
   }
+  const customers = payload.customers === undefined ? Number(site.customers || 0) : Number(payload.customers);
+  if (!Number.isSafeInteger(customers) || customers < 0) {
+    throw new HttpError(400, 'จำนวนลูกค้าต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป', 'validation_error');
+  }
+  const opex = payload.opex === undefined ? Number(site.opex || 0) : Number(payload.opex);
+  if (access.role === 'admin' && (!Number.isFinite(opex) || opex < 0 || opex > 999999999999.99)) {
+    throw new HttpError(400, 'OPEX ไม่ถูกต้อง', 'validation_error');
+  }
   const changes = {
     site_code: cleanText(payload.siteCode, ' Site Code', 100, true),
     site_name: cleanText(payload.siteName, 'ชื่อไซต์', 200) || null,
@@ -1126,6 +1134,8 @@ async function updateMod2Site(request, env, siteId) {
     type_of_digit: cleanText(payload.type, ' Type of Digit', 200) || null,
     owner: cleanText(payload.owner, ' Owner', 200) || null,
     node_equipment: cleanText(payload.nodeEquipment, ' Node Equipment', 500) || null,
+    customers,
+    ...(access.role === 'admin' ? { opex } : {}),
     remark: cleanText(payload.remark, ' Remark', 2000) || null,
     latitude,
     longitude,

@@ -81,8 +81,14 @@ for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', '
 for (const marker of ['id="opexReportBtn"', 'function openOpexReport()', 'function renderOpexReport(', 'data-opex-monthly', 'data-opex-yearly', "const exportSites = isAdmin() ? state.sites : state.filtered"]) {
   if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`MOD 2 OPEX or permission-aware export marker is missing: ${marker}`);
 }
+for (const marker of ["name: 'customers'", "name: 'opex'", 'site-edit-section', 'payload.customers = Number(payload.customers)']) {
+  if (!mod2Js.includes(marker)) throw new Error(`Complete MOD 2 site editor marker is missing: ${marker}`);
+}
 if (!workerSource.includes("if (access.role !== 'admin')") || !workerSource.includes("if (key.toLocaleLowerCase('en-US') === 'opex')")) {
   throw new Error('MOD 2 API must redact OPEX for non-admin users');
+}
+if (!workerSource.includes('customers,') || !workerSource.includes("...(access.role === 'admin' ? { opex } : {})")) {
+  throw new Error('MOD 2 site editor API must persist customers and admin-only OPEX');
 }
 if (!mod2Js.includes('function syncSiteSearch(') || !mod2Js.includes('handleSiteSearchKeydown')) {
   throw new Error('MOD 2 map/sidebar search synchronization is missing');

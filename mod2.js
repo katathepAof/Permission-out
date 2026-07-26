@@ -751,25 +751,75 @@
     map.closePopup();
     const content = document.createElement('form');
     content.className = 'site-edit-grid';
-    const fields = [
-      ['siteCode', 'Site Code', site.siteCode, true],
-      ['siteName', 'ชื่อไซต์', site.siteName],
-      ['province', 'จังหวัด', site.province],
-      ['district', 'อำเภอ', site.district],
-      ['regional', 'Regional', site.regional],
-      ['area', 'UIH Area', site.area],
-      ['grade', 'Site Grade', site.grade],
-      ['type', 'Type of Digit', site.type],
-      ['owner', 'Owner', site.owner],
-      ['nodeEquipment', 'Node Equipment', site.nodeEquipment],
-      ['latitude', 'Latitude', site.latitude, true, 'number'],
-      ['longitude', 'Longitude', site.longitude, true, 'number']
+    const sections = [
+      {
+        title: 'ข้อมูลไซต์',
+        fields: [
+          { name: 'siteCode', label: 'Site Code', value: site.siteCode, required: true },
+          { name: 'siteName', label: 'ชื่อไซต์', value: site.siteName },
+          { name: 'type', label: 'Type of Digit', value: site.type },
+          { name: 'grade', label: 'Site Grade', value: site.grade }
+        ]
+      },
+      {
+        title: 'พื้นที่และพิกัด',
+        fields: [
+          { name: 'regional', label: 'Regional', value: site.regional },
+          { name: 'area', label: 'UIH Area', value: site.area },
+          { name: 'province', label: 'จังหวัด', value: site.province },
+          { name: 'district', label: 'อำเภอ / เขต', value: site.district },
+          { name: 'latitude', label: 'Latitude', value: site.latitude, required: true, type: 'number', step: 'any', min: '-90', max: '90' },
+          { name: 'longitude', label: 'Longitude', value: site.longitude, required: true, type: 'number', step: 'any', min: '-180', max: '180' }
+        ]
+      },
+      {
+        title: 'โครงข่ายและการดำเนินงาน',
+        fields: [
+          { name: 'nodeEquipment', label: 'Node Equipment', value: site.nodeEquipment, wide: true, maxlength: 500 },
+          { name: 'owner', label: 'Owner', value: site.owner },
+          { name: 'customers', label: 'จำนวนลูกค้า', value: site.customers, type: 'number', step: '1', min: '0', required: true },
+          ...(isAdmin() ? [{
+            name: 'opex',
+            label: 'OPEX รายเดือน (บาท)',
+            value: site.opex,
+            type: 'number',
+            step: '0.01',
+            min: '0',
+            required: true
+          }] : [])
+        ]
+      }
     ];
-    content.innerHTML = fields.map(([name, label, value, required, type = 'text']) => `
-      <div class="modal-field"><label>${escapeHtml(label)}</label><input name="${name}" type="${type}" value="${escapeHtml(value)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : 'maxlength="200"'}></div>
+    const fieldMarkup = field => `
+      <div class="modal-field${field.wide ? ' is-wide' : ''}">
+        <label>${escapeHtml(field.label)}</label>
+        <input
+          name="${escapeHtml(field.name)}"
+          type="${field.type || 'text'}"
+          value="${escapeHtml(field.value)}"
+          ${field.required ? 'required' : ''}
+          ${field.type === 'number'
+            ? `step="${field.step || 'any'}"${field.min !== undefined ? ` min="${field.min}"` : ''}${field.max !== undefined ? ` max="${field.max}"` : ''}`
+            : `maxlength="${field.maxlength || 200}"`}
+        >
+      </div>`;
+    content.innerHTML = sections.map(section => `
+      <fieldset class="site-edit-section">
+        <legend>${escapeHtml(section.title)}</legend>
+        <div class="site-edit-section-grid">${section.fields.map(fieldMarkup).join('')}</div>
+      </fieldset>
     `).join('') + `
       <div class="modal-field is-wide"><label>Remark</label><textarea name="remark" maxlength="2000">${escapeHtml(site.remark)}</textarea></div>
       <button class="modal-primary is-wide" type="submit">บันทึกการแก้ไข</button>`;
+    const extras = extraPopupProperties(site);
+    if (extras.length) {
+      const details = document.createElement('details');
+      details.className = 'site-edit-extra is-wide';
+      details.innerHTML = `
+        <summary>ข้อมูลเพิ่มเติมจากชุดข้อมูลต้นทาง <span>${extras.length.toLocaleString('th-TH')} รายการ</span></summary>
+        ${popupRows(extras.map(([key, value]) => [popupFieldLabel(key), value]))}`;
+      content.querySelector('.modal-field.is-wide').before(details);
+    }
     content.addEventListener('submit', async event => {
       event.preventDefault();
       if (!content.reportValidity()) return;
@@ -778,12 +828,16 @@
       const payload = Object.fromEntries(new FormData(content));
       payload.latitude = Number(payload.latitude);
       payload.longitude = Number(payload.longitude);
+      payload.customers = Number(payload.customers);
+      if (isAdmin()) payload.opex = Number(payload.opex);
       try {
         const result = await authenticatedJson(`/api/mod2/sites/${site.id}`, {
           method: 'PATCH',
           body: JSON.stringify(payload)
         });
-        Object.assign(site, featureToSite(result.site));
+        const updatedSite = featureToSite(result.site);
+        updatedSite.sourceProperties = { ...site.sourceProperties, ...updatedSite.sourceProperties };
+        Object.assign(site, updatedSite);
         closeModal(true);
         applyFilters(false);
         toast('บันทึกข้อมูลไซต์แล้ว', 'success');

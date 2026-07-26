@@ -172,6 +172,14 @@ body.mod2-map-focus .map-card{
 .facility-comment-form button,.facility-admin-actions button{height:32px;padding:0 9px;border:0;border-radius:7px;background:#1f629e;color:#fff;font:600 .61rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer}
 .facility-admin-actions{display:flex;gap:5px;margin-top:8px}.facility-admin-actions button{flex:1;background:#edf3f8;color:#285477}.facility-admin-actions .is-danger{background:#fff0f0;color:#ad3434}
 .site-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.site-edit-grid .is-wide{grid-column:1/-1}
+.site-edit-section{grid-column:1/-1;margin:0 0 14px;padding:13px 14px 2px;border:1px solid #dde6ef;border-radius:12px;background:#fbfcfe}
+.site-edit-section legend{padding:0 7px;color:#1c446e;font-size:.72rem;font-weight:700}
+.site-edit-section-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.site-edit-section-grid .is-wide{grid-column:1/-1}
+.site-edit-extra{grid-column:1/-1;margin:0 0 13px;border:1px solid #dde6ef;border-radius:11px;background:#f8fafc;overflow:hidden}
+.site-edit-extra summary{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;color:#38546f;font-size:.7rem;font-weight:700;cursor:pointer}
+.site-edit-extra summary span{color:#79899b;font-weight:600}
+.site-edit-extra dl{margin:0;padding:0 12px 10px}
 .modal-field textarea{min-height:70px;padding:9px 11px;resize:vertical;border:1px solid #d7e1eb;border-radius:9px;outline:0;font:500 .75rem 'IBM Plex Sans Thai',sans-serif}
 .mod2-modal-backdrop{position:fixed;z-index:3000;inset:0;display:grid;place-items:center;padding:18px;background:rgba(4,15,31,.62);backdrop-filter:blur(5px)}
 .mod2-modal-backdrop[hidden]{display:none}
@@ -186,6 +194,7 @@ body.mod2-map-focus .map-card{
 .modal-field label{color:#52677e;font-size:.66rem;font-weight:600}
 .modal-field input{height:41px;padding:0 11px;border:1px solid #d7e1eb;border-radius:9px;outline:0;font:500 .75rem 'IBM Plex Sans Thai',sans-serif}
 .modal-field input:focus{border-color:#6b9dcc;box-shadow:0 0 0 3px rgba(43,107,166,.1)}
+@media(max-width:620px){.site-edit-grid,.site-edit-section-grid{grid-template-columns:1fr}.site-edit-grid .modal-field,.site-edit-section-grid .modal-field{grid-column:1}}
 .modal-primary,.modal-secondary,.modal-danger{width:100%;height:40px;border:0;border-radius:9px;font:600 .72rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer}
 .modal-primary{background:#1f629e;color:#fff}.modal-secondary{margin-top:7px;background:#edf2f7;color:#35516f}.modal-danger{margin-top:7px;background:#fff0f0;color:#ad3434}
 .auth-error{min-height:18px;color:#ba3f3f;font-size:.64rem}
