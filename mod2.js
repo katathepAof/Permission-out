@@ -79,6 +79,8 @@
     fitBtn: document.getElementById('fitBtn'),
     mapFocusToggle: document.getElementById('mapFocusToggle'),
     opexReportBtn: document.getElementById('opexReportBtn'),
+    sidebarToggle: document.getElementById('sidebarToggle'),
+    workspace: document.querySelector('.mod2-workspace'),
     exportBtn: document.getElementById('exportBtn'),
     modalBackdrop: document.getElementById('modalBackdrop'),
     modalTitle: document.getElementById('modalTitle'),
@@ -182,6 +184,32 @@
     if (!force && elements.modalClose.hidden) return;
     elements.modalBackdrop.hidden = true;
     elements.modalBody.replaceChildren();
+  }
+
+  function setSidebarCollapsed(collapsed, { persist = true } = {}) {
+    const isCollapsed = Boolean(collapsed);
+    elements.workspace?.classList.toggle('is-sidebar-collapsed', isCollapsed);
+    elements.sidebarToggle?.setAttribute('aria-expanded', String(!isCollapsed));
+    if (elements.sidebarToggle) {
+      const label = isCollapsed ? 'แสดง Sidebar' : 'ซ่อน Sidebar';
+      elements.sidebarToggle.title = label;
+      const copy = elements.sidebarToggle.querySelector('.sidebar-toggle-label');
+      if (copy) copy.textContent = label;
+    }
+    if (persist) {
+      try {
+        window.sessionStorage.setItem('permission-out:mod2-sidebar-collapsed', String(isCollapsed));
+      } catch { /* storage may be unavailable */ }
+    }
+    window.setTimeout(() => map.invalidateSize({ animate: false }), 240);
+  }
+
+  function restoreSidebarState() {
+    let collapsed = false;
+    try {
+      collapsed = window.sessionStorage.getItem('permission-out:mod2-sidebar-collapsed') === 'true';
+    } catch { /* use expanded state */ }
+    setSidebarCollapsed(collapsed, { persist: false });
   }
 
   async function loadProfile(user) {
@@ -1308,6 +1336,9 @@
     renderMap();
   });
   elements.fitBtn.addEventListener('click', fitAll);
+  elements.sidebarToggle?.addEventListener('click', () => {
+    setSidebarCollapsed(!elements.workspace?.classList.contains('is-sidebar-collapsed'));
+  });
   function setMapFocus(focused, persist = true) {
     document.body.classList.toggle('mod2-map-focus', focused);
     elements.mapFocusToggle.setAttribute('aria-pressed', String(focused));
@@ -1361,6 +1392,7 @@
   };
 
   async function initialize() {
+    restoreSidebarState();
     updateAccountUi();
     if (!client) {
       setHealth('ตั้งค่าไม่ครบ', 'error');

@@ -87,6 +87,13 @@ if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new
 for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="mapFilterBar"', 'id="mapEmptyState"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
 }
+for (const marker of ['sidebar-overview', 'sidebar-metric-primary', 'sidebar-metric-grid', 'Network Overview', 'id="metricSites"', 'id="metricCustomers"', 'id="metricNodes"', 'id="metricOwners"']) {
+  if (!mod2Html.includes(marker)) throw new Error(`MOD 2 sidebar overview marker is missing: ${marker}`);
+}
+for (const marker of ['id="sidebarToggle"', 'id="mod2Sidebar"', 'function setSidebarCollapsed(', 'function restoreSidebarState()', 'permission-out:mod2-sidebar-collapsed', 'map.invalidateSize']) {
+  if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`Collapsible MOD 2 sidebar marker is missing: ${marker}`);
+}
+if (mod2Html.includes('class="metric-grid"')) throw new Error('Legacy MOD 2 metric card row must not remain in the map workspace');
 for (const marker of ['function bindLazySitePopup(', 'window.requestAnimationFrame(() =>', 'map.flyToBounds(', 'function updateActiveFilters(', 'resetAllFilters({']) {
   if (!mod2Js.includes(marker)) throw new Error(`Smooth MOD 2 map UX marker is missing: ${marker}`);
 }
