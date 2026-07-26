@@ -90,7 +90,7 @@ if (!html.includes('ux-refresh.css') || !html.includes('ux-refresh.js')) throw n
 if (!html.includes('admin-users.css') || !html.includes('admin-users.js')) throw new Error('Admin user assets are missing');
 if (!html.includes('admin-data.css') || !html.includes('admin-data.js')) throw new Error('Admin data assets are missing');
 if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new Error('Module navigation is missing');
-for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="mapFilterBar"', 'id="mapEmptyState"', 'id="exportBtn"', '/api/mod2/sites']) {
+for (const marker of ['id="mod2Map"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="mapFilterBar"', 'id="mapEmptyState"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
 }
 for (const marker of ['sidebar-overview', 'sidebar-metric-primary', 'sidebar-metric-grid', 'Network Overview', 'id="metricSites"', 'id="metricCustomers"', 'id="metricNodes"', 'id="metricOwners"']) {
@@ -101,6 +101,12 @@ for (const marker of ['id="sidebarToggle"', 'id="mod2Sidebar"', 'function setSid
 }
 for (const marker of ['id="mapLegendToggle"', 'id="mapLegendPanel"', 'id="mapLegendItems"', 'function setLegendExpanded(', 'function restoreLegendState()', 'permission-out:mod2-legend-expanded']) {
   if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`Collapsible MOD 2 legend marker is missing: ${marker}`);
+}
+for (const marker of ['id="mapOutputToggle"', 'id="mapOutputPanel"', 'function setOutputMenuExpanded(', 'class="map-mode-switch"', 'class="map-navigation-actions"']) {
+  if (!`${mod2Html}\n${mod2Js}`.includes(marker)) throw new Error(`Streamlined MOD 2 toolbar marker is missing: ${marker}`);
+}
+if (mod2Html.includes('id="siteSearch"') || mod2Html.includes('class="map-toolbar-copy"')) {
+  throw new Error('MOD 2 toolbar still contains duplicate search or heading UI');
 }
 if (mod2Html.includes('class="metric-grid"')) throw new Error('Legacy MOD 2 metric card row must not remain in the map workspace');
 for (const marker of ['function bindLazySitePopup(', 'window.requestAnimationFrame(() =>', 'map.flyToBounds(', 'function updateActiveFilters(', 'resetAllFilters({']) {

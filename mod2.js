@@ -54,8 +54,6 @@
     accountMeta: document.getElementById('accountMeta'),
     userInitial: document.getElementById('userInitial'),
     datasetStatus: document.getElementById('datasetStatus'),
-    siteSearch: document.getElementById('siteSearch'),
-    clearSearch: document.getElementById('clearSearch'),
     mapSiteSearch: document.getElementById('mapSiteSearch'),
     clearMapSearch: document.getElementById('clearMapSearch'),
     mapSearchCount: document.getElementById('mapSearchCount'),
@@ -70,7 +68,6 @@
     metricCustomers: document.getElementById('metricCustomers'),
     metricNodes: document.getElementById('metricNodes'),
     metricOwners: document.getElementById('metricOwners'),
-    mapSubtitle: document.getElementById('mapSubtitle'),
     mapLoading: document.getElementById('mapLoading'),
     loadingDetail: document.getElementById('loadingDetail'),
     mapLegend: document.getElementById('mapLegend'),
@@ -84,6 +81,9 @@
     heatBtn: document.getElementById('heatBtn'),
     fitBtn: document.getElementById('fitBtn'),
     mapFocusToggle: document.getElementById('mapFocusToggle'),
+    mapOutputMenu: document.getElementById('mapOutputMenu'),
+    mapOutputToggle: document.getElementById('mapOutputToggle'),
+    mapOutputPanel: document.getElementById('mapOutputPanel'),
     opexReportBtn: document.getElementById('opexReportBtn'),
     sidebarToggle: document.getElementById('sidebarToggle'),
     workspace: document.querySelector('.mod2-workspace'),
@@ -459,7 +459,7 @@
   }
 
   function applyFilters(autoFit = false) {
-    const query = elements.siteSearch.value.trim().toLocaleLowerCase('th');
+    const query = elements.mapSiteSearch.value.trim().toLocaleLowerCase('th');
     const selections = Object.fromEntries(
       Object.entries(filterElements).map(([key, select]) => [key, selectedValues(select)])
     );
@@ -497,7 +497,7 @@
       owner: 'Owner'
     };
     const chips = [];
-    if (query) chips.push({ label: 'ค้นหา', value: elements.siteSearch.value.trim() });
+    if (query) chips.push({ label: 'ค้นหา', value: elements.mapSiteSearch.value.trim() });
     for (const [key, values] of Object.entries(selections)) {
       for (const value of values) chips.push({ label: labels[key] || key, value });
     }
@@ -532,7 +532,6 @@
     elements.metricCustomers.textContent = sites.reduce((sum, site) => sum + site.customers, 0).toLocaleString('th-TH');
     elements.metricNodes.textContent = new Set(sites.map(site => site.nodeEquipment).filter(Boolean)).size.toLocaleString('th-TH');
     elements.metricOwners.textContent = new Set(sites.map(site => site.owner).filter(Boolean)).size.toLocaleString('th-TH');
-    elements.mapSubtitle.textContent = `แสดง ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites`;
     elements.mapSearchCount.textContent = sites.length.toLocaleString('th-TH');
     elements.mapSearchCount.setAttribute('aria-label', `พบ ${sites.length.toLocaleString('th-TH')} ไซต์`);
     elements.opexReportBtn.hidden = !isAdmin();
@@ -1308,10 +1307,19 @@
   for (const select of Object.values(filterElements)) {
     select.addEventListener('change', () => applyFilters(false));
   }
-  elements.opexReportBtn.addEventListener('click', openOpexReport);
+
+  function setOutputMenuExpanded(expanded) {
+    const isExpanded = Boolean(expanded);
+    elements.mapOutputToggle?.setAttribute('aria-expanded', String(isExpanded));
+    if (elements.mapOutputPanel) elements.mapOutputPanel.hidden = !isExpanded;
+  }
+
+  elements.opexReportBtn.addEventListener('click', () => {
+    setOutputMenuExpanded(false);
+    openOpexReport();
+  });
 
   function syncSiteSearch(value) {
-    elements.siteSearch.value = value;
     elements.mapSiteSearch.value = value;
   }
 
@@ -1344,13 +1352,8 @@
     else if (state.filtered.length > 1) fitAll();
   }
 
-  for (const input of [elements.siteSearch, elements.mapSiteSearch]) {
-    input.addEventListener('input', () => scheduleSiteSearch(input));
-    input.addEventListener('keydown', handleSiteSearchKeydown);
-  }
-  elements.clearSearch.addEventListener('click', () => {
-    clearSiteSearch(elements.siteSearch);
-  });
+  elements.mapSiteSearch.addEventListener('input', () => scheduleSiteSearch(elements.mapSiteSearch));
+  elements.mapSiteSearch.addEventListener('keydown', handleSiteSearchKeydown);
   elements.clearMapSearch.addEventListener('click', () => {
     clearSiteSearch(elements.mapSiteSearch);
   });
@@ -1397,7 +1400,13 @@
   elements.mapFocusToggle.addEventListener('click', () => {
     setMapFocus(!document.body.classList.contains('mod2-map-focus'));
   });
-  elements.exportBtn.addEventListener('click', exportCsv);
+  elements.mapOutputToggle?.addEventListener('click', () => {
+    setOutputMenuExpanded(elements.mapOutputToggle.getAttribute('aria-expanded') !== 'true');
+  });
+  elements.exportBtn.addEventListener('click', () => {
+    setOutputMenuExpanded(false);
+    exportCsv();
+  });
   elements.accountBtn.addEventListener('click', showAccount);
   elements.commentNotificationBtn?.addEventListener('click', () => {
     const opening = elements.commentNotificationPanel.hidden;
@@ -1417,8 +1426,16 @@
     if (elements.commentNotifications && !elements.commentNotifications.contains(event.target)) {
       closeCommentNotifications();
     }
+    if (elements.mapOutputMenu && !elements.mapOutputMenu.contains(event.target)) {
+      setOutputMenuExpanded(false);
+    }
   });
   document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && elements.mapOutputToggle?.getAttribute('aria-expanded') === 'true') {
+      setOutputMenuExpanded(false);
+      elements.mapOutputToggle.focus();
+      return;
+    }
     if (event.key === 'Escape' && elements.mapLegendToggle?.getAttribute('aria-expanded') === 'true') {
       setLegendExpanded(false);
       elements.mapLegendToggle.focus();
