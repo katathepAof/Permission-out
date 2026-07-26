@@ -152,7 +152,7 @@ body.mod2-map-focus .map-card{
 .facility-popup-code{overflow:hidden;color:#f2ca57;font:700 .75rem 'IBM Plex Mono',monospace;text-overflow:ellipsis;white-space:nowrap}
 .facility-popup h3{margin:3px 0 2px;overflow:hidden;color:#fff;font-size:1rem;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
 .facility-popup-header p{margin:0;color:#c9dbe9;font-size:.65rem}
-.facility-popup-header-actions{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}
+.facility-popup-header-actions{position:absolute;z-index:2;top:17px;right:50px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px;margin:0}
 .facility-popup-header-actions button{height:27px;padding:0 9px;border:1px solid rgba(255,255,255,.19);border-radius:7px;background:rgba(255,255,255,.08);color:#eaf3fa;font:600 .57rem 'IBM Plex Sans Thai',sans-serif;cursor:pointer;transition:background .16s,border-color .16s}
 .facility-popup-header-actions button:hover{border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.16)}
 .facility-popup-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid #dce5ed;background:#fff}
@@ -247,7 +247,7 @@ body.mod2-map-focus .map-card{
 @media(max-width:520px){
   .facility-popup{width:calc(100vw - 58px);max-height:70vh}
   .facility-popup-header{padding:16px 45px 13px 14px}
-  .facility-popup-header-actions{margin-top:10px}
+  .facility-popup-header-actions{position:relative;top:auto;right:auto;justify-content:flex-start;margin-top:10px}
   .facility-popup-content{padding:9px}
   .facility-popup-grid{grid-template-columns:1fr}
   .facility-popup-group.is-wide{grid-column:auto}
