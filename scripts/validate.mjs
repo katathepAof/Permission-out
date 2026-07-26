@@ -67,8 +67,11 @@ if (!html.includes('ux-refresh.css') || !html.includes('ux-refresh.js')) throw n
 if (!html.includes('admin-users.css') || !html.includes('admin-users.js')) throw new Error('Admin user assets are missing');
 if (!html.includes('admin-data.css') || !html.includes('admin-data.js')) throw new Error('Admin data assets are missing');
 if (!html.includes('href="/mod2/"') || !mod2Html.includes('href="/"')) throw new Error('Module navigation is missing');
-for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="exportBtn"', '/api/mod2/sites']) {
+for (const marker of ['id="mod2Map"', 'id="siteSearch"', 'id="mapSiteSearch"', 'id="clearMapSearch"', 'id="filterProvince"', 'id="mapFocusToggle"', 'id="exportBtn"', '/api/mod2/sites']) {
   if (!mod2Html.includes(marker) && !mod2Js.includes(marker)) throw new Error(`MOD 2 marker is missing: ${marker}`);
+}
+if (!mod2Js.includes('function syncSiteSearch(') || !mod2Js.includes('handleSiteSearchKeydown')) {
+  throw new Error('MOD 2 map/sidebar search synchronization is missing');
 }
 if (!mod2Js.includes("cache: 'no-store'") || !mod2Js.includes('commentRefreshTimer')) {
   throw new Error('MOD 2 comments must refresh across active users without cache');

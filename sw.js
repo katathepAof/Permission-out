@@ -1,5 +1,5 @@
-const CACHE = 'permission-out-v19-site-popup';
-const CORE = ['/', '/mod2/', '/login/', '/production.css?v=20260723-modules', '/production.js?v=20260726-central-login', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260726-site-popup', '/mod2.js?v=20260726-site-popup', '/login.css?v=20260726-central-login', '/login.js?v=20260726-central-login', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
+const CACHE = 'permission-out-v20-map-search';
+const CORE = ['/', '/mod2/', '/login/', '/production.css?v=20260723-modules', '/production.js?v=20260726-central-login', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260723-ux-refresh', '/ux-refresh.js?v=20260723-ux-refresh', '/mod2.css?v=20260726-map-search', '/mod2.js?v=20260726-map-search', '/login.css?v=20260726-central-login', '/login.js?v=20260726-central-login', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

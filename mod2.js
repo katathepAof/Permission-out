@@ -56,6 +56,9 @@
     datasetStatus: document.getElementById('datasetStatus'),
     siteSearch: document.getElementById('siteSearch'),
     clearSearch: document.getElementById('clearSearch'),
+    mapSiteSearch: document.getElementById('mapSiteSearch'),
+    clearMapSearch: document.getElementById('clearMapSearch'),
+    mapSearchCount: document.getElementById('mapSearchCount'),
     resetFilters: document.getElementById('resetFilters'),
     reloadBtn: document.getElementById('reloadBtn'),
     metricSites: document.getElementById('metricSites'),
@@ -432,6 +435,8 @@
     elements.metricNodes.textContent = new Set(sites.map(site => site.nodeEquipment).filter(Boolean)).size.toLocaleString('th-TH');
     elements.metricOwners.textContent = new Set(sites.map(site => site.owner).filter(Boolean)).size.toLocaleString('th-TH');
     elements.mapSubtitle.textContent = `แสดง ${sites.length.toLocaleString('th-TH')} จาก ${state.sites.length.toLocaleString('th-TH')} sites`;
+    elements.mapSearchCount.textContent = sites.length.toLocaleString('th-TH');
+    elements.mapSearchCount.setAttribute('aria-label', `พบ ${sites.length.toLocaleString('th-TH')} ไซต์`);
   }
 
   const STANDARD_SITE_PROPERTIES = new Set([
@@ -880,7 +885,7 @@
           return;
         }
         if (!state.filtered.some(filtered => Number(filtered.id) === Number(site.id))) {
-          elements.siteSearch.value = '';
+          syncSiteSearch('');
           for (const select of Object.values(filterElements)) select.value = '';
           applyFilters(false);
         }
@@ -981,17 +986,53 @@
   for (const select of Object.values(filterElements)) {
     select.addEventListener('change', () => applyFilters());
   }
-  elements.siteSearch.addEventListener('input', () => {
+
+  function syncSiteSearch(value) {
+    elements.siteSearch.value = value;
+    elements.mapSiteSearch.value = value;
+  }
+
+  function scheduleSiteSearch(source) {
+    syncSiteSearch(source.value);
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => applyFilters(false), 130);
-  });
+  }
+
+  function clearSiteSearch(focusTarget, autoFit = true) {
+    window.clearTimeout(searchTimer);
+    syncSiteSearch('');
+    applyFilters(autoFit);
+    focusTarget?.focus();
+  }
+
+  function handleSiteSearchKeydown(event) {
+    if (event.key === 'Escape' && event.currentTarget.value) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearSiteSearch(event.currentTarget);
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    window.clearTimeout(searchTimer);
+    syncSiteSearch(event.currentTarget.value);
+    applyFilters(false);
+    if (state.filtered.length === 1) focusSite(state.filtered[0]);
+    else if (state.filtered.length > 1) fitAll();
+  }
+
+  for (const input of [elements.siteSearch, elements.mapSiteSearch]) {
+    input.addEventListener('input', () => scheduleSiteSearch(input));
+    input.addEventListener('keydown', handleSiteSearchKeydown);
+  }
   elements.clearSearch.addEventListener('click', () => {
-    elements.siteSearch.value = '';
-    applyFilters();
-    elements.siteSearch.focus();
+    clearSiteSearch(elements.siteSearch);
+  });
+  elements.clearMapSearch.addEventListener('click', () => {
+    clearSiteSearch(elements.mapSiteSearch);
   });
   elements.resetFilters.addEventListener('click', () => {
-    elements.siteSearch.value = '';
+    syncSiteSearch('');
     for (const select of Object.values(filterElements)) {
       select.value = '';
     }
