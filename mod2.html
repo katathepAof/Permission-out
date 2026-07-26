@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="/vendor/leaflet.css">
   <link rel="stylesheet" href="/production.css?v=20260723-modules">
   <link rel="stylesheet" href="/admin-users.css?v=20260724-user-permissions">
-  <link rel="stylesheet" href="/mod2.css?v=20260726-map-search">
+  <link rel="stylesheet" href="/mod2.css?v=20260726-metric-cards">
 </head>
 <body class="mod2-body">
   <header class="app-shellbar" aria-label="แถบจัดการระบบ">
@@ -102,24 +102,44 @@
     <section class="mod2-content">
       <div class="metric-grid" aria-label="สรุปข้อมูล">
         <article class="metric-card metric-primary">
-          <span>Sites</span>
-          <strong id="metricSites">—</strong>
-          <small>รายการที่ตรงกับตัวกรอง</small>
+          <div class="metric-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"/><circle cx="12" cy="10" r="2.2"/></svg>
+          </div>
+          <div class="metric-card-copy">
+            <span>Sites</span>
+            <strong id="metricSites">—</strong>
+            <small>รายการที่ตรงกับตัวกรอง</small>
+          </div>
         </article>
         <article class="metric-card metric-green">
-          <span>Customers</span>
-          <strong id="metricCustomers">—</strong>
-          <small>ลูกค้ารวม</small>
+          <div class="metric-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M16 20v-1.8a3.8 3.8 0 0 0-3.8-3.8H7.8A3.8 3.8 0 0 0 4 18.2V20"/><circle cx="10" cy="7" r="3.3"/><path d="M17 8.5a3 3 0 0 1 0 5.8M20 20v-1.6a3.6 3.6 0 0 0-2.7-3.5"/></svg>
+          </div>
+          <div class="metric-card-copy">
+            <span>Customers</span>
+            <strong id="metricCustomers">—</strong>
+            <small>ลูกค้ารวมในพื้นที่ที่เลือก</small>
+          </div>
         </article>
         <article class="metric-card metric-purple">
-          <span>Node Types</span>
-          <strong id="metricNodes">—</strong>
-          <small>รูปแบบอุปกรณ์</small>
+          <div class="metric-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="9" y="14" width="6" height="6" rx="1"/><path d="M7 10v2h10v-2M12 12v2"/></svg>
+          </div>
+          <div class="metric-card-copy">
+            <span>Node Types</span>
+            <strong id="metricNodes">—</strong>
+            <small>ประเภทอุปกรณ์โครงข่าย</small>
+          </div>
         </article>
         <article class="metric-card metric-gold">
-          <span>Owners</span>
-          <strong id="metricOwners">—</strong>
-          <small>เจ้าของพื้นที่</small>
+          <div class="metric-card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11"/><path d="M9 20v-6h6v6"/></svg>
+          </div>
+          <div class="metric-card-copy">
+            <span>Owners</span>
+            <strong id="metricOwners">—</strong>
+            <small>หน่วยงานเจ้าของพื้นที่</small>
+          </div>
         </article>
       </div>
 
