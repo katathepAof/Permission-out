@@ -46,6 +46,9 @@ for (const marker of ['CATALOG_RENDER_PAGE_SIZE', 'baseCatalogIndex', 'compareCa
 for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
   if (!html.includes(marker)) throw new Error(`Distinct MOD 1 dataset line color marker is missing: ${marker}`);
 }
+for (const marker of ['mapSourceLines', 'function renderSourceColorOverlay(', 'uniqueSources.size <= 1', 'interactive: false']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 multi-source map color overlay marker is missing: ${marker}`);
+}
 if (!html.includes('costFiltered') || !html.includes('เส้นที่ตรงกับตัวกรองในการ์ด 4')) {
   throw new Error('Card-4-filtered billing is missing');
 }
@@ -73,6 +76,9 @@ if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includ
 }
 for (const marker of ['peaCompareCatalogSelected', 'ufmBaseCatalogSelected', 'baseCatalogSelectCompare', 'compareCatalogSelectBase']) {
   if (!`${html}\n${production}`.includes(marker)) throw new Error(`Dual-source MOD 1 role selection is missing: ${marker}`);
+}
+if (!production.includes('payload: await fetchBaseAnalysis(item)') || !production.includes('payload: await fetchCompareAnalysis(item)')) {
+  throw new Error('MOD 1 multi-dataset export must keep each loaded payload paired with its selected dataset');
 }
 if (!html.includes('<th>Status จากไฟล์</th>') || !html.includes('source_measured') || !production.includes('propertiesWithDescriptionFields') || !production.includes('function routeIdentifier(properties)')) throw new Error('UFM source metadata or Placemark identifier resolution is missing');
 if (!production.includes('permissionOutResolvePeaAreas') || !production.includes('/api/data/billing-formula')) throw new Error('PEA spatial resolver or protected billing formula loader is missing');

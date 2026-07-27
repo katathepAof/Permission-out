@@ -1742,7 +1742,7 @@ function parallelDiffDeg(a, b) {
 /* ===================== KML parsing ===================== */
 
 let map, layerGroup;
-let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], removedA: 0, removedB: 0 };
+let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], mapSourceLines: [], removedA: 0, removedB: 0 };
 const LARGE_RESULT_THRESHOLD = 1500;
 const REPORT_ROW_LIMIT = 300;
 let aggregateResultMode = false;
@@ -2514,6 +2514,7 @@ function drawResults(resB) {
       };
     });
     renderAggregateResults(resB.segments, true);
+    renderSourceColorOverlay(state.mapSourceLines);
     map.on('click', handleAggregateMapClick);
     return;
   }
@@ -2535,7 +2536,33 @@ function drawResults(resB) {
     seg._mapBounds = ll;
     searchableLayers.push({ name: placemarkDisplayText(seg), routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`, layer: polyline, bounds: ll });
   });
+  renderSourceColorOverlay(state.mapSourceLines);
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+}
+
+function renderSourceColorOverlay(lines = []) {
+  if (!layerGroup || !Array.isArray(lines)) return;
+  const uniqueSources = new Set(lines.map(line => line.sourceKey || line.sourceDatasetId || line.sourceFile).filter(Boolean));
+  if (uniqueSources.size <= 1) return;
+  const grouped = new Map();
+  lines.forEach(line => {
+    if (!line.sourceColor || !Array.isArray(line.coords) || line.coords.length < 2) return;
+    const path = toLatLngs(line.coords);
+    if (!path.length) return;
+    const key = `${line.sourceKey || line.sourceDatasetId || line.sourceFile}|${line.sourceColor}`;
+    if (!grouped.has(key)) grouped.set(key, { color: line.sourceColor, paths: [] });
+    grouped.get(key).paths.push(path);
+  });
+  grouped.forEach(({ color, paths }) => {
+    if (!paths.length) return;
+    L.polyline(paths, {
+      color,
+      weight: aggregateResultMode ? 2.6 : 3,
+      opacity: 0.92,
+      interactive: false,
+      renderer: aggregateResultMode ? (aggregateRenderer || undefined) : undefined
+    }).addTo(layerGroup);
+  });
 }
 
 // Large networks are rendered as three Canvas paths instead of thousands of
@@ -3189,6 +3216,7 @@ async function runAnalysis() {
     state.newLen = newLen;
     state.removeLen = removeLen;
     state.segmentsB = resB.segments;
+    state.mapSourceLines = [...linesA, ...linesB];
     state.removedA = dedupeA.removedCount;
     state.removedB = dedupeB.removedCount;
 
@@ -3699,7 +3727,7 @@ function clearAll() {
   });
 
   // Reset analysis state
-  state = { totalA: 0, totalB: 0, nonOverlapB: 0, segmentsB: [], removedA: 0, removedB: 0 };
+  state = { totalA: 0, totalB: 0, nonOverlapB: 0, segmentsB: [], mapSourceLines: [], removedA: 0, removedB: 0 };
   previews = { BASE: null, COMPARE: null };
   renderDatasetColorLegend([]);
   document.querySelectorAll('.categoryFilter').forEach(input => { input.checked = true; });
@@ -3877,7 +3905,7 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260726-dataset-picker"></script>
+<script src="production.js?v=20260727-multi-export"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
 <script src="ux-refresh.js?v=20260726-dataset-picker"></script>

@@ -436,11 +436,14 @@
     try {
       if (!selectedItems.length) return [];
       updateBaseCatalogSummary(`กำลังอ่าน PEA ฝั่ง${roleLabel} ${selectedItems.length.toLocaleString('th-TH')} ชุด…`);
-      const payloads = [];
+      const results = [];
       for (let offset = 0; offset < selectedItems.length; offset += 3) {
-        payloads.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchBaseAnalysis)));
+        results.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(async item => ({
+          item,
+          payload: await fetchBaseAnalysis(item)
+        }))));
       }
-      const lines = payloads.flatMap((payload, index) => (payload.lines || []).map(line => compactLineToApp(line, selectedItems[index])));
+      const lines = results.flatMap(({ item, payload }) => (payload.lines || []).map(line => compactLineToApp(line, item)));
       updateBaseCatalogSummary(`PEA ฝั่ง${roleLabel}พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
       return lines;
     } catch (error) {
@@ -575,11 +578,14 @@
     try {
       if (!selectedItems.length) return [];
       updateCompareCatalogSummary(`กำลังอ่าน UFM ฝั่ง${roleLabel} ${selectedItems.length.toLocaleString('th-TH')} ชุด…`);
-      const payloads = [];
+      const results = [];
       for (let offset = 0; offset < selectedItems.length; offset += 3) {
-        payloads.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(fetchCompareAnalysis)));
+        results.push(...await Promise.all(selectedItems.slice(offset, offset + 3).map(async item => ({
+          item,
+          payload: await fetchCompareAnalysis(item)
+        }))));
       }
-      const lines = payloads.flatMap((payload, index) => (payload.lines || []).map(line => compactLineToApp(line, selectedItems[index])));
+      const lines = results.flatMap(({ item, payload }) => (payload.lines || []).map(line => compactLineToApp(line, item)));
       updateCompareCatalogSummary(`UFM ฝั่ง${roleLabel}พร้อมวิเคราะห์ ${lines.length.toLocaleString('th-TH')} เส้น`);
       return lines;
     } catch (error) {
