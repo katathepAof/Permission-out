@@ -3353,10 +3353,21 @@ function sourceLineBillingNote(line, billingSourceKeys, sourceOverlapGroups) {
 function sourceLineMatchedWith(line, sourceExportLines, sourceOverlapGroups) {
   const group = sourceOverlapGroups.get(line);
   if (!group) return '';
-  return sourceExportLines
-    .filter(item => item !== line && sourceOverlapGroups.get(item) === group)
+  return sourceLineOverlapMatches(line, sourceExportLines, sourceOverlapGroups)
     .map(item => `${sourceFileColumnValue(item)} / ${placemarkDisplayText(item)}`)
     .join(' | ');
+}
+
+function sourceLineOverlapMatches(line, sourceExportLines, sourceOverlapGroups) {
+  const group = sourceOverlapGroups.get(line);
+  if (!group) return [];
+  const lineGroup = sourceLineGroup(line);
+  const matches = sourceExportLines.filter(item =>
+    item !== line &&
+    sourceOverlapGroups.get(item) === group &&
+    sourceLineGroup(item) !== lineGroup
+  );
+  return matches.length ? matches : sourceExportLines.filter(item => item !== line && sourceOverlapGroups.get(item) === group);
 }
 
 // Assign one stable export label to every connected group of routes that follows
@@ -3615,16 +3626,19 @@ async function exportCSV() {
   rows.push(['Imported source lines included in this export']);
   rows.push(['Count', sourceExportLines.length]);
   rows.push(['Overlapping groups', sourceOverlapGroupCount]);
-  rows.push(['No.', 'Group', 'Overlap status', 'Overlap group', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
+  rows.push(['No.', 'Group', 'Overlap marker', 'Overlap status', 'Overlap group', 'Overlap count', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
   sourceExportLines.forEach((line, index) => {
     const coords = line.coords || [];
     const sourceMetadata = line.sourceMetadata || {};
     const overlapGroup = sourceOverlapGroups.get(line) || '';
+    const overlapMatches = sourceLineOverlapMatches(line, sourceExportLines, sourceOverlapGroups);
     rows.push([
       index + 1,
       GROUP_LABELS[sourceLineGroup(line)] || sourceLineGroup(line) || '-',
+      overlapMatches.length ? '●' : '',
       overlapGroup ? 'ทับกัน' : 'ไม่ทับกัน',
       overlapGroup,
+      overlapMatches.length,
       sourceLineMatchedWith(line, sourceExportLines, sourceOverlapGroups),
       sourceLineBillingNote(line, billingSourceKeys, sourceOverlapGroups),
       sourceFileColumnValue(line),
