@@ -3316,6 +3316,22 @@ function activeBillingFormula() {
   return window.permissionOutBillingFormula || { code: 'permission_fee', version: 1, source: 'local-fallback' };
 }
 
+function sourceLineGroup(line) {
+  return String(line.sourceKey || '').startsWith('COMPARE:')
+    ? 'COMPARE'
+    : String(line.sourceKey || '').startsWith('BASE:') ? 'BASE' : '';
+}
+
+function sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories) {
+  const provinces = getSegProvinces(line);
+  const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
+  const provinceOk = showAllProv || provinces.some(province => selectedProvinces.includes(province));
+  const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
+  const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(line));
+  const categoryOk = activeCategories[normalizeImportCategory(line.importCategory)] === true;
+  return provinceOk && cableStatusOk && categoryOk;
+}
+
 // Assign one stable export label to every connected group of routes that follows
 // the same corridor/road side. A short route can join a longer route when at
 // least 60% of the short route is within the configured overlap distance.
@@ -3547,6 +3563,38 @@ async function exportCSV() {
   rows.push(['PEA areas included in this export']);
   rows.push(['PEA Area ID', 'PEA Area Name', 'PEA Office Type']);
   uniquePeaAreas.forEach(area => rows.push([area.id, area.name, area.officeType]));
+
+  const sourceExportLines = (state.mapSourceLines || []).filter(line =>
+    sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, getActiveCategories())
+  );
+  rows.push([]);
+  rows.push(['Imported source lines included in this export']);
+  rows.push(['Count', sourceExportLines.length]);
+  rows.push(['No.', 'Group', 'Source file', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
+  sourceExportLines.forEach((line, index) => {
+    const coords = line.coords || [];
+    const sourceMetadata = line.sourceMetadata || {};
+    rows.push([
+      index + 1,
+      GROUP_LABELS[sourceLineGroup(line)] || sourceLineGroup(line) || '-',
+      line.sourceFile || '-',
+      placemarkCode(line),
+      placemarkName(line),
+      getSegProvince(line),
+      normalizeImportCategory(line.importCategory),
+      line.cableStatus || '-',
+      line.cableType || '-',
+      line.rawType || line.type || '-',
+      line.core ?? '-',
+      segmentDiameterValue(line),
+      segmentDiameterSourceLabel(line),
+      (lineLengthMeters(coords) / 1000).toFixed(3),
+      fmtCoord(coords[0]),
+      fmtCoord(coords[Math.max(0, coords.length - 1)]),
+      sourceMetadata.measured || '',
+      sourceMetadata.calculated || ''
+    ]);
+  });
 
   const csvContent = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM so Excel reads Thai correctly
