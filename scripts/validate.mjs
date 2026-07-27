@@ -58,7 +58,7 @@ if (csvSection.includes('document.querySelector(`.diamInput')) {
 }
 if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
 if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExport(exportSegments)')) throw new Error('CSV PEA area export is missing');
-if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('sourceLineMatchesExportFilters(line') || !csvSection.includes('state.mapSourceLines || []')) {
+if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('sourceLineMatchesExportFilters(line') || !csvSection.includes('state.mapSourceLines || []') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'")) {
   throw new Error('CSV export must include the complete imported source-line audit section');
 }
 if (!csvSection.includes("'รหัส Placemark', 'ชื่อ Placemark'") || !csvSection.includes('placemarkCode(seg)') || !csvSection.includes('placemarkName(seg)')) {

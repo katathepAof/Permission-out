@@ -3567,16 +3567,21 @@ async function exportCSV() {
   const sourceExportLines = (state.mapSourceLines || []).filter(line =>
     sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, getActiveCategories())
   );
+  const sourceOverlapGroups = buildExportOverlapGroups(sourceExportLines, threshold, interval);
   rows.push([]);
   rows.push(['Imported source lines included in this export']);
   rows.push(['Count', sourceExportLines.length]);
-  rows.push(['No.', 'Group', 'Source file', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
+  rows.push(['Overlapping groups', new Set(sourceOverlapGroups.values()).size]);
+  rows.push(['No.', 'Group', 'Overlap status', 'Overlap group', 'Source file', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
   sourceExportLines.forEach((line, index) => {
     const coords = line.coords || [];
     const sourceMetadata = line.sourceMetadata || {};
+    const overlapGroup = sourceOverlapGroups.get(line) || '';
     rows.push([
       index + 1,
       GROUP_LABELS[sourceLineGroup(line)] || sourceLineGroup(line) || '-',
+      overlapGroup ? 'ทับกัน' : 'ไม่ทับกัน',
+      overlapGroup,
       line.sourceFile || '-',
       placemarkCode(line),
       placemarkName(line),
