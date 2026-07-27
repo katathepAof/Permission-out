@@ -3339,6 +3339,26 @@ function sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableSt
   return provinceOk && cableStatusOk && categoryOk;
 }
 
+function sourceLineRouteKey(line) {
+  return [line.sourceKey || line.sourceDatasetId || line.sourceFile || '', placemarkCode(line), placemarkName(line)].join('|');
+}
+
+function sourceLineBillingNote(line, billingSourceKeys, sourceOverlapGroups) {
+  if (billingSourceKeys.has(sourceLineRouteKey(line))) return 'คิดค่าบริการในผลวิเคราะห์';
+  return sourceOverlapGroups.get(line)
+    ? 'ไม่คิดค่าบริการโดยตรง (ทับกัน/ใช้ตรวจสอบ)'
+    : 'ไม่พบในผลคำนวณค่าบริการ (ใช้ตรวจสอบข้อมูลต้นฉบับ)';
+}
+
+function sourceLineMatchedWith(line, sourceExportLines, sourceOverlapGroups) {
+  const group = sourceOverlapGroups.get(line);
+  if (!group) return '';
+  return sourceExportLines
+    .filter(item => item !== line && sourceOverlapGroups.get(item) === group)
+    .map(item => `${sourceFileColumnValue(item)} / ${placemarkDisplayText(item)}`)
+    .join(' | ');
+}
+
 // Assign one stable export label to every connected group of routes that follows
 // the same corridor/road side. A short route can join a longer route when at
 // least 60% of the short route is within the configured overlap distance.
@@ -3457,8 +3477,28 @@ async function exportCSV() {
   const exportOverlapGroups = buildExportOverlapGroups(exportSegments, threshold, interval);
   const overlapGroupCount = new Set(exportOverlapGroups.values()).size;
   const formula = activeBillingFormula();
+  const activeCategories = getActiveCategories();
+  const sourceExportLines = (state.mapSourceLines || []).filter(line =>
+    sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories)
+  );
+  const sourceOverlapGroups = buildExportOverlapGroups(sourceExportLines, threshold, interval);
+  const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
+  const billingSourceKeys = new Set(exportSegments.map(sourceLineRouteKey));
+  const sourceOverlapLineCount = sourceExportLines.filter(line => sourceOverlapGroups.has(line)).length;
+  const sourceNonOverlapLineCount = sourceExportLines.length - sourceOverlapLineCount;
+  const selectedFileNames = FILE_GROUPS.flatMap(groupKey => sourceNamesForGroup(groupKey));
 
   const rows = [];
+  rows.push(['=== Export Summary ===']);
+  rows.push(['Selected files', selectedFileNames.length]);
+  rows.push(['Imported source lines selected', sourceExportLines.length]);
+  rows.push(['Source lines overlapping', sourceOverlapLineCount]);
+  rows.push(['Source lines not overlapping', sourceNonOverlapLineCount]);
+  rows.push(['Source overlap groups', sourceOverlapGroupCount]);
+  rows.push(['Billing result segments exported', exportSegments.length]);
+  rows.push(['Billing overlap groups', overlapGroupCount]);
+  rows.push(['Billing included source routes', billingSourceKeys.size]);
+  rows.push([]);
   rows.push(['Calculation formula', `${formula.code} v${formula.version}`, formula.source || 'unknown']);
   rows.push(['รายงานเปรียบเทียบเส้นทาง KML และค่าบริการ']);
   rows.push(['วันที่ออกรายงาน', new Date().toLocaleString('th-TH')]);
@@ -3571,15 +3611,11 @@ async function exportCSV() {
   rows.push(['PEA Area ID', 'PEA Area Name', 'PEA Office Type']);
   uniquePeaAreas.forEach(area => rows.push([area.id, area.name, area.officeType]));
 
-  const sourceExportLines = (state.mapSourceLines || []).filter(line =>
-    sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, getActiveCategories())
-  );
-  const sourceOverlapGroups = buildExportOverlapGroups(sourceExportLines, threshold, interval);
   rows.push([]);
   rows.push(['Imported source lines included in this export']);
   rows.push(['Count', sourceExportLines.length]);
-  rows.push(['Overlapping groups', new Set(sourceOverlapGroups.values()).size]);
-  rows.push(['No.', 'Group', 'Overlap status', 'Overlap group', 'Source file', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
+  rows.push(['Overlapping groups', sourceOverlapGroupCount]);
+  rows.push(['No.', 'Group', 'Overlap status', 'Overlap group', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
   sourceExportLines.forEach((line, index) => {
     const coords = line.coords || [];
     const sourceMetadata = line.sourceMetadata || {};
@@ -3589,7 +3625,11 @@ async function exportCSV() {
       GROUP_LABELS[sourceLineGroup(line)] || sourceLineGroup(line) || '-',
       overlapGroup ? 'ทับกัน' : 'ไม่ทับกัน',
       overlapGroup,
+      sourceLineMatchedWith(line, sourceExportLines, sourceOverlapGroups),
+      sourceLineBillingNote(line, billingSourceKeys, sourceOverlapGroups),
       sourceFileColumnValue(line),
+      line.sourceDatasetId || '',
+      line.sourceKey || '',
       placemarkCode(line),
       placemarkName(line),
       getSegProvince(line),

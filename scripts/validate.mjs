@@ -58,8 +58,11 @@ if (csvSection.includes('document.querySelector(`.diamInput')) {
 }
 if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
 if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExport(exportSegments)')) throw new Error('CSV PEA area export is missing');
-if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('sourceLineMatchesExportFilters(line') || !csvSection.includes('state.mapSourceLines || []') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'")) {
+if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('sourceLineMatchesExportFilters(line') || !csvSection.includes('state.mapSourceLines || []') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'") || !csvSection.includes('Source dataset ID') || !csvSection.includes('Included in billing') || !csvSection.includes('Matched with')) {
   throw new Error('CSV export must include the complete imported source-line audit section');
+}
+if (!html.includes('function sourceLineMatchedWith(') || !html.includes('function sourceLineBillingNote(') || !csvSection.includes('=== Export Summary ===')) {
+  throw new Error('CSV export must include summary, matched routes, and billing inclusion audit fields');
 }
 if (!html.includes('function sourceFileColumnValue(line)') || !html.includes('`${groupLabel} | ${fileName}`') || !csvSection.includes('sourceFileColumnValue(seg)')) {
   throw new Error('CSV export must show each route source file clearly in one column');
