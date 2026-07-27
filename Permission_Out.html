@@ -2738,11 +2738,33 @@ function findProvince(lon, lat) {
 
 // คืนค่าจังหวัดของ segment โดยใช้พิกัดต้นทาง พร้อม cache ผลลัพธ์ไว้ที่ตัว segment เอง
 function getSegProvince(seg) {
-  if (seg._province === undefined) {
-    const c = seg.coords && seg.coords[0];
-    seg._province = (c ? findProvince(c[0], c[1]) : null) || '-';
+  const provinces = getSegProvinces(seg);
+  return provinces.length ? provinces.join(' | ') : '-';
+}
+
+function getSegProvinces(seg) {
+  if (Array.isArray(seg._provinces)) return seg._provinces;
+  const coords = Array.isArray(seg.coords) ? seg.coords : [];
+  if (!coords.length) {
+    seg._provinces = [];
+    return seg._provinces;
   }
-  return seg._province;
+  const length = Number(seg.length) || lineLengthMeters(coords);
+  const interval = Math.max(1000, Math.min(10000, length / 12 || 5000));
+  const samples = coords.length >= 2 ? sampleLine(coords, interval).map(sample => sample.coord) : coords;
+  const points = [coords[0], coords[coords.length - 1], ...samples];
+  const provinces = [];
+  const seen = new Set();
+  points.forEach(point => {
+    const province = point ? findProvince(point[0], point[1]) : null;
+    if (province && province !== '-' && !seen.has(province)) {
+      seen.add(province);
+      provinces.push(province);
+    }
+  });
+  seg._provinces = provinces;
+  seg._province = provinces.length ? provinces.join(' | ') : '-';
+  return seg._provinces;
 }
 
 /* ===================== Report / cost UI ===================== */
@@ -2883,7 +2905,7 @@ function populateProvinceFilter() {
     bindProvinceFilterOptions();
   };
   if (state.segmentsB.length <= LARGE_RESULT_THRESHOLD) {
-    renderOptions(Array.from(new Set(state.segmentsB.map(getSegProvince).filter(p => p && p !== '-'))));
+    renderOptions(Array.from(new Set(state.segmentsB.flatMap(getSegProvinces).filter(p => p && p !== '-'))));
     return;
   }
   container.innerHTML = '<label style="display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" checked>ทุกจังหวัด</label><span style="font-size:.76rem;color:var(--ink-mute);">กำลังเตรียมตัวกรองจังหวัดเบื้องหลัง…</span>';
@@ -2893,8 +2915,9 @@ function populateProvinceFilter() {
     if (token !== provinceBuildToken) return;
     const end = Math.min(cursor + 180, state.segmentsB.length);
     for (; cursor < end; cursor++) {
-      const province = getSegProvince(state.segmentsB[cursor]);
-      if (province && province !== '-') provinces.add(province);
+      getSegProvinces(state.segmentsB[cursor]).forEach(province => {
+        if (province && province !== '-') provinces.add(province);
+      });
     }
     if (cursor < state.segmentsB.length) setTimeout(processChunk, 0);
     else renderOptions(Array.from(provinces));
@@ -2943,7 +2966,8 @@ function getSelectedProvinces() {
 }
 function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinces(), activeOverlaps = getActiveOverlaps(), selectedCableStatuses = getSelectedCableStatuses(), activeCategories = getActiveCategories()) {
   const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
-  const provOk = showAllProv || selectedProvinces.includes(getSegProvince(seg));
+  const segmentProvinces = getSegProvinces(seg);
+  const provOk = showAllProv || segmentProvinces.some(province => selectedProvinces.includes(province));
   const overlapOk = activeOverlaps[OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none'];
   const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
   const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(seg));
