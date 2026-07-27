@@ -3322,6 +3322,13 @@ function sourceLineGroup(line) {
     : String(line.sourceKey || '').startsWith('BASE:') ? 'BASE' : '';
 }
 
+function sourceFileColumnValue(line) {
+  const groupKey = sourceLineGroup(line);
+  const groupLabel = GROUP_LABELS[groupKey] || groupKey || '';
+  const fileName = line.sourceFile || line.sourceDatasetId || '-';
+  return groupLabel ? `${groupLabel} | ${fileName}` : fileName;
+}
+
 function sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories) {
   const provinces = getSegProvinces(line);
   const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
@@ -3497,7 +3504,7 @@ async function exportCSV() {
   } else {
     groupedSegments.forEach((seg, index) => {
       const st = STATUS_META[seg.status] || STATUS_META.new;
-      rows.push([index + 1, exportOverlapGroups.get(seg), placemarkCode(seg), placemarkName(seg), seg.sourceFile || '-', st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
+      rows.push([index + 1, exportOverlapGroups.get(seg), placemarkCode(seg), placemarkName(seg), sourceFileColumnValue(seg), st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
     });
   }
   rows.push([]);
@@ -3512,7 +3519,7 @@ async function exportCSV() {
     const st = STATUS_META[seg.status] ? seg.status : 'new';
     const m = STATUS_META[st];
     const km = seg.length / 1000;
-    const srcFile = seg.sourceFile || '-';
+    const srcFile = sourceFileColumnValue(seg);
     const cableTypeVal = seg.cableType || '-';
     const typeVal = seg.rawType || seg.type || '-';
     const cableStatusVal = seg.cableStatus || '-';
@@ -3582,7 +3589,7 @@ async function exportCSV() {
       GROUP_LABELS[sourceLineGroup(line)] || sourceLineGroup(line) || '-',
       overlapGroup ? 'ทับกัน' : 'ไม่ทับกัน',
       overlapGroup,
-      line.sourceFile || '-',
+      sourceFileColumnValue(line),
       placemarkCode(line),
       placemarkName(line),
       getSegProvince(line),

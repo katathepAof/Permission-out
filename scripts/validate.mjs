@@ -61,6 +61,9 @@ if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreas
 if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('sourceLineMatchesExportFilters(line') || !csvSection.includes('state.mapSourceLines || []') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'")) {
   throw new Error('CSV export must include the complete imported source-line audit section');
 }
+if (!html.includes('function sourceFileColumnValue(line)') || !html.includes('`${groupLabel} | ${fileName}`') || !csvSection.includes('sourceFileColumnValue(seg)')) {
+  throw new Error('CSV export must show each route source file clearly in one column');
+}
 if (!csvSection.includes("'รหัส Placemark', 'ชื่อ Placemark'") || !csvSection.includes('placemarkCode(seg)') || !csvSection.includes('placemarkName(seg)')) {
   throw new Error('CSV export must separate Placemark code and name columns');
 }

@@ -5,6 +5,7 @@ node_modules/
 *.log
 *.zip
 API_Key.txt
+API_Key_Local.txt
 PEA Area.kmz
 data-out/
 uih-20072026/
