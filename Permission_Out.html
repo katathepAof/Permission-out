@@ -4468,7 +4468,7 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
   return `<description>${xmlEscape(html)}</description>`;
 }
 function kmlProvinceFolderName(segment) {
-  return getSegProvince(segment) || 'ไม่ระบุจังหวัด';
+  return getSegProvinces(segment)[0] || 'ไม่ระบุจังหวัด';
 }
 function renderKmlLayerPlacemarks(layer, province = null) {
   return layer.placemarks
