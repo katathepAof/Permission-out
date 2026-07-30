@@ -86,6 +86,9 @@ if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includ
 if (!html.includes('function getSegProvinces(seg)') || !html.includes('state.segmentsB.flatMap(getSegProvinces)') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))')) {
   throw new Error('MOD 1 province filtering must include every province crossed by a segment');
 }
+if (!html.includes('function filterMod1ComparisonPair(lines, groupKey)') || !html.includes("name.includes('rd03')") || !html.includes("name.includes('maxi')") || !html.includes('const selectedComparisonLines = [...linesA, ...linesB]') || !html.includes("linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE')")) {
+  throw new Error('MOD 1 comparison must be limited to rd03 base routes and Maxi compare routes');
+}
 for (const marker of ['peaCompareCatalogSelected', 'ufmBaseCatalogSelected', 'baseCatalogSelectCompare', 'compareCatalogSelectBase']) {
   if (!`${html}\n${production}`.includes(marker)) throw new Error(`Dual-source MOD 1 role selection is missing: ${marker}`);
 }

@@ -1852,6 +1852,21 @@ function sourceNamesForGroup(groupKey) {
   return physicalSourceNames(groupKey);
 }
 
+function mod1ComparisonFileName(line) {
+  return String(line.sourceFile || line.sourceDatasetId || line.sourceKey || '').toLocaleLowerCase('en-US');
+}
+
+function isMod1ComparisonPairLine(line, groupKey = '') {
+  const name = mod1ComparisonFileName(line);
+  if (groupKey === 'BASE') return name.includes('rd03');
+  if (groupKey === 'COMPARE') return name.includes('maxi');
+  return name.includes('rd03') || name.includes('maxi');
+}
+
+function filterMod1ComparisonPair(lines, groupKey) {
+  return (lines || []).filter(line => isMod1ComparisonPairLine(line, groupKey));
+}
+
 function updateSourceRoleUI() {
   GROUP_LABELS.BASE = 'ฐาน';
   GROUP_LABELS.COMPARE = 'เปรียบเทียบ';
@@ -3206,6 +3221,12 @@ async function runAnalysis() {
         return line;
       })
     ));
+    const selectedComparisonLines = [...linesA, ...linesB];
+    linesA = filterMod1ComparisonPair(selectedComparisonLines, 'BASE');
+    linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE');
+    if (!linesA.length || !linesB.length) {
+      throw new Error('ต้องมีข้อมูลฝั่งฐาน rd03 และฝั่งเปรียบเทียบ Maxi.kmz เพื่อวิเคราะห์ MOD 1');
+    }
     const datasetColorEntries = applyDatasetLineColors({ BASE: linesA, COMPARE: linesB });
     renderDatasetColorLegend(datasetColorEntries);
 
