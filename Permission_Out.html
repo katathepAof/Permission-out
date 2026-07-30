@@ -1458,7 +1458,7 @@ table.report td.num{
 <dialog id="kmlExportDialog" style="width:min(540px,calc(100vw - 32px));border:0;border-radius:16px;padding:0;box-shadow:0 24px 80px rgba(15,23,42,.28);">
   <form method="dialog" style="padding:20px;">
     <h3 id="kmlExportDialogTitle" style="margin:0 0 6px;color:var(--navy-700);">ตั้งค่าการ Export KML/KMZ</h3>
-    <p style="margin:0 0 16px;font-size:.82rem;color:var(--ink-soft);">เลือกข้อมูลที่ต้องการแสดงเมื่อคลิกเส้นทางใน Google Earth</p>
+    <p style="margin:0 0 16px;font-size:.82rem;color:var(--ink-soft);">เลือกข้อมูลที่ต้องการแสดงใน Popup ของไฟล์ เมื่อคลิกเส้นทางใน Google Earth</p>
     <div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:.8rem;color:var(--ink-soft);">
       <label style="width:100%;font-weight:700;color:var(--ink);"><input type="checkbox" id="kmlProvinceFolders" checked> จัดจังหวัดเป็น Folder ชั้นแรก</label>
       <span style="width:100%;font-weight:700;color:var(--ink);margin-top:4px;">ข้อมูลที่แสดงใน Popup</span>
@@ -3255,6 +3255,10 @@ function applyProvinceFilter(fitMapToSelection = false) {
   const selectedCableStatuses = getSelectedCableStatuses();
   const activeCategories = getActiveCategories();
   const matching = [];
+  const matchingSourceLines = (state.mapSourceLines || []).filter(seg => {
+    const statusOk = active[STATUS_META[seg.status] ? seg.status : 'new'];
+    return statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses, activeCategories);
+  });
   state.segmentsB.forEach(seg => {
     const statusOk = active[STATUS_META[seg.status] ? seg.status : 'new'];
     const match = statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses, activeCategories);
@@ -3276,10 +3280,9 @@ function applyProvinceFilter(fitMapToSelection = false) {
     });
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 12 });
   }
-  // Report/export filters must not erase the source/category colors from the map.
-  // The result layers above still follow the active filters, while this overlay
-  // consistently identifies every analyzed RD03/Maxi source.
-  renderSourceColorOverlay(state.mapSourceLines);
+  // Keep source/category colors, but display only lines matching the filters
+  // selected in the result panel.
+  renderSourceColorOverlay(matchingSourceLines);
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
@@ -4663,7 +4666,7 @@ function requestKmlExportOptions(format) {
     dialog.showModal();
   });
 }
-async function runExport(format, button, exporter) {
+async function runExport(format, button, exporter, optionsConfirmed = false) {
   if (exportInProgress) return;
   if (state.segmentsB.length === 0 && state.totalB === 0) {
     alert('กรุณานำเข้าและวิเคราะห์เส้นทางก่อน Export');
@@ -4671,7 +4674,7 @@ async function runExport(format, button, exporter) {
     return;
   }
   const preview = exportPreview(format);
-  if (!confirmExport(format, preview)) {
+  if (!optionsConfirmed && !confirmExport(format, preview)) {
     setExportStatus('ยกเลิกการส่งออกแล้ว');
     return;
   }
@@ -4711,10 +4714,10 @@ document.getElementById('exportCsvBtn').addEventListener('click', event => {
   runExport('CSV', event.currentTarget, exportCSV);
 });
 document.getElementById('exportKmlBtn').addEventListener('click', async event => {
-  if (await requestKmlExportOptions('KML')) runExport('KML', event.currentTarget, exportKML);
+  if (await requestKmlExportOptions('KML')) runExport('KML', event.currentTarget, exportKML, true);
 });
 document.getElementById('exportKmzBtn').addEventListener('click', async event => {
-  if (await requestKmlExportOptions('KMZ')) runExport('KMZ', event.currentTarget, exportKMZ);
+  if (await requestKmlExportOptions('KMZ')) runExport('KMZ', event.currentTarget, exportKMZ, true);
 });
 exportModeSelect?.addEventListener('change', () => {
   updateExportModeHint();
