@@ -107,6 +107,9 @@ if (!html.includes('function kmlTopFolderName(') || !html.includes('function kml
 if (!html.includes('function kmlCategoryFolderKey(') || !html.includes('function kmlCategoryFolderName(') || !html.includes("network: 'Network'") || !html.includes("'ready-access': 'Ready Access'") || !html.includes("customer: 'Customer'")) {
   throw new Error('KML/KMZ export must let Maxi data be selected by Network, Ready Access, and Customer folders');
 }
+if (!html.includes('function kmlMaxiReference(') || !html.includes('function kmlFolderReference(') || !html.includes('kmlSegmentNearLineRatio(segment, line, threshold, interval)') || !html.includes('maxi_reference_category') || !html.includes('normalizeImportCategory(reference.importCategory)')) {
+  throw new Error('KML/KMZ export must derive overlap-only category folders from overlapping Maxi data');
+}
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
   throw new Error('Logical PEA/UFM dataset grouping or province map focus is missing');

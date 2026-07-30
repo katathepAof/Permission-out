@@ -3874,35 +3874,79 @@ function kmlMaxiStatusColor(segment, fallback) {
 function kmlSafeId(value, fallback = 'route') {
   return String(value || fallback).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback;
 }
+function kmlIsMaxiSegment(segment) {
+  return mod1ComparisonFileName(segment).includes('maxi');
+}
+function kmlSegmentNearLineRatio(segment, line, threshold, interval) {
+  const samples = sampleLine(segment.coords || [], Math.max(2, interval || 5));
+  if (!samples.length || !Array.isArray(line?.coords) || line.coords.length < 2) return 0;
+  let hits = 0;
+  samples.forEach(sample => {
+    for (let i = 0; i < line.coords.length - 1; i++) {
+      if (pointToSegmentMeters(sample.coord, line.coords[i], line.coords[i + 1]) <= threshold) {
+        hits++;
+        break;
+      }
+    }
+  });
+  return hits / samples.length;
+}
+function kmlMaxiReference(segment) {
+  if (kmlIsMaxiSegment(segment)) return segment;
+  if (segment._kmlMaxiReference !== undefined) return segment._kmlMaxiReference;
+  const threshold = parseFloat(document.getElementById('threshold').value) || 20;
+  const interval = parseFloat(document.getElementById('interval').value) || 5;
+  const maxiLines = (state.mapSourceLines || []).filter(kmlIsMaxiSegment);
+  let best = null, bestRatio = 0;
+  maxiLines.forEach(line => {
+    const ratio = kmlSegmentNearLineRatio(segment, line, threshold, interval);
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      best = line;
+    }
+  });
+  segment._kmlMaxiReference = bestRatio >= 0.6 ? best : null;
+  return segment._kmlMaxiReference;
+}
+function kmlFolderReference(segment) {
+  return kmlMaxiReference(segment) || segment;
+}
 function kmlTopFolderKey(segment) {
-  return segment.sourceKey || segment.sourceDatasetId || segment.sourceFile || 'source';
+  const reference = kmlFolderReference(segment);
+  return reference.sourceKey || reference.sourceDatasetId || reference.sourceFile || 'source';
 }
 function kmlTopFolderName(segment) {
-  return sourceFileColumnValue(segment) || mod1ComparisonFileName(segment) || 'Selected source';
+  const reference = kmlFolderReference(segment);
+  return sourceFileColumnValue(reference) || mod1ComparisonFileName(reference) || 'Selected source';
 }
 function kmlExportFolderName(segment) {
-  return mod1ComparisonFileName(segment).includes('maxi')
-    ? `Status: ${getSegCableStatus(segment) || 'ไม่ระบุ'}`
+  const reference = kmlFolderReference(segment);
+  return kmlIsMaxiSegment(reference)
+    ? `Status: ${getSegCableStatus(reference) || 'ไม่ระบุ'}`
     : kmlTopFolderName(segment);
 }
 function kmlCategoryFolderKey(segment) {
-  if (!mod1ComparisonFileName(segment).includes('maxi')) return kmlTopFolderKey(segment);
-  return `${kmlTopFolderKey(segment)}:category:${normalizeImportCategory(segment.importCategory)}`;
+  const reference = kmlFolderReference(segment);
+  if (!kmlIsMaxiSegment(reference)) return kmlTopFolderKey(segment);
+  return `${kmlTopFolderKey(segment)}:category:${normalizeImportCategory(reference.importCategory)}`;
 }
 function kmlCategoryFolderName(segment) {
-  if (!mod1ComparisonFileName(segment).includes('maxi')) return kmlTopFolderName(segment);
+  const reference = kmlFolderReference(segment);
+  if (!kmlIsMaxiSegment(reference)) return kmlTopFolderName(segment);
   const labels = { network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' };
-  return labels[normalizeImportCategory(segment.importCategory)] || 'Network';
+  return labels[normalizeImportCategory(reference.importCategory)] || 'Network';
 }
 function kmlExportStyleId(segment) {
-  const suffix = mod1ComparisonFileName(segment).includes('maxi')
-    ? `${kmlCategoryFolderKey(segment)}:status:${getSegCableStatus(segment) || 'unknown'}`
+  const reference = kmlFolderReference(segment);
+  const suffix = kmlIsMaxiSegment(reference)
+    ? `${kmlCategoryFolderKey(segment)}:status:${getSegCableStatus(reference) || 'unknown'}`
     : kmlTopFolderKey(segment);
   return `route-${kmlSafeId(suffix)}`;
 }
 function kmlExportColor(segment, fallbackColor) {
-  if (!mod1ComparisonFileName(segment).includes('maxi')) return fallbackColor;
-  const status = String(getSegCableStatus(segment) || '').trim();
+  const reference = kmlFolderReference(segment);
+  if (!kmlIsMaxiSegment(reference)) return fallbackColor;
+  const status = String(getSegCableStatus(reference) || '').trim();
   if (!status) return fallbackColor;
   let hash = 0;
   for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
@@ -3965,10 +4009,14 @@ function buildSelectedKml(segments, peaFeatures = []) {
     const status = STATUS_META[seg.status] || STATUS_META.new;
     const overlap = OVERLAP_META[seg.overlapType] || OVERLAP_META.none;
     const billing = billingRows[index];
+    const kmlReference = kmlFolderReference(seg);
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
     const placemark = `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${kmlExportStyleId(seg)}</styleUrl><ExtendedData>` +
       `<Data name="source_layer"><value>${xmlEscape(sourceFileColumnValue(seg))}</value></Data>` +
       `<Data name="kml_layer"><value>${xmlEscape(kmlExportFolderName(seg))}</value></Data>` +
+      `<Data name="maxi_reference_layer"><value>${xmlEscape(kmlIsMaxiSegment(kmlReference) ? sourceFileColumnValue(kmlReference) : '')}</value></Data>` +
+      `<Data name="maxi_reference_category"><value>${xmlEscape(kmlIsMaxiSegment(kmlReference) ? kmlCategoryFolderName(seg) : '')}</value></Data>` +
+      `<Data name="maxi_reference_status"><value>${xmlEscape(kmlIsMaxiSegment(kmlReference) ? getSegCableStatus(kmlReference) : '')}</value></Data>` +
       `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
