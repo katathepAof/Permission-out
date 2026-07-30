@@ -158,6 +158,9 @@ if (!html.includes('id="kmlExportDialog"') || !html.includes('function requestKm
 if (!html.includes("const button = event.currentTarget;\n  if (await requestKmlExportOptions('KML'))") || !html.includes("const button = event.currentTarget;\n  if (await requestKmlExportOptions('KMZ'))")) {
   throw new Error('KML/KMZ export must preserve the clicked button across the options await');
 }
+if (!html.includes('if (button) button.textContent = `กำลังสร้าง ${format}…`;')) {
+  throw new Error('Export progress must tolerate a missing button element');
+}
 for (const marker of ['id="exportStatus"', 'function confirmExport(', 'function runExport(', 'exportInProgress', 'result.itemCount', 'formatExportBytes(result.size)']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 export progress or confirmation UX marker is missing: ${marker}`);
 }

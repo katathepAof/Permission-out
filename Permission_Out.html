@@ -4743,7 +4743,7 @@ async function runExport(format, button, exporter, optionsConfirmed = false) {
   const originalLabels = new Map(exportButtons.map(item => [item, item.innerHTML]));
   exportButtons.forEach(item => { item.disabled = true; });
   if (exportModeSelect) exportModeSelect.disabled = true;
-  button.textContent = `กำลังสร้าง ${format}…`;
+  if (button) button.textContent = `กำลังสร้าง ${format}…`;
   setExportStatus(`กำลังเตรียม ${preview.itemCount.toLocaleString('th-TH')} รายการ กรุณารอสักครู่…`, 'busy');
   try {
     const result = await exporter();
