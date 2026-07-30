@@ -4367,7 +4367,10 @@ function kmlMaxiReference(segment) {
   return reference;
 }
 function kmlFolderReference(segment) {
-  return kmlMaxiReference(segment) || segment;
+  // Export must stay linear for large datasets. Every imported source line
+  // already carries its source, category and cable status, so folder metadata
+  // can be read directly without geometrically matching every line to Maxi.
+  return segment;
 }
 function kmlTopFolderKey(segment) {
   const reference = kmlFolderReference(segment);
