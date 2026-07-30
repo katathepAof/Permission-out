@@ -2949,7 +2949,7 @@ function getSegCableStatus(seg) {
 function populateCableStatusFilter() {
   const container = document.getElementById('cableStatusFilter');
   if (!container) return;
-  const statuses = Array.from(new Set(state.segmentsB.map(getSegCableStatus)))
+  const statuses = Array.from(new Set([...state.segmentsB, ...(state.mapSourceLines || [])].map(getSegCableStatus)))
     .sort((a, b) => a.localeCompare(b, 'th'));
   const prev = Array.from(container.querySelectorAll('.cableStatusOption:checked')).map(o => o.value);
   const selected = prev.filter(s => statuses.includes(s));
