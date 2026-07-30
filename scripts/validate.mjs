@@ -79,6 +79,9 @@ for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Obj
 for (const marker of ['mapSourceLines', 'function renderSourceColorOverlay(', 'uniqueSources.size <= 1', 'interactive: false']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 multi-source map color overlay marker is missing: ${marker}`);
 }
+if (!html.includes('renderSourceColorOverlay(state.mapSourceLines);') || html.includes('renderSourceColorOverlay(selectedSourceLinesForKmlExport());')) {
+  throw new Error('MOD 1 map colors must remain independent from report/export filters');
+}
 for (const marker of ['lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters)', 'const lengthMeters = Number(line.length) || lineLengthMeters(line.coords);']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 source-color map overlay popup marker is missing: ${marker}`);
 }

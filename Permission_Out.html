@@ -3252,7 +3252,10 @@ function applyProvinceFilter(fitMapToSelection = false) {
     });
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 12 });
   }
-  renderSourceColorOverlay(selectedSourceLinesForKmlExport());
+  // Report/export filters must not erase the source/category colors from the map.
+  // The result layers above still follow the active filters, while this overlay
+  // consistently identifies every analyzed RD03/Maxi source.
+  renderSourceColorOverlay(state.mapSourceLines);
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
