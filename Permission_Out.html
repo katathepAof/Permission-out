@@ -4392,26 +4392,20 @@ function kmlTopFolderName(segment) {
 }
 function kmlExportFolderName(segment) {
   const reference = kmlFolderReference(segment);
-  return kmlIsMaxiSegment(reference)
-    ? `Status: ${getSegCableStatus(reference) || 'ไม่ระบุ'}`
-    : kmlTopFolderName(segment);
+  return `Status: ${getSegCableStatus(reference) || 'ไม่ระบุ'}`;
 }
 function kmlCategoryFolderKey(segment) {
   const reference = kmlFolderReference(segment);
-  if (!kmlIsMaxiSegment(reference)) return kmlTopFolderKey(segment);
   return `${kmlTopFolderKey(segment)}:category:${normalizeImportCategory(reference.importCategory)}`;
 }
 function kmlCategoryFolderName(segment) {
   const reference = kmlFolderReference(segment);
-  if (!kmlIsMaxiSegment(reference)) return kmlTopFolderName(segment);
   const labels = { network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' };
   return labels[normalizeImportCategory(reference.importCategory)] || 'Network';
 }
 function kmlExportStyleId(segment) {
   const reference = kmlFolderReference(segment);
-  const suffix = kmlIsMaxiSegment(reference)
-    ? `${kmlCategoryFolderKey(segment)}:status:${getSegCableStatus(reference) || 'unknown'}`
-    : kmlTopFolderKey(segment);
+  const suffix = `${kmlCategoryFolderKey(segment)}:status:${getSegCableStatus(reference) || 'unknown'}`;
   return `route-${kmlSafeId(suffix)}`;
 }
 function kmlExportColor(segment, fallbackColor) {
@@ -4423,23 +4417,13 @@ function kmlExportMeta(segment) {
   const referenceIsMaxi = kmlIsMaxiSegment(reference);
   const topKey = reference.sourceKey || reference.sourceDatasetId || reference.sourceFile || 'source';
   const topName = sourceFileColumnValue(reference) || mod1ComparisonFileName(reference) || 'Selected source';
-  const categoryKey = referenceIsMaxi
-    ? `${topKey}:category:${normalizeImportCategory(reference.importCategory)}`
-    : topKey;
-  const categoryName = referenceIsMaxi
-    ? ({ network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' }[normalizeImportCategory(reference.importCategory)] || 'Network')
-    : topName;
-  const folderName = referenceIsMaxi
-    ? `Status: ${getSegCableStatus(reference) || 'ไม่ระบุ'}`
-    : topName;
-  const styleSuffix = referenceIsMaxi
-    ? `${categoryKey}:status:${getSegCableStatus(reference) || 'unknown'}`
-    : topKey;
+  const categoryKey = `${topKey}:category:${normalizeImportCategory(reference.importCategory)}`;
+  const categoryName = ({ network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' }[normalizeImportCategory(reference.importCategory)] || 'Network');
+  const folderName = `Status: ${getSegCableStatus(reference) || 'ไม่ระบุ'}`;
+  const styleSuffix = `${categoryKey}:status:${getSegCableStatus(reference) || 'unknown'}`;
   const styleId = `route-${kmlSafeId(styleSuffix)}`;
   const fallbackColor = segment.sourceColor || (STATUS_META[segment.status] || STATUS_META.new).color;
-  const lineColor = referenceIsMaxi
-    ? kmlExportColor(segment, fallbackColor)
-    : fallbackColor;
+  const lineColor = kmlExportColor(segment, fallbackColor);
   return {
     reference,
     referenceIsMaxi,

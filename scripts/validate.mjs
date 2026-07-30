@@ -139,6 +139,9 @@ if (!html.includes('function kmlTopFolderName(') || !html.includes('function kml
 if (!html.includes('function kmlCategoryFolderKey(') || !html.includes('function kmlCategoryFolderName(') || !html.includes("network: 'Network'") || !html.includes("'ready-access': 'Ready Access'") || !html.includes("customer: 'Customer'")) {
   throw new Error('KML/KMZ export must let Maxi data be selected by Network, Ready Access, and Customer folders');
 }
+if (html.includes('if (!kmlIsMaxiSegment(reference)) return kmlTopFolder') || !html.includes('const folderName = `Status: ${getSegCableStatus(reference) ||')) {
+  throw new Error('KML/KMZ export must preserve category and status folders for both rd03 and Maxi');
+}
 if (!html.includes('function kmlFolderReference(segment)') || !html.includes('// Export must stay linear for large datasets') || !html.includes('return segment;') || !html.includes('maxi_reference_category') || !html.includes('normalizeImportCategory(reference.importCategory)')) {
   throw new Error('KML/KMZ export must derive folders directly from source metadata');
 }
