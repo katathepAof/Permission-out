@@ -143,6 +143,12 @@ if (!html.includes('function kmlExportMeta(segment)') || !html.includes('const e
   throw new Error('KML/KMZ export must precompute per-line metadata and use fast KMZ compression mode');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
+if (!html.includes('name="kmlPopupField"') || !html.includes('function kmlPopupDescription(') || !html.includes('selectedKmlPopupFields()')) {
+  throw new Error('KML/KMZ selectable Popup fields are missing');
+}
+if (!html.includes('id="kmlProvinceFolders"') || !html.includes('function renderKmlLayerPlacemarks(') || !html.includes('function kmlProvinceFolderName(')) {
+  throw new Error('KML/KMZ province Folder option is missing');
+}
 for (const marker of ['id="exportStatus"', 'function confirmExport(', 'function runExport(', 'exportInProgress', 'result.itemCount', 'formatExportBytes(result.size)']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 export progress or confirmation UX marker is missing: ${marker}`);
 }
