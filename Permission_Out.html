@@ -1747,10 +1747,12 @@ function parallelDiffDeg(a, b) {
 
 let map, layerGroup;
 let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], mapSourceLines: [], removedA: 0, removedB: 0 };
+let exportSelectionRevision = 0;
 const LARGE_RESULT_THRESHOLD = 1500;
 const REPORT_ROW_LIMIT = 300;
 let aggregateResultMode = false;
 let aggregateSelectionLayer = null;
+let sourceOverlayLayerGroup = null;
 let aggregateRenderer = null;
 let provinceBuildToken = 0;
 
@@ -2561,6 +2563,8 @@ function drawResults(resB) {
 
 function renderSourceColorOverlay(lines = []) {
   if (!layerGroup || !Array.isArray(lines)) return;
+  if (sourceOverlayLayerGroup && layerGroup.hasLayer(sourceOverlayLayerGroup)) layerGroup.removeLayer(sourceOverlayLayerGroup);
+  sourceOverlayLayerGroup = L.layerGroup().addTo(layerGroup);
   const uniqueSources = new Set(lines.map(line => line.sourceKey || line.sourceDatasetId || line.sourceFile).filter(Boolean));
   if (uniqueSources.size <= 1) return;
   if (!aggregateResultMode) {
@@ -2577,7 +2581,7 @@ function renderSourceColorOverlay(lines = []) {
       })
         .bindPopup(() => lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters))
         .bindTooltip(placemarkDisplayText(line), { sticky: true })
-        .addTo(layerGroup);
+        .addTo(sourceOverlayLayerGroup);
     });
     return;
   }
@@ -2598,7 +2602,7 @@ function renderSourceColorOverlay(lines = []) {
       opacity: 0.92,
       interactive: false,
       renderer: aggregateResultMode ? (aggregateRenderer || undefined) : undefined
-    }).addTo(layerGroup);
+    }).addTo(sourceOverlayLayerGroup);
   });
 }
 
@@ -3033,7 +3037,7 @@ function applyProvinceFilter(fitMapToSelection = false) {
     if (!aggregateResultMode && seg._mapLayer && typeof layerGroup !== 'undefined' && layerGroup) {
       if (match) {
         if (!layerGroup.hasLayer(seg._mapLayer)) seg._mapLayer.addTo(layerGroup);
-      } else if (layerGroup.hasLayer(seg._mapLayer)) {
+  } else if (layerGroup.hasLayer(seg._mapLayer)) {
         layerGroup.removeLayer(seg._mapLayer);
       }
     }
@@ -3047,6 +3051,7 @@ function applyProvinceFilter(fitMapToSelection = false) {
     });
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 12 });
   }
+  renderSourceColorOverlay(selectedSourceLinesForKmlExport());
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
@@ -3305,6 +3310,7 @@ async function runAnalysis() {
     state.removeLen = removeLen;
     state.segmentsB = resB.segments;
     state.mapSourceLines = [...linesA, ...linesB];
+    exportSelectionRevision++;
     state.removedA = dedupeA.removedCount;
     state.removedB = dedupeB.removedCount;
 
@@ -3593,9 +3599,7 @@ async function exportCSV() {
   const overlapGroupCount = new Set(exportOverlapGroups.values()).size;
   const formula = activeBillingFormula();
   const activeCategories = getActiveCategories();
-  const sourceExportLines = (state.mapSourceLines || []).filter(line =>
-    sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories)
-  );
+  const sourceExportLines = selectedSourceLinesForKmlExport();
   const sourceOverlapGroups = buildExportOverlapGroups(sourceExportLines, threshold, interval);
   const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
   const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
@@ -3839,6 +3843,7 @@ function kmlExportFilterCacheKey() {
   const activeOverlaps = getActiveOverlaps();
   return JSON.stringify({
     sourceCount: (state.mapSourceLines || []).length,
+    revision: exportSelectionRevision,
     threshold: parseFloat(document.getElementById('threshold').value) || 20,
     interval: parseFloat(document.getElementById('interval').value) || 5,
     provinces: selectedProvinces,
