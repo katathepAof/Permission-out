@@ -53,7 +53,7 @@ if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsFo
 if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-export-feedback')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
-for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
+for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Object.freeze({ label: 'Network', color: '#1E5BA8' })", "'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' })", "customer: Object.freeze({ label: 'Customer', color: '#B7791F' })", 'applyDatasetLineColors(', 'maxiCategoryColor(line, colorByKey.get(key))', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
   if (!html.includes(marker)) throw new Error(`Distinct MOD 1 dataset line color marker is missing: ${marker}`);
 }
 for (const marker of ['mapSourceLines', 'function renderSourceColorOverlay(', 'uniqueSources.size <= 1', 'interactive: false']) {
@@ -107,7 +107,7 @@ if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlS
 if (!html.includes('function kmlExportLayerKey(') || !html.includes("name.includes('maxi')") || !html.includes('function kmlMaxiStatusColor(') || !html.includes('<Data name="kml_layer">')) {
   throw new Error('KML/KMZ export must split Maxi layers and colors by source status');
 }
-if (!html.includes('function kmlTopFolderName(') || !html.includes('function kmlExportStyleId(') || !html.includes('<visibility>1</visibility>') || !html.includes('source.categories.values()') || !html.includes('DATASET_LINE_COLORS[Math.abs(hash) % DATASET_LINE_COLORS.length]')) {
+if (!html.includes('function kmlTopFolderName(') || !html.includes('function kmlExportStyleId(') || !html.includes('<visibility>1</visibility>') || !html.includes('source.categories.values()') || !html.includes('return maxiCategoryColor(reference, fallbackColor)')) {
   throw new Error('KML/KMZ export must use selectable parent source folders and KML-safe hex colors');
 }
 if (!html.includes('function kmlCategoryFolderKey(') || !html.includes('function kmlCategoryFolderName(') || !html.includes("network: 'Network'") || !html.includes("'ready-access': 'Ready Access'") || !html.includes("customer: 'Customer'")) {

@@ -1788,6 +1788,20 @@ const DATASET_LINE_COLORS = [
   '#558B2F', '#F4511E', '#512DA8', '#00796B', '#B26A00', '#1565C0',
   '#8E24AA', '#2E7D32', '#C62828', '#00695C', '#6A1B9A', '#9A6700'
 ];
+const MAXI_CATEGORY_META = Object.freeze({
+  network: Object.freeze({ label: 'Network', color: '#1E5BA8' }),
+  'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' }),
+  customer: Object.freeze({ label: 'Customer', color: '#B7791F' })
+});
+function isMaxiSourceLine(line) {
+  return mod1ComparisonFileName(line).includes('maxi');
+}
+function maxiCategoryMeta(line) {
+  return MAXI_CATEGORY_META[normalizeImportCategory(line?.importCategory)] || MAXI_CATEGORY_META.network;
+}
+function maxiCategoryColor(line, fallback = '') {
+  return isMaxiSourceLine(line) ? maxiCategoryMeta(line).color : fallback;
+}
 function datasetLineColor(index) {
   if (index < DATASET_LINE_COLORS.length) return DATASET_LINE_COLORS[index];
   const hue = ((index - DATASET_LINE_COLORS.length) * 137.508 + 23) % 360;
@@ -1797,6 +1811,7 @@ function datasetLineColor(index) {
 function applyDatasetLineColors(groups) {
   const entries = [];
   const colorByKey = new Map();
+  const maxiLegendKeys = new Set();
   FILE_GROUPS.forEach(groupKey => {
     const lines = groups[groupKey] || [];
     lines.forEach(line => {
@@ -1808,10 +1823,27 @@ function applyDatasetLineColors(groups) {
         entries.push({ key, color, groupKey, name: line.sourceFile || identity });
       }
       line.sourceKey = key;
-      line.sourceColor = colorByKey.get(key);
+      line.sourceColor = maxiCategoryColor(line, colorByKey.get(key));
+      if (isMaxiSourceLine(line)) {
+        const category = normalizeImportCategory(line.importCategory);
+        const legendKey = `${key}:${category}`;
+        if (!maxiLegendKeys.has(legendKey)) {
+          maxiLegendKeys.add(legendKey);
+          const meta = maxiCategoryMeta(line);
+          entries.push({
+            key: legendKey,
+            color: meta.color,
+            groupKey,
+            name: `${line.sourceFile || identity} · ${meta.label}`,
+            maxiCategory: category
+          });
+        }
+      }
     });
   });
-  return entries;
+  return entries.filter(entry => !entry.maxiCategory
+    ? !entries.some(candidate => candidate.maxiCategory && candidate.key.startsWith(`${entry.key}:`))
+    : true);
 }
 function renderDatasetColorLegend(entries = []) {
   const container = document.getElementById('datasetColorLegend');
@@ -2577,7 +2609,10 @@ function renderSourceColorOverlay(lines = []) {
   if (!layerGroup || !Array.isArray(lines)) return;
   if (sourceOverlayLayerGroup && layerGroup.hasLayer(sourceOverlayLayerGroup)) layerGroup.removeLayer(sourceOverlayLayerGroup);
   sourceOverlayLayerGroup = L.layerGroup().addTo(layerGroup);
-  const uniqueSources = new Set(lines.map(line => line.sourceKey || line.sourceDatasetId || line.sourceFile).filter(Boolean));
+  const uniqueSources = new Set(lines.map(line => {
+    const source = line.sourceKey || line.sourceDatasetId || line.sourceFile;
+    return source ? `${source}|${line.sourceColor || ''}` : '';
+  }).filter(Boolean));
   if (uniqueSources.size <= 1) return;
   if (!aggregateResultMode) {
     lines.forEach(line => {
@@ -3989,17 +4024,13 @@ function kmlExportLayerStyleId(segment) {
   return `source-${String(kmlExportLayerKey(segment)).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'route'}`;
 }
 function kmlMaxiStatusColor(segment, fallback) {
-  const status = String(getSegCableStatus(segment) || '').trim();
-  if (!status) return fallback;
-  let hash = 0;
-  for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
-  return datasetLineColor(Math.abs(hash));
+  return maxiCategoryColor(segment, fallback);
 }
 function kmlSafeId(value, fallback = 'route') {
   return String(value || fallback).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback;
 }
 function kmlIsMaxiSegment(segment) {
-  return mod1ComparisonFileName(segment).includes('maxi');
+  return isMaxiSourceLine(segment);
 }
 function kmlSegmentNearLineRatio(segment, line, threshold, interval, preparedSamples = null) {
   const samples = preparedSamples || sampleLine(segment.coords || [], Math.max(2, interval || 5));
@@ -4110,12 +4141,7 @@ function kmlExportStyleId(segment) {
 }
 function kmlExportColor(segment, fallbackColor) {
   const reference = kmlFolderReference(segment);
-  if (!kmlIsMaxiSegment(reference)) return fallbackColor;
-  const status = String(getSegCableStatus(reference) || '').trim();
-  if (!status) return fallbackColor;
-  let hash = 0;
-  for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
-  return DATASET_LINE_COLORS[Math.abs(hash) % DATASET_LINE_COLORS.length];
+  return maxiCategoryColor(reference, fallbackColor);
 }
 function kmlExportMeta(segment) {
   const reference = kmlFolderReference(segment);
