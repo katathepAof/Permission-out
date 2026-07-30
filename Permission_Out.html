@@ -3757,6 +3757,19 @@ function selectedSegmentsForExport() {
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
 }
+function selectedSourceLinesForKmlExport() {
+  const selectedProvinces = getSelectedProvinces();
+  const selectedCableStatuses = getSelectedCableStatuses();
+  const activeCategories = getActiveCategories();
+  return (state.mapSourceLines || [])
+    .filter(line => sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories))
+    .map(line => ({
+      ...line,
+      length: Number(line.length) || lineLengthMeters(line.coords || []),
+      status: line.status || 'new',
+      overlapType: line.overlapType || 'none'
+    }));
+}
 function xmlEscape(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
@@ -3852,7 +3865,7 @@ function ensureSegmentsAvailableForExport() {
     alert('กรุณานำเข้าและวิเคราะห์เส้นทางก่อน Export');
     return false;
   }
-  if (selectedSegmentsForExport().length === 0) {
+  if (selectedSegmentsForExport().length === 0 && selectedSourceLinesForKmlExport().length === 0) {
     alert('ไม่พบช่วงเส้นทางตามตัวกรองที่เลือก');
     return false;
   }
@@ -3860,7 +3873,7 @@ function ensureSegmentsAvailableForExport() {
 }
 async function exportKML() {
   if (!ensureSegmentsAvailableForExport()) return;
-  const segments = selectedSegmentsForExport();
+  const segments = selectedSourceLinesForKmlExport();
   await ensurePeaAreasForExport(segments);
   const peaFeatures = typeof window.permissionOutPeaFeaturesForSegments === 'function' ? await window.permissionOutPeaFeaturesForSegments(segments) : [];
   downloadBlob(new Blob([buildSelectedKml(segments, peaFeatures)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' }), `kml_compare_selected_${exportTimestamp()}.kml`);
@@ -3868,7 +3881,7 @@ async function exportKML() {
 async function exportKMZ() {
   if (!ensureSegmentsAvailableForExport()) return;
   if (typeof JSZip === 'undefined') { alert('ไม่สามารถสร้างไฟล์ KMZ ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่'); return; }
-  const segments = selectedSegmentsForExport();
+  const segments = selectedSourceLinesForKmlExport();
   await ensurePeaAreasForExport(segments);
   const peaFeatures = typeof window.permissionOutPeaFeaturesForSegments === 'function' ? await window.permissionOutPeaFeaturesForSegments(segments) : [];
   const zip = new JSZip();
