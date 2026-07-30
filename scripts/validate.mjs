@@ -31,7 +31,7 @@ if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('bill
   throw new Error('Shared UI/export billing logic is missing');
 }
 if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
-for (const marker of ['class="categoryFilter" value="network"', 'class="categoryFilter" value="ready-access"', 'class="categoryFilter" value="customer"', 'name="reportOverlapMode"', 'function normalizeImportCategory(', 'function detectImportCategory(', 'function parseKML(text, sourceName', "line.importCategory || 'network'", 'function getActiveCategories()', 'window.permissionOutCompareFiles', 'renderer: aggregateRenderer']) {
+for (const marker of ['class="categoryFilter" value="network"', 'class="categoryFilter" value="ready-access"', 'class="categoryFilter" value="customer"', 'type="checkbox" name="reportOverlapMode"', 'value="limit-two"', 'function getReportOverlapModes(', 'function limitSelfOverlapCopies(', 'function normalizeImportCategory(', 'function detectImportCategory(', 'function parseKML(text, sourceName', "line.importCategory || 'network'", 'function getActiveCategories()', 'window.permissionOutCompareFiles', 'renderer: aggregateRenderer']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 import/report filter marker is missing: ${marker}`);
 }
 if (!production.includes('importCategory') || !production.includes('reportCategories: Array.from') || !production.includes('item?.category') || !production.includes('Array.isArray(line.c) ? line.c : line.coords')) {
@@ -64,13 +64,13 @@ for (const marker of ["source in ('pea', 'ufm', 'road', 'building')", 'create or
 for (const marker of ['create table if not exists public.osm_roads', 'create table if not exists public.osm_buildings', 'create or replace function public.osm_reference_features', '© OpenStreetMap contributors']) {
   if (!osmReferenceMigration.includes(marker)) throw new Error(`OSM reference migration marker is missing: ${marker}`);
 }
-for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEnabled()', "seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' }))", 'reportOverlapModeLabel()']) {
+for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEnabled()', "seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' }))", 'reportOverlapModeLabel()', "reportOverlapModes.has('overlap-only')"]) {
   if (!html.includes(marker)) throw new Error(`MOD 1 overlap-only report/export marker is missing: ${marker}`);
 }
 if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();')) {
   throw new Error('KML/KMZ export must include all selected source data, not only overlap-only result segments');
 }
-if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-trim-engine')) {
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-multi-report-filter')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Object.freeze({ label: 'Network', color: '#1E5BA8' })", "'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' })", "customer: Object.freeze({ label: 'Customer', color: '#B7791F' })", 'applyDatasetLineColors(', 'maxiCategoryColor(line, colorByKey.get(key))', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {

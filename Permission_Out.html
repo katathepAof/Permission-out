@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260730-trim-engine">
+<link rel="stylesheet" href="ux-refresh.css?v=20260730-multi-report-filter">
 </head>
 <body>
 
@@ -1309,17 +1309,21 @@ table.report td.num{
       <div class="field report-overlap-field">
         <span class="field-label">รูปแบบรายงาน</span>
         <input type="checkbox" id="dedupeToggle" hidden aria-hidden="true">
-        <div class="report-overlap-options" role="radiogroup" aria-label="การจัดการเส้นที่ทับกัน">
+        <div class="report-overlap-options" role="group" aria-label="การจัดการเส้นที่ทับกัน เลือกได้หลายตัวกรอง">
           <label>
-            <input type="radio" name="reportOverlapMode" value="keep" checked>
+            <input type="checkbox" name="reportOverlapMode" value="keep" checked>
             <span><strong>ทั้งหมด</strong><small>แสดงทุกเส้น</small></span>
           </label>
           <label>
-            <input type="radio" name="reportOverlapMode" value="dedupe">
+            <input type="checkbox" name="reportOverlapMode" value="dedupe">
             <span><strong>ตัดซ้ำ</strong><small>ตัดเส้นซ้ำ</small></span>
           </label>
           <label>
-            <input type="radio" name="reportOverlapMode" value="overlap-only">
+            <input type="checkbox" name="reportOverlapMode" value="limit-two">
+            <span><strong>คงไว้ไม่เกิน 2 เส้น</strong><small>กลุ่มตั้งแต่ 3 เส้น ตัดส่วนเกิน</small></span>
+          </label>
+          <label>
+            <input type="checkbox" name="reportOverlapMode" value="overlap-only">
             <span><strong>เฉพาะทับจริง</strong><small>ตัดส่วนเกิน</small></span>
           </label>
         </div>
@@ -2323,6 +2327,34 @@ function dedupeSelfOverlap(lines, threshold, interval) {
   return { accepted, removedCount };
 }
 
+function limitSelfOverlapCopies(lines, threshold, interval, maximumCopies = 2) {
+  const accepted = [];
+  let removedCount = 0;
+  const cellSizeMeters = Math.max(threshold * 1.5, 30);
+  const indexes = Array.from({ length: maximumCopies }, () => createEmptyIndex(cellSizeMeters));
+
+  for (const line of lines) {
+    if (line.coords.length < 2) continue;
+    const samples = sampleLine(line.coords, interval);
+    if (samples.length === 0) continue;
+    let targetIndex = null;
+    for (const index of indexes) {
+      const overlapCount = samples.filter(sample => isWithinThreshold(sample.coord, index, threshold)).length;
+      if (index.empty || overlapCount / samples.length < 0.9) {
+        targetIndex = index;
+        break;
+      }
+    }
+    if (!targetIndex) {
+      removedCount++;
+      continue;
+    }
+    accepted.push(line);
+    addLineToIndex(targetIndex, line);
+  }
+  return { accepted, removedCount };
+}
+
 // Used only in single-file mode: no opposite dataset to diff against, so every full line becomes
 // one segment as-is. status = 'new' if only base loaded, 'remove' if only compare loaded.
 function segmentsFromLinesDirect(lines, status) {
@@ -3299,16 +3331,31 @@ function getActiveOverlaps() {
   return active;
 }
 function getReportOverlapMode() {
-  return document.querySelector('input[name="reportOverlapMode"]:checked')?.value || 'keep';
+  const modes = getReportOverlapModes();
+  if (modes.has('overlap-only')) return 'overlap-only';
+  if (modes.has('dedupe')) return 'dedupe';
+  if (modes.has('limit-two')) return 'limit-two';
+  return 'keep';
+}
+function getReportOverlapModes() {
+  const selected = new Set(Array.from(
+    document.querySelectorAll('input[name="reportOverlapMode"]:checked'),
+    input => input.value
+  ));
+  if (!selected.size || selected.has('keep')) return new Set(['keep']);
+  return selected;
 }
 function overlapOnlyReportModeEnabled() {
-  return getReportOverlapMode() === 'overlap-only';
+  return getReportOverlapModes().has('overlap-only');
 }
 function reportOverlapModeLabel() {
-  const mode = getReportOverlapMode();
-  if (mode === 'dedupe') return 'ตัดเส้นที่ทับกัน';
-  if (mode === 'overlap-only') return 'แสดงเฉพาะช่วงที่ทับกันจริง';
-  return 'ไม่ตัดเส้นที่ทับกัน';
+  const modes = getReportOverlapModes();
+  if (modes.has('keep')) return 'แสดงทุกเส้น';
+  const labels = [];
+  if (modes.has('dedupe')) labels.push('ตัดเส้นที่ทับกัน');
+  if (modes.has('limit-two')) labels.push('กลุ่มทับกันคงไว้ไม่เกิน 2 เส้น');
+  if (modes.has('overlap-only')) labels.push('แสดงเฉพาะช่วงที่ทับกันจริง');
+  return labels.join(' + ');
 }
 
 function recomputeAll() {
@@ -3392,8 +3439,9 @@ async function runAnalysis() {
   }
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = Math.max(1, parseFloat(document.getElementById('interval').value) || 5);
-  const reportOverlapMode = getReportOverlapMode();
-  const dedupeEnabled = reportOverlapMode === 'dedupe';
+  const reportOverlapModes = getReportOverlapModes();
+  const dedupeEnabled = reportOverlapModes.has('dedupe');
+  const limitTwoEnabled = reportOverlapModes.has('limit-two') && !dedupeEnabled;
 
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
@@ -3449,8 +3497,12 @@ async function runAnalysis() {
     const rawCountB = linesB.length;
 
     // ตัดเส้นทับซ้อนเฉพาะเมื่อผู้ใช้เปิดสวิตช์ — ค่าเริ่มต้นปิด เพื่อให้ import ครบทุกเส้น
-    const dedupeA = dedupeEnabled ? dedupeSelfOverlap(linesA, threshold, interval) : { accepted: linesA, removedCount: 0 };
-    const dedupeB = dedupeEnabled ? dedupeSelfOverlap(linesB, threshold, interval) : { accepted: linesB, removedCount: 0 };
+    const dedupeA = dedupeEnabled
+      ? dedupeSelfOverlap(linesA, threshold, interval)
+      : limitTwoEnabled ? limitSelfOverlapCopies(linesA, threshold, interval, 2) : { accepted: linesA, removedCount: 0 };
+    const dedupeB = dedupeEnabled
+      ? dedupeSelfOverlap(linesB, threshold, interval)
+      : limitTwoEnabled ? limitSelfOverlapCopies(linesB, threshold, interval, 2) : { accepted: linesB, removedCount: 0 };
     linesA = dedupeA.accepted;
     linesB = dedupeB.accepted;
 
@@ -3465,7 +3517,7 @@ async function runAnalysis() {
     } else {
       resB = segmentsFromLinesDirect(linesA, 'new');    // มีเฉพาะ A/B → ไม่มีในเปรียบเทียบ → New
     }
-    if (reportOverlapMode === 'overlap-only') {
+    if (reportOverlapModes.has('overlap-only')) {
       resB = { segments: resB.segments.filter(seg => seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' })) };
     }
     const elapsedMs = Math.round(performance.now() - t0);
@@ -3505,7 +3557,7 @@ async function runAnalysis() {
     const noteParts = [];
     if (hasBase) noteParts.push(`นำเข้าฐาน ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
     if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
-    noteParts.push(dedupeEnabled ? 'รายงาน: ตัดเส้นทับกัน' : 'รายงาน: แสดงเส้นทับกัน');
+    noteParts.push(`รายงาน: ${reportOverlapModeLabel()}`);
     const importNote = noteParts.join(' · ');
     document.getElementById('execMeta').textContent = `${dateStr} · ${timeStr} · ${importNote} · ${state.segmentsB.length} ช่วง${breakdown} · ${elapsedMs.toLocaleString('th-TH')} มิลลิวินาที`;
 
@@ -4607,14 +4659,23 @@ updateSourceRoleUI();
 document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
 function syncReportOverlapModeFromLegacy() {
   const dedupe = Boolean(document.getElementById('dedupeToggle')?.checked);
-  const radio = document.querySelector(`input[name="reportOverlapMode"][value="${dedupe ? 'dedupe' : 'keep'}"]`);
-  if (radio) radio.checked = true;
+  document.querySelectorAll('input[name="reportOverlapMode"]').forEach(input => {
+    input.checked = input.value === (dedupe ? 'dedupe' : 'keep');
+  });
 }
 window.permissionOutSyncOverlapMode = syncReportOverlapModeFromLegacy;
-document.querySelectorAll('input[name="reportOverlapMode"]').forEach(radio => {
-  radio.addEventListener('change', () => {
+document.querySelectorAll('input[name="reportOverlapMode"]').forEach(input => {
+  input.addEventListener('change', () => {
+    const all = document.querySelector('input[name="reportOverlapMode"][value="keep"]');
+    const filters = Array.from(document.querySelectorAll('input[name="reportOverlapMode"]:not([value="keep"])'));
+    if (input.value === 'keep' && input.checked) {
+      filters.forEach(filter => { filter.checked = false; });
+    } else if (input.value !== 'keep' && input.checked && all) {
+      all.checked = false;
+    }
+    if (!document.querySelector('input[name="reportOverlapMode"]:checked') && all) all.checked = true;
     const legacy = document.getElementById('dedupeToggle');
-    if (legacy) legacy.checked = radio.value === 'dedupe';
+    if (legacy) legacy.checked = Boolean(document.querySelector('input[name="reportOverlapMode"][value="dedupe"]:checked'));
     if ((hasBaseSources() || hasCompareSources()) && (state.segmentsB.length || state.mapSourceLines.length)) {
       runAnalysis();
     }
