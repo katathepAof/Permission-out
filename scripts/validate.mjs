@@ -146,7 +146,7 @@ if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA A
 if (!html.includes('name="kmlPopupField"') || !html.includes('function kmlPopupDescription(') || !html.includes('selectedKmlPopupFields()')) {
   throw new Error('KML/KMZ selectable Popup fields are missing');
 }
-if (!html.includes('id="kmlProvinceFolders"') || !html.includes('function renderKmlLayerPlacemarks(') || !html.includes('function kmlProvinceFolderName(') || !html.includes('function renderKmlSourceFolder(')) {
+if (!html.includes('id="kmlProvinceFolders"') || !html.includes('function renderKmlLayerPlacemarks(') || !html.includes('function kmlProvinceFolderName(') || !html.includes('function renderKmlSourceContent(') || !html.includes('function renderKmlSourceFolder(')) {
   throw new Error('KML/KMZ province Folder option is missing');
 }
 if (!html.includes('id="kmlExportDialog"') || !html.includes('function requestKmlExportOptions(') || !html.includes('dialog.showModal()')) {

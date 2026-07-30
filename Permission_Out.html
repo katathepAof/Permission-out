@@ -4417,8 +4417,8 @@ function renderKmlLayerPlacemarks(layer, province = null) {
     .map(item => item.kml)
     .join('');
 }
-function renderKmlSourceFolder(source, province = null) {
-  const content = Array.from(source.categories.values()).map(category => {
+function renderKmlSourceContent(source, province = null) {
+  return Array.from(source.categories.values()).map(category => {
     const categoryContent = Array.from(category.layers.values()).map(layer => {
       const layerContent = renderKmlLayerPlacemarks(layer, province);
       if (!layerContent) return '';
@@ -4431,6 +4431,9 @@ function renderKmlSourceFolder(source, province = null) {
       ? categoryContent
       : `<Folder><name>${xmlEscape(category.name)}</name><open>1</open><visibility>1</visibility>${categoryContent}</Folder>`;
   }).join('');
+}
+function renderKmlSourceFolder(source, province = null) {
+  const content = renderKmlSourceContent(source, province);
   return content
     ? `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${content}</Folder>`
     : '';
@@ -4537,10 +4540,17 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
   });
   const sources = Array.from(sourceEntries.values());
   const placemarks = document.getElementById('kmlProvinceFolders')?.checked
-    ? Array.from(new Set(segments.map(kmlProvinceFolderName)))
-        .sort((left, right) => left.localeCompare(right, 'th'))
-        .map(province => `<Folder><name>${xmlEscape(province)}</name><open>1</open><visibility>1</visibility>${sources.map(source => renderKmlSourceFolder(source, province)).join('')}</Folder>`)
-        .join('')
+    ? sources.map(source => {
+        const provinces = new Set();
+        source.categories.forEach(category => category.layers.forEach(layer =>
+          layer.placemarks.forEach(item => provinces.add(item.province))
+        ));
+        const provinceFolders = Array.from(provinces)
+          .sort((left, right) => left.localeCompare(right, 'th'))
+          .map(province => `<Folder><name>${xmlEscape(province)}</name><open>1</open><visibility>1</visibility>${renderKmlSourceContent(source, province)}</Folder>`)
+          .join('');
+        return `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${provinceFolders}</Folder>`;
+      }).join('')
     : sources.map(source => renderKmlSourceFolder(source)).join('');
   const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
