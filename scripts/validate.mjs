@@ -9,6 +9,7 @@ const production = await readFile(resolve(root, 'production.js'), 'utf8');
 const adminUsers = await readFile(resolve(root, 'admin-users.js'), 'utf8');
 const adminData = await readFile(resolve(root, 'admin-data.js'), 'utf8');
 const uxRefresh = await readFile(resolve(root, 'ux-refresh.js'), 'utf8');
+const uxRefreshCss = await readFile(resolve(root, 'ux-refresh.css'), 'utf8');
 const mod2Html = await readFile(resolve(root, 'mod2.html'), 'utf8');
 const mod2Js = await readFile(resolve(root, 'mod2.js'), 'utf8');
 const loginHtml = await readFile(resolve(root, 'login.html'), 'utf8');
@@ -45,6 +46,9 @@ for (const marker of ['CATALOG_RENDER_PAGE_SIZE', 'baseCatalogIndex', 'compareCa
 }
 for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEnabled()', "seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' }))", 'if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();', 'reportOverlapModeLabel()']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 overlap-only report/export marker is missing: ${marker}`);
+}
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('repeat(3,minmax(0,1fr))') || !html.includes('ux-refresh.css?v=20260730-overlap-only-layout')) {
+  throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
   if (!html.includes(marker)) throw new Error(`Distinct MOD 1 dataset line color marker is missing: ${marker}`);

@@ -291,9 +291,9 @@ body.ux-enhanced .execSummary .liveBadge{display:none;}
 .report-overlap-options span{display:flex;min-width:0;flex-direction:column}
 .report-overlap-options strong{color:#233d5d;font-size:.72rem;line-height:1.25}
 .report-overlap-options small{margin-top:3px;color:#7d899a;font-size:.62rem;line-height:1.35}
-.report-overlap-field{grid-column:1/-1}
+.report-overlap-field{grid-column:1/-1;flex:1 1 100%;width:100%;min-width:260px}
 .report-overlap-field>.field-label{color:#43536a;font-size:.72rem;font-weight:700}
-.report-overlap-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.report-overlap-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 @media(max-width:720px){
   .report-overlap-options{grid-template-columns:1fr}
 }

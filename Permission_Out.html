@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260726-dataset-picker">
+<link rel="stylesheet" href="ux-refresh.css?v=20260730-overlap-only-layout">
 </head>
 <body>
 
@@ -1312,15 +1312,15 @@ table.report td.num{
         <div class="report-overlap-options" role="radiogroup" aria-label="การจัดการเส้นที่ทับกัน">
           <label>
             <input type="radio" name="reportOverlapMode" value="keep" checked>
-            <span><strong>ไม่ตัดเส้นที่ทับกัน</strong><small>แสดงทุกเส้นจากไฟล์ต้นทาง</small></span>
+            <span><strong>ทั้งหมด</strong><small>แสดงทุกเส้น</small></span>
           </label>
           <label>
             <input type="radio" name="reportOverlapMode" value="dedupe">
-            <span><strong>ตัดเส้นที่ทับกัน</strong><small>ตัดเส้นซ้ำก่อนสร้างรายงาน</small></span>
+            <span><strong>ตัดซ้ำ</strong><small>ตัดเส้นซ้ำ</small></span>
           </label>
           <label>
             <input type="radio" name="reportOverlapMode" value="overlap-only">
-            <span><strong>แสดงเฉพาะช่วงที่ทับกันจริง</strong><small>ตัดเส้นที่ไม่ทับและส่วนเกินออกจากแผนที่/Export</small></span>
+            <span><strong>เฉพาะทับจริง</strong><small>ตัดส่วนเกิน</small></span>
           </label>
         </div>
       </div>
