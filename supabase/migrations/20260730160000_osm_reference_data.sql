@@ -52,7 +52,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   with bounds as (
     select ST_MakeEnvelope(p_min_lng, p_min_lat, p_max_lng, p_max_lat, 4326) as geometry
@@ -97,4 +97,3 @@ $$;
 
 revoke all on function public.osm_reference_features(double precision, double precision, double precision, double precision, boolean, boolean, integer) from public;
 grant execute on function public.osm_reference_features(double precision, double precision, double precision, double precision, boolean, boolean, integer) to service_role;
-

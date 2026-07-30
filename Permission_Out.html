@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260730-osm-reference">
+<link rel="stylesheet" href="ux-refresh.css?v=20260730-managed-reference">
 </head>
 <body>
 
@@ -1482,10 +1482,10 @@ table.report td.num{
             <div class="pea-layer-list" id="peaLayerList" role="group" aria-label="เลือกพื้นที่ PEA หลายรายการ"></div>
           </div>
         </div>
-        <div class="osm-reference-control" aria-label="ข้อมูลอ้างอิง OpenStreetMap">
+        <div class="osm-reference-control" aria-label="ข้อมูลอ้างอิงภายในระบบ">
           <label><input type="checkbox" id="osmRoadToggle"> ถนน</label>
           <label><input type="checkbox" id="osmBuildingToggle"> อาคาร</label>
-          <small id="osmReferenceStatus">© OpenStreetMap contributors</small>
+          <small id="osmReferenceStatus">ข้อมูลจากคลังภายใน</small>
         </div>
         <div class="map-search-wrap">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -4669,7 +4669,7 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260730-osm-reference"></script>
+<script src="production.js?v=20260730-managed-reference"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
 <script src="ux-refresh.js?v=20260730-export-feedback"></script>

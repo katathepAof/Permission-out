@@ -158,18 +158,18 @@
       osmReferenceLayer = null;
     }
     if (!types.length) {
-      if (osmReferenceStatus) osmReferenceStatus.textContent = '© OpenStreetMap contributors';
+      if (osmReferenceStatus) osmReferenceStatus.textContent = 'ข้อมูลจากคลังภายใน';
       return;
     }
     const bounds = map.getBounds();
     const west = bounds.getWest(), south = bounds.getSouth(), east = bounds.getEast(), north = bounds.getNorth();
     if (east - west > 0.5 || north - south > 0.5) {
-      if (osmReferenceStatus) osmReferenceStatus.textContent = 'ซูมเข้าเพื่อโหลด OSM';
+      if (osmReferenceStatus) osmReferenceStatus.textContent = 'ซูมเข้าเพื่อโหลดข้อมูลอ้างอิง';
       return;
     }
-    if (osmReferenceStatus) osmReferenceStatus.textContent = 'กำลังโหลด OSM…';
+    if (osmReferenceStatus) osmReferenceStatus.textContent = 'กำลังโหลดข้อมูลอ้างอิง…';
     try {
-      const data = await authenticatedJson(`/api/data/osm-reference?bbox=${[west, south, east, north].map(value => value.toFixed(6)).join(',')}&types=${types.join(',')}&limit=25000`);
+      const data = await authenticatedJson(`/api/data/reference?bbox=${[west, south, east, north].map(value => value.toFixed(6)).join(',')}&types=${types.join(',')}&limit=25000`);
       osmReferenceLayer = L.geoJSON(data, {
         style: feature => feature.properties?.reference_type === 'building'
           ? { color: '#8B5E3C', weight: 1, fillColor: '#D9B38C', fillOpacity: 0.22 }
@@ -177,9 +177,9 @@
         interactive: false
       }).addTo(map);
       const count = Array.isArray(data.features) ? data.features.length : 0;
-      if (osmReferenceStatus) osmReferenceStatus.textContent = `${count.toLocaleString('th-TH')} รายการ · © OSM`;
+      if (osmReferenceStatus) osmReferenceStatus.textContent = `${count.toLocaleString('th-TH')} รายการ · คลังภายใน`;
     } catch (error) {
-      if (osmReferenceStatus) osmReferenceStatus.textContent = `โหลด OSM ไม่สำเร็จ: ${error.message}`;
+      if (osmReferenceStatus) osmReferenceStatus.textContent = `โหลดข้อมูลอ้างอิงไม่สำเร็จ: ${error.message}`;
     }
   }
 

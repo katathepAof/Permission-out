@@ -429,7 +429,7 @@ async function deleteAdminUser(request, env, targetId) {
 
 function cleanDataSource(value) {
   const source = String(value || '').toLowerCase();
-  if (!['pea', 'ufm'].includes(source)) throw new HttpError(400, 'ประเภทชุดข้อมูลต้องเป็น PEA หรือ UFM', 'validation_error');
+  if (!['pea', 'ufm', 'road', 'building'].includes(source)) throw new HttpError(400, 'ประเภทชุดข้อมูลต้องเป็น PEA, UFM, Road หรือ Building', 'validation_error');
   return source;
 }
 
@@ -629,17 +629,19 @@ function validateManagedFeature(value, index) {
     throw new HttpError(400, `Metadata ของ ${name} มีขนาดใหญ่เกินไป`, 'validation_error');
   }
   const geometry = value.geometry;
-  if (!geometry || !['LineString', 'MultiLineString'].includes(geometry.type)) {
-    throw new HttpError(400, `${name} ต้องเป็น LineString หรือ MultiLineString`, 'validation_error');
+  if (!geometry || !['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon'].includes(geometry.type)) {
+    throw new HttpError(400, `${name} ต้องเป็น LineString, MultiLineString, Polygon หรือ MultiPolygon`, 'validation_error');
   }
-  const lines = geometry.type === 'LineString' ? [geometry.coordinates] : geometry.coordinates;
-  if (!Array.isArray(lines) || !lines.length) throw new HttpError(400, `${name} ไม่มีพิกัด`, 'validation_error');
   let coordinateCount = 0;
-  for (const line of lines) {
-    if (!Array.isArray(line) || line.length < 2 || !line.every(validateCoordinatePair)) {
-      throw new HttpError(400, `พิกัดของ ${name} ไม่ถูกต้อง`, 'validation_error');
+  const countCoordinates = coordinates => {
+    if (validateCoordinatePair(coordinates)) {
+      coordinateCount += 1;
+      return true;
     }
-    coordinateCount += line.length;
+    return Array.isArray(coordinates) && coordinates.length > 0 && coordinates.every(countCoordinates);
+  };
+  if (!countCoordinates(geometry.coordinates)) {
+    throw new HttpError(400, `พิกัดของ ${name} ไม่ถูกต้อง`, 'validation_error');
   }
   if (coordinateCount > 50_000) throw new HttpError(400, `${name} มีพิกัดมากเกิน 50,000 จุด`, 'validation_error');
   return { logical_id: logicalId, source_index: sourceIndex, name, properties, geometry };
@@ -1192,7 +1194,7 @@ async function handleAdminApi(request, env, url) {
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
 }
 
-async function osmReferenceFeatures(request, env, url) {
+async function managedReferenceFeatures(request, env, url) {
   const { supabase } = await requireModuleAccess(request, env, 'mod1', 'read');
   const bbox = String(url.searchParams.get('bbox') || '').split(',').map(Number);
   if (bbox.length !== 4 || bbox.some(value => !Number.isFinite(value))) {
@@ -1208,17 +1210,24 @@ async function osmReferenceFeatures(request, env, url) {
   }
   const types = new Set(String(url.searchParams.get('types') || 'road,building').split(','));
   const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit')) || 10000, 25000));
-  const { data, error } = await supabase.rpc('osm_reference_features', {
-    p_min_lng: minLng,
-    p_min_lat: minLat,
-    p_max_lng: maxLng,
-    p_max_lat: maxLat,
-    p_include_roads: types.has('road'),
-    p_include_buildings: types.has('building'),
-    p_limit: limit
+  const requestedTypes = ['road', 'building'].filter(type => types.has(type));
+  const collections = await Promise.all(requestedTypes.map(async source => {
+    const { data, error } = await supabase.rpc('managed_reference_features', {
+      p_source: source,
+      p_min_lng: minLng,
+      p_min_lat: minLat,
+      p_max_lng: maxLng,
+      p_max_lat: maxLat,
+      p_limit: limit
+    });
+    if (error) throw error;
+    return data;
+  }));
+  return jsonResponse({
+    type: 'FeatureCollection',
+    features: collections.flatMap(collection => collection?.features || []),
+    source: 'managed-private'
   });
-  if (error) throw error;
-  return jsonResponse(data);
 }
 
 async function handleDataApi(request, env, url) {
@@ -1226,7 +1235,7 @@ async function handleDataApi(request, env, url) {
   if (assetMatch) return activeMod1Asset(request, env, assetMatch[1]);
   if (url.pathname === '/api/data/billing-formula') return activeBillingFormula(request, env, url);
   if (request.method === 'GET' && url.pathname === '/api/data/catalog') return activeDatasetCatalog(request, env);
-  if (request.method === 'GET' && url.pathname === '/api/data/osm-reference') return osmReferenceFeatures(request, env, url);
+  if (request.method === 'GET' && url.pathname === '/api/data/reference') return managedReferenceFeatures(request, env, url);
   const featureMatch = url.pathname.match(/^\/api\/data\/datasets\/([^/]+)\/features$/);
   if (featureMatch && request.method === 'GET') return activeDatasetFeatures(request, env, featureMatch[1]);
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');

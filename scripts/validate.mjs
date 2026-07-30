@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260730160000_osm_reference_data.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-osm-reference.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260730160000_osm_reference_data.sql', 'supabase/migrations/20260730180000_managed_reference_datasets.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-osm-reference.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 const production = await readFile(resolve(root, 'production.js'), 'utf8');
@@ -17,6 +17,7 @@ const loginJs = await readFile(resolve(root, 'login.js'), 'utf8');
 const workerSource = await readFile(resolve(root, 'src/worker.js'), 'utf8');
 const privateAccessMigration = await readFile(resolve(root, 'supabase/migrations/20260726120000_private_mod1_access.sql'), 'utf8');
 const osmReferenceMigration = await readFile(resolve(root, 'supabase/migrations/20260730160000_osm_reference_data.sql'), 'utf8');
+const managedReferenceMigration = await readFile(resolve(root, 'supabase/migrations/20260730180000_managed_reference_datasets.sql'), 'utf8');
 const uploadScripts = await Promise.all([
   'scripts/upload-pea-data.mjs',
   'scripts/upload-uih-data.mjs',
@@ -48,8 +49,14 @@ for (const marker of ['CATALOG_RENDER_PAGE_SIZE', 'baseCatalogIndex', 'compareCa
 for (const marker of ['id="osmRoadToggle"', 'id="osmBuildingToggle"', 'id="osmReferenceStatus"']) {
   if (!html.includes(marker)) throw new Error(`OSM reference control is missing: ${marker}`);
 }
-for (const marker of ['/api/data/osm-reference', 'osmReferenceFeatures(', "supabase.rpc('osm_reference_features'"]) {
+for (const marker of ['/api/data/reference', 'managedReferenceFeatures(', "supabase.rpc('managed_reference_features'"]) {
   if (!`${production}\n${workerSource}`.includes(marker)) throw new Error(`OSM reference runtime marker is missing: ${marker}`);
+}
+for (const marker of ["value=\"road\"", "value=\"building\"", 'buildingFeaturesFromKml(', "source === 'building'"]) {
+  if (!adminData.includes(marker)) throw new Error(`Managed Road/Building upload marker is missing: ${marker}`);
+}
+for (const marker of ["source in ('pea', 'ufm', 'road', 'building')", 'create or replace function public.managed_reference_features']) {
+  if (!managedReferenceMigration.includes(marker)) throw new Error(`Managed reference migration marker is missing: ${marker}`);
 }
 for (const marker of ['create table if not exists public.osm_roads', 'create table if not exists public.osm_buildings', 'create or replace function public.osm_reference_features', '© OpenStreetMap contributors']) {
   if (!osmReferenceMigration.includes(marker)) throw new Error(`OSM reference migration marker is missing: ${marker}`);
@@ -60,7 +67,7 @@ for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEna
 if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();')) {
   throw new Error('KML/KMZ export must include all selected source data, not only overlap-only result segments');
 }
-if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-osm-reference')) {
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-managed-reference')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Object.freeze({ label: 'Network', color: '#1E5BA8' })", "'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' })", "customer: Object.freeze({ label: 'Customer', color: '#B7791F' })", 'applyDatasetLineColors(', 'maxiCategoryColor(line, colorByKey.get(key))', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {

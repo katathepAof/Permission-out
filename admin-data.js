@@ -97,6 +97,39 @@
     });
   }
 
+  function kmlCoordinateList(value) {
+    return String(value || '').trim().split(/\s+/).map(tuple => {
+      const [lng, lat] = tuple.split(',').map(Number);
+      return [lng, lat];
+    }).filter(pair => pair.every(Number.isFinite));
+  }
+
+  function buildingFeaturesFromKml(text, fileName) {
+    const documentNode = new DOMParser().parseFromString(text, 'application/xml');
+    if (documentNode.querySelector('parsererror')) throw new Error('KML ของ Building polygon ไม่ถูกต้อง');
+    const features = [];
+    for (const [placemarkIndex, placemark] of Array.from(documentNode.getElementsByTagName('Placemark')).entries()) {
+      const polygons = Array.from(placemark.getElementsByTagName('Polygon')).map(polygon => {
+        const rings = Array.from(polygon.getElementsByTagName('LinearRing'))
+          .map(ring => kmlCoordinateList(ring.getElementsByTagName('coordinates')[0]?.textContent))
+          .filter(ring => ring.length >= 4);
+        return rings;
+      }).filter(rings => rings.length);
+      if (!polygons.length) continue;
+      const name = placemark.getElementsByTagName('name')[0]?.textContent?.trim() || `Building ${placemarkIndex + 1}`;
+      features.push({
+        logical_id: `${cleanIdentity(fileName)}::building::${placemarkIndex + 1}`,
+        source_index: features.length,
+        name: name.slice(0, 500),
+        properties: { source_file: fileName, reference_type: 'building' },
+        geometry: polygons.length === 1
+          ? { type: 'Polygon', coordinates: polygons[0] }
+          : { type: 'MultiPolygon', coordinates: polygons }
+      });
+    }
+    return features;
+  }
+
   function statusLabel(status) {
     return {
       staging: 'กำลังนำเข้า',
@@ -247,9 +280,14 @@
         throw new Error('ไม่พบตัวอ่าน KML/KMZ ของระบบ');
       }
       const text = await window.readKmlOrKmzText(file);
-      const lines = window.parseKML(text).map(line => ({ ...line, sourceFile: file.name }));
-      if (!lines.length) throw new Error('ไม่พบเส้นทางในไฟล์');
-      const features = linesToFeatures(lines, file.name);
+      const lines = source === 'building' ? [] : window.parseKML(text).map(line => ({ ...line, sourceFile: file.name }));
+      const features = source === 'building'
+        ? buildingFeaturesFromKml(text, file.name)
+        : linesToFeatures(lines, file.name).map(feature => ({
+          ...feature,
+          properties: { ...feature.properties, reference_type: source === 'road' ? 'road' : source }
+        }));
+      if (!features.length) throw new Error(source === 'building' ? 'ไม่พบ Building polygon ในไฟล์' : 'ไม่พบเส้นทางในไฟล์');
       for (let offset = 0; offset < features.length; offset += FEATURE_BATCH_SIZE) {
         const batch = features.slice(offset, offset + FEATURE_BATCH_SIZE);
         await api(`/api/admin/data/versions/${encodeURIComponent(versionId)}/features`, {
@@ -318,7 +356,7 @@
     sourceField.append(el('span', '', 'ชุดข้อมูล'));
     const source = document.createElement('select');
     source.id = 'adminDataSource';
-    source.innerHTML = '<option value="pea">PEA</option><option value="ufm">UFM</option>';
+    source.innerHTML = '<option value="pea">PEA</option><option value="ufm">UFM</option><option value="road">Road centerline</option><option value="building">Building polygon</option>';
     sourceField.appendChild(source);
     const fileField = el('label', 'admin-data-file');
     fileField.append(el('span', '', 'ไฟล์ KML/KMZ — เลือกได้หลายไฟล์'));
