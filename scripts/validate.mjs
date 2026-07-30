@@ -64,6 +64,9 @@ if (!csvSection.includes('Imported source lines included in this export') || !cs
 if (!html.includes('function sourceLineMatchedWith(') || !html.includes('function sourceLineBillingNote(') || !html.includes('function sourceLineOverlapMatches(') || !csvSection.includes('=== Export Summary ===')) {
   throw new Error('CSV export must include summary, matched routes, and billing inclusion audit fields');
 }
+if (!html.includes('function rd03MaxiMatchRows(') || !csvSection.includes('rd03 to Maxi match detail') || !csvSection.includes('Maxi count for rd03') || !csvSection.includes('Maxi source file')) {
+  throw new Error('CSV export must include complete rd03-to-Maxi match detail rows');
+}
 if (!html.includes('function sourceFileColumnValue(line)') || !html.includes('`${groupLabel} | ${fileName}`') || !csvSection.includes('sourceFileColumnValue(seg)')) {
   throw new Error('CSV export must show each route source file clearly in one column');
 }

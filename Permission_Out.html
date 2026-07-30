@@ -3391,6 +3391,16 @@ function sourceLineOverlapMatches(line, sourceExportLines, sourceOverlapGroups) 
   return matches.length ? matches : sourceExportLines.filter(item => item !== line && sourceOverlapGroups.get(item) === group);
 }
 
+function rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups) {
+  return sourceExportLines
+    .filter(line => sourceLineGroup(line) === 'BASE' && mod1ComparisonFileName(line).includes('rd03'))
+    .flatMap(rd03Line => {
+      const matches = sourceLineOverlapMatches(rd03Line, sourceExportLines, sourceOverlapGroups)
+        .filter(item => mod1ComparisonFileName(item).includes('maxi'));
+      return matches.map((maxiLine, matchIndex) => ({ rd03Line, maxiLine, matchIndex, totalMatches: matches.length }));
+    });
+}
+
 // Assign one stable export label to every connected group of routes that follows
 // the same corridor/road side. A short route can join a longer route when at
 // least 60% of the short route is within the configured overlap distance.
@@ -3680,6 +3690,46 @@ async function exportCSV() {
       fmtCoord(coords[Math.max(0, coords.length - 1)]),
       sourceMetadata.measured || '',
       sourceMetadata.calculated || ''
+    ]);
+  });
+
+  const rd03MaxiRows = rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups);
+  rows.push([]);
+  rows.push(['rd03 to Maxi match detail']);
+  rows.push(['Count', rd03MaxiRows.length]);
+  rows.push(['rd03 No.', 'Match No.', 'Maxi count for rd03', 'Match marker', 'Overlap group', 'rd03 source file', 'rd03 code', 'rd03 name', 'rd03 province', 'rd03 length (km)', 'Maxi source file', 'Maxi dataset ID', 'Maxi source key', 'Maxi code', 'Maxi name', 'Maxi province', 'Maxi import category', 'Maxi status from file', 'Maxi cable_type', 'Maxi Type', 'Maxi Core', 'Maxi Diameter (mm)', 'Maxi length (km)', 'Maxi start (Lat, Lon)', 'Maxi end (Lat, Lon)', 'Maxi measured', 'Maxi calculated']);
+  rd03MaxiRows.forEach(({ rd03Line, maxiLine, matchIndex, totalMatches }, index) => {
+    const rd03Coords = rd03Line.coords || [];
+    const maxiCoords = maxiLine.coords || [];
+    const maxiMetadata = maxiLine.sourceMetadata || {};
+    rows.push([
+      index + 1,
+      matchIndex + 1,
+      totalMatches,
+      '●',
+      sourceOverlapGroups.get(rd03Line) || '',
+      sourceFileColumnValue(rd03Line),
+      placemarkCode(rd03Line),
+      placemarkName(rd03Line),
+      getSegProvince(rd03Line),
+      (lineLengthMeters(rd03Coords) / 1000).toFixed(3),
+      sourceFileColumnValue(maxiLine),
+      maxiLine.sourceDatasetId || '',
+      maxiLine.sourceKey || '',
+      placemarkCode(maxiLine),
+      placemarkName(maxiLine),
+      getSegProvince(maxiLine),
+      normalizeImportCategory(maxiLine.importCategory),
+      maxiLine.cableStatus || '-',
+      maxiLine.cableType || '-',
+      maxiLine.rawType || maxiLine.type || '-',
+      maxiLine.core ?? '-',
+      segmentDiameterValue(maxiLine),
+      (lineLengthMeters(maxiCoords) / 1000).toFixed(3),
+      fmtCoord(maxiCoords[0]),
+      fmtCoord(maxiCoords[Math.max(0, maxiCoords.length - 1)]),
+      maxiMetadata.measured || '',
+      maxiMetadata.calculated || ''
     ]);
   });
 
