@@ -69,6 +69,9 @@
   const billingExportButtons = ['exportCsvBtn', 'exportKmlBtn', 'exportKmzBtn']
     .map(id => q(`#${id}`))
     .filter(Boolean);
+  const exportModeControl = q('#exportModeControl');
+  const exportModeHint = q('#exportModeHint');
+  const exportStatus = q('#exportStatus');
   const billingCostList = q('.costList', billingCard);
   const billingTotalBanner = q('.totalBanner', billingCard);
   if (billingHeader && billingCostList && billingTotalBanner && billingExportButtons.length) {
@@ -105,8 +108,13 @@
         <strong id="billingExportTitle">ส่งออกข้อมูล</strong>
         <span>ส่งออกเฉพาะรายการที่ผ่านตัวกรองในหน้ารายงาน</span>
       </div>
+      <div class="billing-export-settings"></div>
       <div class="billing-export-actions"></div>`;
+    const exportSettings = q('.billing-export-settings', exportPanel);
     const exportActions = q('.billing-export-actions', exportPanel);
+    if (exportModeControl) exportSettings.appendChild(exportModeControl);
+    if (exportModeHint) exportSettings.appendChild(exportModeHint);
+    if (exportStatus) exportSettings.appendChild(exportStatus);
     billingExportButtons.forEach(button => exportActions.appendChild(button));
     billingTotalBanner.after(exportPanel);
   }

@@ -569,6 +569,40 @@ body.ux-enhanced #billingCard .totalBanner-val .currency{
   font-size:.68rem;
   line-height:1.45;
 }
+.billing-export-settings{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:5px 10px;
+  margin-block-start:10px;
+  padding:9px 10px;
+  border:1px solid #dbe4ef;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.billing-export-settings #exportModeControl{
+  font-weight:700;
+  color:var(--ux-text);
+}
+.export-mode-hint{
+  color:var(--ux-text-muted);
+  font-size:.66rem;
+  line-height:1.4;
+}
+.export-status{
+  grid-column:1/-1;
+  min-height:18px;
+  color:var(--ux-primary);
+  font-size:.68rem;
+  font-weight:700;
+}
+.export-status.is-busy{color:#7a5b00;}
+.export-status.is-success{color:#157347;}
+.export-status.is-error{color:#b42318;}
+.billing-export-actions .ghost:disabled{
+  cursor:wait;
+  opacity:.65;
+}
 .billing-export-actions{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));

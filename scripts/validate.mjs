@@ -50,7 +50,7 @@ for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEna
 if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();')) {
   throw new Error('KML/KMZ export must include all selected source data, not only overlap-only result segments');
 }
-if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-compact-report-options')) {
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-export-feedback')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
@@ -120,6 +120,9 @@ if (!html.includes('function kmlExportMeta(segment)') || !html.includes('const e
   throw new Error('KML/KMZ export must precompute per-line metadata and use fast KMZ compression mode');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
+for (const marker of ['id="exportStatus"', 'function confirmExport(', 'function runExport(', 'exportInProgress', 'result.itemCount', 'formatExportBytes(result.size)']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 export progress or confirmation UX marker is missing: ${marker}`);
+}
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
   throw new Error('Logical PEA/UFM dataset grouping or province map focus is missing');
 }

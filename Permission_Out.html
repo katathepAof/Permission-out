@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260730-compact-report-options">
+<link rel="stylesheet" href="ux-refresh.css?v=20260730-export-feedback">
 </head>
 <body>
 
@@ -1390,13 +1390,15 @@ table.report td.num{
       </button>
       <button type="button" class="ghost" id="exportKmlBtn">Export KML</button>
       <button type="button" class="ghost" id="exportKmzBtn">Export KMZ</button>
-      <label style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ink-soft);">
+      <label id="exportModeControl" style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ink-soft);">
         โหมด Export
         <select id="exportDetailMode" style="padding:6px 8px;border:1px solid var(--border-strong);border-radius:8px;font-size:.78rem;">
           <option value="fast" selected>เร็ว</option>
           <option value="detailed">ละเอียด</option>
         </select>
       </label>
+      <span id="exportModeHint" class="export-mode-hint">โหมดเร็วไม่แนบรายละเอียดพื้นที่ PEA เพื่อลดเวลาและขนาดไฟล์</span>
+      <div id="exportStatus" class="export-status" role="status" aria-live="polite">พร้อมส่งออกหลังการวิเคราะห์</div>
     </div>
     <div id="costStatus" class="perfNote" style="margin-top:0; margin-bottom:14px;">รอผลวิเคราะห์เส้นทาง — นำเข้าไฟล์ฐาน (A/B) และ/หรือไฟล์เปรียบเทียบ (C/D) ก่อน</div>
 
@@ -3874,16 +3876,11 @@ async function exportCSV() {
 
   const csvContent = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM so Excel reads Thai correctly
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const ts = new Date();
   const pad = n => String(n).padStart(2, '0');
-  a.href = url;
-  a.download = `kml_compare_report_${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const filename = `kml_compare_report_${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}.csv`;
+  downloadBlob(blob, filename);
+  return { filename, itemCount: exportSegments.length, size: blob.size };
 }
 
 function selectedSegmentsForExport() {
@@ -4291,7 +4288,10 @@ async function exportKML() {
   await ensurePeaAreasForExportMode(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
-  downloadBlob(new Blob([buildSelectedKml(segments, peaFeatures, overlapGroups)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' }), `kml_compare_selected_${exportTimestamp()}.kml`);
+  const blob = new Blob([buildSelectedKml(segments, peaFeatures, overlapGroups)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
+  const filename = `kml_compare_selected_${exportTimestamp()}.kml`;
+  downloadBlob(blob, filename);
+  return { filename, itemCount: segments.length, size: blob.size };
 }
 async function exportKMZ() {
   if (!ensureSegmentsAvailableForExport()) return;
@@ -4306,23 +4306,112 @@ async function exportKMZ() {
   const blob = await zip.generateAsync(fastExport
     ? { type: 'blob', compression: 'STORE' }
     : { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
-  downloadBlob(blob, `kml_compare_selected_${exportTimestamp()}.kmz`);
+  const filename = `kml_compare_selected_${exportTimestamp()}.kmz`;
+  downloadBlob(blob, filename);
+  return { filename, itemCount: segments.length, size: blob.size };
 }
 
-document.getElementById('exportCsvBtn').addEventListener('click', async (e) => {
-  e.preventDefault();
+const exportButtons = ['exportCsvBtn', 'exportKmlBtn', 'exportKmzBtn']
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+const exportModeSelect = document.getElementById('exportDetailMode');
+const exportModeHint = document.getElementById('exportModeHint');
+const exportStatus = document.getElementById('exportStatus');
+let exportInProgress = false;
+
+function setExportStatus(message, stateName = '') {
+  if (!exportStatus) return;
+  exportStatus.textContent = message;
+  exportStatus.className = `export-status${stateName ? ` is-${stateName}` : ''}`;
+}
+function updateExportModeHint() {
+  if (!exportModeHint) return;
+  exportModeHint.textContent = exportIncludesPeaDetails()
+    ? 'โหมดละเอียดจะแนบข้อมูลและ Polygon พื้นที่ PEA อาจใช้เวลานานขึ้นและไฟล์มีขนาดใหญ่ขึ้น'
+    : 'โหมดเร็วไม่แนบรายละเอียดพื้นที่ PEA เพื่อลดเวลาและขนาดไฟล์';
+}
+function exportPreview(format) {
+  const segments = format === 'CSV' ? selectedSegmentsForExport() : selectedSourceLinesForKmlExport();
+  const provinces = getSelectedProvinces().filter(value => value && value !== '__ALL__');
+  return {
+    itemCount: segments.length,
+    provinceLabel: provinces.length ? provinces.join(', ') : 'ทุกจังหวัด',
+    modeLabel: exportIncludesPeaDetails() ? 'ละเอียด (รวมพื้นที่ PEA)' : 'เร็ว'
+  };
+}
+function confirmExport(format, preview) {
+  return window.confirm(
+    `ยืนยันการส่งออก ${format}\n\n` +
+    `จำนวนรายการ: ${preview.itemCount.toLocaleString('th-TH')}\n` +
+    `จังหวัด: ${preview.provinceLabel}\n` +
+    `โหมด: ${preview.modeLabel}\n\n` +
+    'ระบบจะใช้ตัวกรองที่เลือกอยู่ในปัจจุบัน'
+  );
+}
+function formatExportBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value.toLocaleString('th-TH')} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toLocaleString('th-TH', { maximumFractionDigits: 1 })} KB`;
+  return `${(value / (1024 * 1024)).toLocaleString('th-TH', { maximumFractionDigits: 1 })} MB`;
+}
+async function runExport(format, button, exporter) {
+  if (exportInProgress) return;
   if (state.segmentsB.length === 0 && state.totalB === 0) {
     alert('กรุณานำเข้าและวิเคราะห์เส้นทางก่อน Export');
+    setExportStatus('ยังไม่มีผลวิเคราะห์สำหรับส่งออก', 'error');
     return;
   }
-  try { await exportCSV(); } catch (err) { alert('Export CSV failed: ' + err.message); }
+  const preview = exportPreview(format);
+  if (!confirmExport(format, preview)) {
+    setExportStatus('ยกเลิกการส่งออกแล้ว');
+    return;
+  }
+  exportInProgress = true;
+  const startedAt = performance.now();
+  const originalLabels = new Map(exportButtons.map(item => [item, item.innerHTML]));
+  exportButtons.forEach(item => { item.disabled = true; });
+  if (exportModeSelect) exportModeSelect.disabled = true;
+  button.textContent = `กำลังสร้าง ${format}…`;
+  setExportStatus(`กำลังเตรียม ${preview.itemCount.toLocaleString('th-TH')} รายการ กรุณารอสักครู่…`, 'busy');
+  try {
+    const result = await exporter();
+    if (!result) {
+      setExportStatus('ไม่พบข้อมูลที่ตรงกับตัวกรองสำหรับส่งออก', 'error');
+      return;
+    }
+    const elapsedSeconds = Math.max(0.1, (performance.now() - startedAt) / 1000);
+    setExportStatus(
+      `ดาวน์โหลด ${result.filename} แล้ว · ${result.itemCount.toLocaleString('th-TH')} รายการ · ${formatExportBytes(result.size)} · ${elapsedSeconds.toLocaleString('th-TH', { maximumFractionDigits: 1 })} วินาที`,
+      'success'
+    );
+  } catch (err) {
+    setExportStatus(`ส่งออก ${format} ไม่สำเร็จ: ${err.message}`, 'error');
+    alert(`Export ${format} failed: ${err.message}`);
+  } finally {
+    exportButtons.forEach(item => {
+      item.disabled = false;
+      item.innerHTML = originalLabels.get(item);
+    });
+    if (exportModeSelect) exportModeSelect.disabled = false;
+    exportInProgress = false;
+  }
+}
+
+document.getElementById('exportCsvBtn').addEventListener('click', event => {
+  event.preventDefault();
+  runExport('CSV', event.currentTarget, exportCSV);
 });
-document.getElementById('exportKmlBtn').addEventListener('click', () => {
-  exportKML().catch(err => { alert('Export KML failed: ' + err.message); });
+document.getElementById('exportKmlBtn').addEventListener('click', event => {
+  runExport('KML', event.currentTarget, exportKML);
 });
-document.getElementById('exportKmzBtn').addEventListener('click', () => {
-  exportKMZ().catch(err => { alert('ไม่สามารถสร้างไฟล์ KMZ ได้: ' + err.message); });
+document.getElementById('exportKmzBtn').addEventListener('click', event => {
+  runExport('KMZ', event.currentTarget, exportKMZ);
 });
+exportModeSelect?.addEventListener('change', () => {
+  updateExportModeHint();
+  setExportStatus('ปรับโหมด Export แล้ว พร้อมส่งออกด้วยตัวกรองปัจจุบัน');
+});
+updateExportModeHint();
 
 const swapSourceRolesButton = document.getElementById('swapSourceRoles');
 swapSourceRolesButton?.addEventListener('click', async () => {
@@ -4552,6 +4641,6 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 <script src="production.js?v=20260727-multi-export"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
-<script src="ux-refresh.js?v=20260726-dataset-picker"></script>
+<script src="ux-refresh.js?v=20260730-export-feedback"></script>
 </body>
 </html>
