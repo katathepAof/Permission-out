@@ -44,10 +44,13 @@ for (const marker of ['dataset-drawer-overview', 'pickerBaseCount', 'pickerCompa
 for (const marker of ['CATALOG_RENDER_PAGE_SIZE', 'baseCatalogIndex', 'compareCatalogIndex', 'catalog-load-more']) {
   if (!`${production}\n${uxRefresh}`.includes(marker)) throw new Error(`Smooth MOD 1 dataset catalog marker is missing: ${marker}`);
 }
-for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEnabled()', "seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' }))", 'if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();', 'reportOverlapModeLabel()']) {
+for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEnabled()', "seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' }))", 'reportOverlapModeLabel()']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 overlap-only report/export marker is missing: ${marker}`);
 }
-if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('repeat(3,minmax(0,1fr))') || !html.includes('ux-refresh.css?v=20260730-overlap-only-layout')) {
+if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();')) {
+  throw new Error('KML/KMZ export must include all selected source data, not only overlap-only result segments');
+}
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('repeat(3,minmax(0,1fr))') || !uxRefreshCss.includes('white-space:nowrap') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260730-short-report-options')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {

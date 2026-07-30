@@ -284,13 +284,13 @@ body.ux-enhanced .execSummary .liveBadge{display:none;}
 .analysis-readiness.is-ready .analysis-readiness-dot{background:var(--ux-success);}
 .analysis-readiness.is-ready:not(.is-comparable){border-color:#c8d9ea;background:#f2f7fc;color:#315b7f}
 .analysis-readiness.is-ready:not(.is-comparable) .analysis-readiness-dot{background:#4a7ec2}
-.report-overlap-options>label{display:flex;min-width:0;align-items:flex-start;gap:8px;padding:10px;border:1px solid #dce4ef;border-radius:10px;background:#fff;cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s}
+.report-overlap-options>label{display:flex;min-width:0;align-items:center;gap:8px;padding:11px 12px;border:1px solid #dce4ef;border-radius:10px;background:#fff;cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s}
 .report-overlap-options>label:hover{border-color:#bfa044;background:#fffdf7}
 .report-overlap-options>label:has(input:checked){border-color:#b79322;background:#fffaf0;box-shadow:inset 0 0 0 1px rgba(183,147,34,.12)}
 .report-overlap-options input{flex:0 0 auto;margin:2px 0 0;accent-color:#173d6b}
 .report-overlap-options span{display:flex;min-width:0;flex-direction:column}
-.report-overlap-options strong{color:#233d5d;font-size:.72rem;line-height:1.25}
-.report-overlap-options small{margin-top:3px;color:#7d899a;font-size:.62rem;line-height:1.35}
+.report-overlap-options strong{color:#173d6b;font-size:.9rem;line-height:1.15;white-space:nowrap}
+.report-overlap-options small{display:none}
 .report-overlap-field{grid-column:1/-1;flex:1 1 100%;width:100%;min-width:260px}
 .report-overlap-field>.field-label{color:#43536a;font-size:.72rem;font-weight:700}
 .report-overlap-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
