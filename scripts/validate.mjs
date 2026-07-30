@@ -82,8 +82,14 @@ for (const marker of ['function buildExportOverlapGroups(', "'กลุ่มเ
 if (!html.includes('name="overlap_group"') || !html.includes('same_road_side_group_count')) {
   throw new Error('KML/KMZ same-road-side export grouping is missing');
 }
-if (!html.includes('function selectedSourceLinesForKmlExport()') || !html.includes('const segments = selectedSourceLinesForKmlExport();')) {
+if (!html.includes('function selectedSourceLinesForKmlExport()') || !html.includes('const segments = selectedSourceLinesForKmlExport();') || !html.includes('const activeOverlaps = getActiveOverlaps();') || !html.includes('sourceOverlapGroups.has(line) ? includeOverlapping : activeOverlaps.none')) {
   throw new Error('KML/KMZ export must include all selected MOD 1 source datasets');
+}
+if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlSourceStyleId(') || !html.includes('<Data name="source_layer">') || !html.includes('<Folder><name>${xmlEscape(entry.name)}</name><open>1</open>')) {
+  throw new Error('KML/KMZ export must separate selected source datasets into selectable colored folders');
+}
+if (!html.includes('function kmlExportLayerKey(') || !html.includes("name.includes('maxi')") || !html.includes('function kmlMaxiStatusColor(') || !html.includes('<Data name="kml_layer">')) {
+  throw new Error('KML/KMZ export must split Maxi layers and colors by source status');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
