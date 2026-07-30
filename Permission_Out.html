@@ -1401,22 +1401,6 @@ table.report td.num{
           <option value="detailed">ละเอียด</option>
         </select>
       </label>
-      <details id="kmlExportOptions" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--bg-soft);">
-        <summary style="cursor:pointer;font-size:.8rem;font-weight:700;color:var(--navy-700);">ตั้งค่า KML/KMZ: Popup และ Folder จังหวัด</summary>
-        <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:9px;font-size:.76rem;color:var(--ink-soft);">
-          <label><input type="checkbox" id="kmlProvinceFolders" checked> แยกจังหวัดเป็น Folder</label>
-          <span style="width:100%;font-weight:700;color:var(--ink);">ข้อมูลที่แสดงใน Popup</span>
-          <label><input type="checkbox" name="kmlPopupField" value="province" checked> จังหวัด</label>
-          <label><input type="checkbox" name="kmlPopupField" value="source" checked> แหล่งข้อมูล</label>
-          <label><input type="checkbox" name="kmlPopupField" value="status" checked> Status</label>
-          <label><input type="checkbox" name="kmlPopupField" value="relationship" checked> ความสัมพันธ์</label>
-          <label><input type="checkbox" name="kmlPopupField" value="length" checked> ระยะทาง</label>
-          <label><input type="checkbox" name="kmlPopupField" value="diameter"> ขนาดสาย</label>
-          <label><input type="checkbox" name="kmlPopupField" value="poles"> จำนวนเสา</label>
-          <label><input type="checkbox" name="kmlPopupField" value="cost"> ค่าบริการ</label>
-          <label><input type="checkbox" name="kmlPopupField" value="pea"> พื้นที่ PEA</label>
-        </div>
-      </details>
       <span id="exportModeHint" class="export-mode-hint">โหมดเร็วไม่แนบรายละเอียดพื้นที่ PEA เพื่อลดเวลาและขนาดไฟล์</span>
       <div id="exportStatus" class="export-status" role="status" aria-live="polite">พร้อมส่งออกหลังการวิเคราะห์</div>
     </div>
@@ -1470,6 +1454,30 @@ table.report td.num{
   </div>
 
 </div>
+
+<dialog id="kmlExportDialog" style="width:min(540px,calc(100vw - 32px));border:0;border-radius:16px;padding:0;box-shadow:0 24px 80px rgba(15,23,42,.28);">
+  <form method="dialog" style="padding:20px;">
+    <h3 id="kmlExportDialogTitle" style="margin:0 0 6px;color:var(--navy-700);">ตั้งค่าการ Export KML/KMZ</h3>
+    <p style="margin:0 0 16px;font-size:.82rem;color:var(--ink-soft);">เลือกข้อมูลที่ต้องการแสดงเมื่อคลิกเส้นทางใน Google Earth</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:.8rem;color:var(--ink-soft);">
+      <label style="width:100%;font-weight:700;color:var(--ink);"><input type="checkbox" id="kmlProvinceFolders" checked> จัดจังหวัดเป็น Folder ชั้นแรก</label>
+      <span style="width:100%;font-weight:700;color:var(--ink);margin-top:4px;">ข้อมูลที่แสดงใน Popup</span>
+      <label><input type="checkbox" name="kmlPopupField" value="province" checked> จังหวัด</label>
+      <label><input type="checkbox" name="kmlPopupField" value="source" checked> แหล่งข้อมูล</label>
+      <label><input type="checkbox" name="kmlPopupField" value="status" checked> Status</label>
+      <label><input type="checkbox" name="kmlPopupField" value="relationship" checked> ความสัมพันธ์</label>
+      <label><input type="checkbox" name="kmlPopupField" value="length" checked> ระยะทาง</label>
+      <label><input type="checkbox" name="kmlPopupField" value="diameter"> ขนาดสาย</label>
+      <label><input type="checkbox" name="kmlPopupField" value="poles"> จำนวนเสา</label>
+      <label><input type="checkbox" name="kmlPopupField" value="cost"> ค่าบริการ</label>
+      <label><input type="checkbox" name="kmlPopupField" value="pea"> พื้นที่ PEA</label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">
+      <button type="submit" value="cancel" class="ghost">ยกเลิก</button>
+      <button type="submit" value="export" class="primary">ยืนยัน Export</button>
+    </div>
+  </form>
+</dialog>
 
 <!-- ============== RIGHT COLUMN — Map ============== -->
 <div class="rightCol">
@@ -4403,19 +4411,29 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
 function kmlProvinceFolderName(segment) {
   return getSegProvince(segment) || 'ไม่ระบุจังหวัด';
 }
-function renderKmlLayerPlacemarks(layer) {
-  if (!document.getElementById('kmlProvinceFolders')?.checked) {
-    return layer.placemarks.map(item => item.kml).join('');
-  }
-  const provinces = new Map();
-  layer.placemarks.forEach(item => {
-    if (!provinces.has(item.province)) provinces.set(item.province, []);
-    provinces.get(item.province).push(item.kml);
-  });
-  return Array.from(provinces.entries())
-    .sort(([left], [right]) => left.localeCompare(right, 'th'))
-    .map(([province, items]) => `<Folder><name>${xmlEscape(province)}</name><open>0</open><visibility>1</visibility>${items.join('')}</Folder>`)
+function renderKmlLayerPlacemarks(layer, province = null) {
+  return layer.placemarks
+    .filter(item => province === null || item.province === province)
+    .map(item => item.kml)
     .join('');
+}
+function renderKmlSourceFolder(source, province = null) {
+  const content = Array.from(source.categories.values()).map(category => {
+    const categoryContent = Array.from(category.layers.values()).map(layer => {
+      const layerContent = renderKmlLayerPlacemarks(layer, province);
+      if (!layerContent) return '';
+      return layer.name === category.name
+        ? layerContent
+        : `<Folder><name>${xmlEscape(layer.name)}</name><open>1</open><visibility>1</visibility>${layerContent}</Folder>`;
+    }).join('');
+    if (!categoryContent) return '';
+    return category.name === source.name
+      ? categoryContent
+      : `<Folder><name>${xmlEscape(category.name)}</name><open>1</open><visibility>1</visibility>${categoryContent}</Folder>`;
+  }).join('');
+  return content
+    ? `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${content}</Folder>`
+    : '';
 }
 function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups = null) {
   const provinceList = getSelectedProvinces();
@@ -4517,21 +4535,13 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       kml: placemark
     });
   });
-  const placemarks = Array.from(sourceEntries.values()).map(source =>
-    `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>` +
-    Array.from(source.categories.values()).map(category =>
-      category.name === source.name
-        ? Array.from(category.layers.values()).map(layer => layer.placemarks.join('')).join('')
-        : `<Folder><name>${xmlEscape(category.name)}</name><open>1</open><visibility>1</visibility>` +
-          Array.from(category.layers.values()).map(layer =>
-            layer.name === category.name
-              ? renderKmlLayerPlacemarks(layer)
-              : `<Folder><name>${xmlEscape(layer.name)}</name><open>1</open><visibility>1</visibility>${renderKmlLayerPlacemarks(layer)}</Folder>`
-          ).join('') +
-          `</Folder>`
-    ).join('') +
-    `</Folder>`
-  ).join('');
+  const sources = Array.from(sourceEntries.values());
+  const placemarks = document.getElementById('kmlProvinceFolders')?.checked
+    ? Array.from(new Set(segments.map(kmlProvinceFolderName)))
+        .sort((left, right) => left.localeCompare(right, 'th'))
+        .map(province => `<Folder><name>${xmlEscape(province)}</name><open>1</open><visibility>1</visibility>${sources.map(source => renderKmlSourceFolder(source, province)).join('')}</Folder>`)
+        .join('')
+    : sources.map(source => renderKmlSourceFolder(source)).join('');
   const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
     `<Data name="segment_count"><value>${segments.length}</value></Data>` +
@@ -4629,6 +4639,20 @@ function formatExportBytes(bytes) {
   if (value < 1024 * 1024) return `${(value / 1024).toLocaleString('th-TH', { maximumFractionDigits: 1 })} KB`;
   return `${(value / (1024 * 1024)).toLocaleString('th-TH', { maximumFractionDigits: 1 })} MB`;
 }
+function requestKmlExportOptions(format) {
+  const dialog = document.getElementById('kmlExportDialog');
+  const title = document.getElementById('kmlExportDialogTitle');
+  if (!dialog || typeof dialog.showModal !== 'function') return Promise.resolve(true);
+  if (title) title.textContent = `ตั้งค่าการ Export ${format}`;
+  return new Promise(resolve => {
+    const handleClose = () => {
+      dialog.removeEventListener('close', handleClose);
+      resolve(dialog.returnValue === 'export');
+    };
+    dialog.addEventListener('close', handleClose);
+    dialog.showModal();
+  });
+}
 async function runExport(format, button, exporter) {
   if (exportInProgress) return;
   if (state.segmentsB.length === 0 && state.totalB === 0) {
@@ -4676,11 +4700,11 @@ document.getElementById('exportCsvBtn').addEventListener('click', event => {
   event.preventDefault();
   runExport('CSV', event.currentTarget, exportCSV);
 });
-document.getElementById('exportKmlBtn').addEventListener('click', event => {
-  runExport('KML', event.currentTarget, exportKML);
+document.getElementById('exportKmlBtn').addEventListener('click', async event => {
+  if (await requestKmlExportOptions('KML')) runExport('KML', event.currentTarget, exportKML);
 });
-document.getElementById('exportKmzBtn').addEventListener('click', event => {
-  runExport('KMZ', event.currentTarget, exportKMZ);
+document.getElementById('exportKmzBtn').addEventListener('click', async event => {
+  if (await requestKmlExportOptions('KMZ')) runExport('KMZ', event.currentTarget, exportKMZ);
 });
 exportModeSelect?.addEventListener('change', () => {
   updateExportModeHint();
