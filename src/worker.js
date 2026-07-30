@@ -1192,11 +1192,41 @@ async function handleAdminApi(request, env, url) {
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
 }
 
+async function osmReferenceFeatures(request, env, url) {
+  const { supabase } = await requireModuleAccess(request, env, 'mod1', 'read');
+  const bbox = String(url.searchParams.get('bbox') || '').split(',').map(Number);
+  if (bbox.length !== 4 || bbox.some(value => !Number.isFinite(value))) {
+    throw new HttpError(400, 'bbox ต้องอยู่ในรูป minLng,minLat,maxLng,maxLat', 'validation_error');
+  }
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  if (minLng >= maxLng || minLat >= maxLat || minLng < -180 || maxLng > 180 || minLat < -90 || maxLat > 90) {
+    throw new HttpError(400, 'ขอบเขต bbox ไม่ถูกต้อง', 'validation_error');
+  }
+  const spanLimit = 0.5;
+  if (maxLng - minLng > spanLimit || maxLat - minLat > spanLimit) {
+    throw new HttpError(400, 'พื้นที่อ้างอิงต่อคำขอต้องไม่เกิน 0.5 องศา', 'bbox_too_large');
+  }
+  const types = new Set(String(url.searchParams.get('types') || 'road,building').split(','));
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit')) || 10000, 25000));
+  const { data, error } = await supabase.rpc('osm_reference_features', {
+    p_min_lng: minLng,
+    p_min_lat: minLat,
+    p_max_lng: maxLng,
+    p_max_lat: maxLat,
+    p_include_roads: types.has('road'),
+    p_include_buildings: types.has('building'),
+    p_limit: limit
+  });
+  if (error) throw error;
+  return jsonResponse(data);
+}
+
 async function handleDataApi(request, env, url) {
   const assetMatch = url.pathname.match(/^\/api\/data\/assets\/(.+)$/);
   if (assetMatch) return activeMod1Asset(request, env, assetMatch[1]);
   if (url.pathname === '/api/data/billing-formula') return activeBillingFormula(request, env, url);
   if (request.method === 'GET' && url.pathname === '/api/data/catalog') return activeDatasetCatalog(request, env);
+  if (request.method === 'GET' && url.pathname === '/api/data/osm-reference') return osmReferenceFeatures(request, env, url);
   const featureMatch = url.pathname.match(/^\/api\/data\/datasets\/([^/]+)\/features$/);
   if (featureMatch && request.method === 'GET') return activeDatasetFeatures(request, env, featureMatch[1]);
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');

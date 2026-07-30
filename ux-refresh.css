@@ -603,6 +603,19 @@ body.ux-enhanced #billingCard .totalBanner-val .currency{
   cursor:wait;
   opacity:.65;
 }
+.osm-reference-control{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:40px;
+  padding:5px 9px;
+  border:1px solid #d7e0eb;
+  border-radius:10px;
+  background:#f8fafc;
+  font-size:.68rem;
+}
+.osm-reference-control label{display:flex;align-items:center;gap:4px;white-space:nowrap;}
+.osm-reference-control small{color:var(--ux-text-muted);white-space:nowrap;}
 .billing-export-actions{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));

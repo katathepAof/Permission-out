@@ -39,6 +39,11 @@
   let peaRenderTimer = null;
   let peaRenderVersion = 0;
   let peaShouldFocus = false;
+  const osmRoadToggle = document.getElementById('osmRoadToggle');
+  const osmBuildingToggle = document.getElementById('osmBuildingToggle');
+  const osmReferenceStatus = document.getElementById('osmReferenceStatus');
+  let osmReferenceLayer = null;
+  let osmReferenceTimer = null;
   const baseFileInput = document.getElementById('fileBase');
   const baseCatalogList = document.getElementById('baseCatalogList');
   const baseCatalogSearch = document.getElementById('baseCatalogSearch');
@@ -143,6 +148,44 @@
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error?.message || `HTTP ${response.status}`);
     return payload;
+  }
+
+  async function updateOsmReferenceLayer() {
+    if (!window.L || typeof map === 'undefined' || !map) return;
+    const types = [osmRoadToggle?.checked ? 'road' : '', osmBuildingToggle?.checked ? 'building' : ''].filter(Boolean);
+    if (osmReferenceLayer) {
+      map.removeLayer(osmReferenceLayer);
+      osmReferenceLayer = null;
+    }
+    if (!types.length) {
+      if (osmReferenceStatus) osmReferenceStatus.textContent = '© OpenStreetMap contributors';
+      return;
+    }
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), south = bounds.getSouth(), east = bounds.getEast(), north = bounds.getNorth();
+    if (east - west > 0.5 || north - south > 0.5) {
+      if (osmReferenceStatus) osmReferenceStatus.textContent = 'ซูมเข้าเพื่อโหลด OSM';
+      return;
+    }
+    if (osmReferenceStatus) osmReferenceStatus.textContent = 'กำลังโหลด OSM…';
+    try {
+      const data = await authenticatedJson(`/api/data/osm-reference?bbox=${[west, south, east, north].map(value => value.toFixed(6)).join(',')}&types=${types.join(',')}&limit=25000`);
+      osmReferenceLayer = L.geoJSON(data, {
+        style: feature => feature.properties?.reference_type === 'building'
+          ? { color: '#8B5E3C', weight: 1, fillColor: '#D9B38C', fillOpacity: 0.22 }
+          : { color: '#64748B', weight: 2.5, opacity: 0.75 },
+        interactive: false
+      }).addTo(map);
+      const count = Array.isArray(data.features) ? data.features.length : 0;
+      if (osmReferenceStatus) osmReferenceStatus.textContent = `${count.toLocaleString('th-TH')} รายการ · © OSM`;
+    } catch (error) {
+      if (osmReferenceStatus) osmReferenceStatus.textContent = `โหลด OSM ไม่สำเร็จ: ${error.message}`;
+    }
+  }
+
+  function scheduleOsmReferenceUpdate() {
+    clearTimeout(osmReferenceTimer);
+    osmReferenceTimer = setTimeout(updateOsmReferenceLayer, 180);
   }
 
   async function managedCatalog(source) {
@@ -1401,7 +1444,11 @@
   window.addEventListener('permissionout:map-ready', () => {
     peaOverlayLayer = null;
     if (peaSelected.size) schedulePeaMapUpdate();
+    map.on('moveend', scheduleOsmReferenceUpdate);
+    scheduleOsmReferenceUpdate();
   });
+  osmRoadToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
+  osmBuildingToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
   window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมตรวจสอบและส่งออกข้อมูล', 'success'); });
   window.addEventListener('online', () => toast('กลับมาออนไลน์แล้ว', 'success'));
   window.addEventListener('offline', () => toast('ออฟไลน์ — ต้องเชื่อมต่ออีกครั้งเพื่ออ่านชุดข้อมูลจาก Supabase'));
