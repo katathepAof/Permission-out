@@ -4159,9 +4159,12 @@ function selectedSourceLinesForKmlExport() {
   const activeOverlaps = getActiveOverlaps();
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = parseFloat(document.getElementById('interval').value) || 5;
-  const candidates = (state.mapSourceLines || [])
+  const sourceLines = state.mapSourceLines || [];
+  const candidates = sourceLines
     .filter(line => sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories));
-  const sourceOverlapGroups = getCachedExportOverlapGroups(candidates, threshold, interval);
+  // The complete source set is pre-cached after analysis. Reuse it here instead
+  // of recalculating the expensive same-road-side grouping for every filter.
+  const sourceOverlapGroups = getCachedExportOverlapGroups(sourceLines, threshold, interval);
   const includeOverlapping = Boolean(activeOverlaps.partial || activeOverlaps.full);
   const selectedOverlapGroups = new Map();
   const selectedLines = candidates

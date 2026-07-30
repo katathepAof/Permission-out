@@ -124,6 +124,9 @@ if (!html.includes('name="overlap_group"') || !html.includes('same_road_side_gro
 if (!html.includes('function selectedSourceLinesForKmlExport()') || !html.includes('const segments = selectedSourceLinesForKmlExport();') || !html.includes('const activeOverlaps = getActiveOverlaps();') || !html.includes('sourceOverlapGroups.has(line) ? includeOverlapping : activeOverlaps.none')) {
   throw new Error('KML/KMZ export must include all selected MOD 1 source datasets');
 }
+if (!html.includes('const sourceLines = state.mapSourceLines || [];') || !html.includes('getCachedExportOverlapGroups(sourceLines, threshold, interval)')) {
+  throw new Error('KML/KMZ export must reuse the full source overlap cache');
+}
 if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlSourceStyleId(') || !html.includes('<Data name="source_layer">') || !html.includes('<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>')) {
   throw new Error('KML/KMZ export must separate selected source datasets into selectable colored folders');
 }
