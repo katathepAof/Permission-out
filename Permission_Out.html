@@ -1799,7 +1799,7 @@ let aggregateRenderer = null;
 let provinceBuildToken = 0;
 let exportOverlapGroupCache = new Map();
 let kmlMaxiReferenceCache = new Map();
-let kmlMaxiSpatialCache = { revision: -1, lines: [] };
+let kmlMaxiSpatialCache = { revision: -1, lines: [], grid: new Map(), overflow: [], cellSize: 0.02 };
 
 const fileBase = document.getElementById('fileBase');
 const fileCompare = document.getElementById('fileCompare');
@@ -3565,7 +3565,7 @@ async function runAnalysis() {
     exportSelectionRevision++;
     exportOverlapGroupCache.clear();
     kmlMaxiReferenceCache.clear();
-    kmlMaxiSpatialCache = { revision: -1, lines: [] };
+    kmlMaxiSpatialCache = { revision: -1, lines: [], grid: new Map(), overflow: [], cellSize: 0.02 };
     getCachedExportOverlapGroups(state.segmentsB, threshold, interval);
     getCachedExportOverlapGroups(state.mapSourceLines, threshold, interval);
     state.removedA = dedupeA.removedCount;
@@ -4282,12 +4282,50 @@ function kmlBoundsCanOverlap(left, right, thresholdMeters) {
     left.maxLat + latitudePadding >= right.minLat;
 }
 function kmlMaxiSpatialEntries() {
-  if (kmlMaxiSpatialCache.revision === exportSelectionRevision) return kmlMaxiSpatialCache.lines;
+  if (kmlMaxiSpatialCache.revision === exportSelectionRevision) return kmlMaxiSpatialCache;
+  const cellSize = 0.02;
+  const grid = new Map();
+  const overflow = [];
   const lines = (state.mapSourceLines || [])
     .filter(kmlIsMaxiSegment)
     .map(line => ({ line, bounds: kmlCoordinateBounds(line.coords) }));
-  kmlMaxiSpatialCache = { revision: exportSelectionRevision, lines };
-  return lines;
+  lines.forEach(entry => {
+    if (!entry.bounds) return;
+    const minX = Math.floor(entry.bounds.minLng / cellSize);
+    const maxX = Math.floor(entry.bounds.maxLng / cellSize);
+    const minY = Math.floor(entry.bounds.minLat / cellSize);
+    const maxY = Math.floor(entry.bounds.maxLat / cellSize);
+    if ((maxX - minX + 1) * (maxY - minY + 1) > 400) {
+      overflow.push(entry);
+      return;
+    }
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const key = `${x},${y}`;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(entry);
+      }
+    }
+  });
+  kmlMaxiSpatialCache = { revision: exportSelectionRevision, lines, grid, overflow, cellSize };
+  return kmlMaxiSpatialCache;
+}
+function kmlNearbyMaxiEntries(bounds, thresholdMeters) {
+  const index = kmlMaxiSpatialEntries();
+  if (!bounds) return index.lines;
+  const latitudePadding = thresholdMeters / 110574;
+  const longitudePadding = thresholdMeters / Math.max(111320 * Math.cos(Math.abs((bounds.minLat + bounds.maxLat) / 2) * Math.PI / 180), 1000);
+  const minX = Math.floor((bounds.minLng - longitudePadding) / index.cellSize);
+  const maxX = Math.floor((bounds.maxLng + longitudePadding) / index.cellSize);
+  const minY = Math.floor((bounds.minLat - latitudePadding) / index.cellSize);
+  const maxY = Math.floor((bounds.maxLat + latitudePadding) / index.cellSize);
+  const candidates = new Set(index.overflow);
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      (index.grid.get(`${x},${y}`) || []).forEach(entry => candidates.add(entry));
+    }
+  }
+  return Array.from(candidates);
 }
 function kmlMaxiReference(segment) {
   if (kmlIsMaxiSegment(segment)) return segment;
@@ -4297,8 +4335,8 @@ function kmlMaxiReference(segment) {
   const cacheKey = `${exportSelectionRevision}|${threshold}|${interval}|${segment._exportCacheId}`;
   if (kmlMaxiReferenceCache.has(cacheKey)) return kmlMaxiReferenceCache.get(cacheKey);
   const segmentBounds = kmlCoordinateBounds(segment.coords);
-  const samples = sampleLine(segment.coords || [], Math.max(2, interval || 5));
-  const maxiLines = kmlMaxiSpatialEntries()
+  const samples = sampleLine(segment.coords || [], Math.max(15, interval || 5));
+  const maxiLines = kmlNearbyMaxiEntries(segmentBounds, threshold)
     .filter(entry => kmlBoundsCanOverlap(segmentBounds, entry.bounds, threshold))
     .map(entry => entry.line);
   let best = null, bestRatio = 0;
