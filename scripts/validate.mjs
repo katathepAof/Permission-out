@@ -49,6 +49,9 @@ for (const marker of ['DATASET_LINE_COLORS', 'applyDatasetLineColors(', 'dataset
 for (const marker of ['mapSourceLines', 'function renderSourceColorOverlay(', 'uniqueSources.size <= 1', 'interactive: false']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 multi-source map color overlay marker is missing: ${marker}`);
 }
+for (const marker of ['lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters)', 'const lengthMeters = Number(line.length) || lineLengthMeters(line.coords);']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 source-color map overlay popup marker is missing: ${marker}`);
+}
 if (!html.includes('costFiltered') || !html.includes('เส้นที่ตรงกับตัวกรองในการ์ด 4')) {
   throw new Error('Card-4-filtered billing is missing');
 }
@@ -85,11 +88,14 @@ if (!html.includes('name="overlap_group"') || !html.includes('same_road_side_gro
 if (!html.includes('function selectedSourceLinesForKmlExport()') || !html.includes('const segments = selectedSourceLinesForKmlExport();') || !html.includes('const activeOverlaps = getActiveOverlaps();') || !html.includes('sourceOverlapGroups.has(line) ? includeOverlapping : activeOverlaps.none')) {
   throw new Error('KML/KMZ export must include all selected MOD 1 source datasets');
 }
-if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlSourceStyleId(') || !html.includes('<Data name="source_layer">') || !html.includes('<Folder><name>${xmlEscape(entry.name)}</name><open>1</open>')) {
+if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlSourceStyleId(') || !html.includes('<Data name="source_layer">') || !html.includes('<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>')) {
   throw new Error('KML/KMZ export must separate selected source datasets into selectable colored folders');
 }
 if (!html.includes('function kmlExportLayerKey(') || !html.includes("name.includes('maxi')") || !html.includes('function kmlMaxiStatusColor(') || !html.includes('<Data name="kml_layer">')) {
   throw new Error('KML/KMZ export must split Maxi layers and colors by source status');
+}
+if (!html.includes('function kmlTopFolderName(') || !html.includes('function kmlExportStyleId(') || !html.includes('<visibility>1</visibility>') || !html.includes('source.layers.values()') || !html.includes('DATASET_LINE_COLORS[Math.abs(hash) % DATASET_LINE_COLORS.length]')) {
+  throw new Error('KML/KMZ export must use selectable parent source folders and KML-safe hex colors');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {

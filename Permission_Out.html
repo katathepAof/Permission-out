@@ -2559,6 +2559,24 @@ function renderSourceColorOverlay(lines = []) {
   if (!layerGroup || !Array.isArray(lines)) return;
   const uniqueSources = new Set(lines.map(line => line.sourceKey || line.sourceDatasetId || line.sourceFile).filter(Boolean));
   if (uniqueSources.size <= 1) return;
+  if (!aggregateResultMode) {
+    lines.forEach(line => {
+      if (!line.sourceColor || !Array.isArray(line.coords) || line.coords.length < 2) return;
+      const path = toLatLngs(line.coords);
+      if (!path.length) return;
+      const lengthMeters = Number(line.length) || lineLengthMeters(line.coords);
+      L.polyline(path, {
+        color: line.sourceColor,
+        weight: 4,
+        opacity: 0.95,
+        interactive: true
+      })
+        .bindPopup(() => lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters))
+        .bindTooltip(placemarkDisplayText(line), { sticky: true })
+        .addTo(layerGroup);
+    });
+    return;
+  }
   const grouped = new Map();
   lines.forEach(line => {
     if (!line.sourceColor || !Array.isArray(line.coords) || line.coords.length < 2) return;
@@ -3832,6 +3850,34 @@ function kmlMaxiStatusColor(segment, fallback) {
   for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
   return datasetLineColor(Math.abs(hash));
 }
+function kmlSafeId(value, fallback = 'route') {
+  return String(value || fallback).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback;
+}
+function kmlTopFolderKey(segment) {
+  return segment.sourceKey || segment.sourceDatasetId || segment.sourceFile || 'source';
+}
+function kmlTopFolderName(segment) {
+  return sourceFileColumnValue(segment) || mod1ComparisonFileName(segment) || 'Selected source';
+}
+function kmlExportFolderName(segment) {
+  return mod1ComparisonFileName(segment).includes('maxi')
+    ? `Status: ${getSegCableStatus(segment) || 'ไม่ระบุ'}`
+    : kmlTopFolderName(segment);
+}
+function kmlExportStyleId(segment) {
+  const suffix = mod1ComparisonFileName(segment).includes('maxi')
+    ? `${kmlTopFolderKey(segment)}:status:${getSegCableStatus(segment) || 'unknown'}`
+    : kmlTopFolderKey(segment);
+  return `route-${kmlSafeId(suffix)}`;
+}
+function kmlExportColor(segment, fallbackColor) {
+  if (!mod1ComparisonFileName(segment).includes('maxi')) return fallbackColor;
+  const status = String(getSegCableStatus(segment) || '').trim();
+  if (!status) return fallbackColor;
+  let hash = 0;
+  for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
+  return DATASET_LINE_COLORS[Math.abs(hash) % DATASET_LINE_COLORS.length];
+}
 function buildSelectedKml(segments, peaFeatures = []) {
   const provinceList = getSelectedProvinces();
   const provinceLabel = provinceList.length === 0 || provinceList.includes('__ALL__') ? 'ทุกจังหวัด' : provinceList.join(', ');
@@ -3851,18 +3897,29 @@ function buildSelectedKml(segments, peaFeatures = []) {
   const overlapGroupCount = new Set(overlapGroups.values()).size;
   const sourceEntries = new Map();
   segments.forEach(seg => {
-    const id = kmlExportLayerStyleId(seg);
-    if (!sourceEntries.has(id)) {
+    const topId = `folder-${kmlSafeId(kmlTopFolderKey(seg))}`;
+    if (!sourceEntries.has(topId)) {
+      sourceEntries.set(topId, {
+        id: topId,
+        name: kmlTopFolderName(seg),
+        layers: new Map()
+      });
+    }
+    const sourceEntry = sourceEntries.get(topId);
+    const id = kmlExportStyleId(seg);
+    if (!sourceEntry.layers.has(id)) {
       const fallbackColor = seg.sourceColor || (STATUS_META[seg.status] || STATUS_META.new).color;
-      sourceEntries.set(id, {
+      sourceEntry.layers.set(id, {
         id,
-        name: kmlExportLayerName(seg),
-        color: kmlColorFromCss(mod1ComparisonFileName(seg).includes('maxi') ? kmlMaxiStatusColor(seg, fallbackColor) : fallbackColor, fallbackColor),
+        name: kmlExportFolderName(seg),
+        color: kmlColorFromCss(kmlExportColor(seg, fallbackColor), fallbackColor),
         placemarks: []
       });
     }
   });
-  const styles = Array.from(sourceEntries.values()).map(entry =>
+  const styles = Array.from(sourceEntries.values()).flatMap(source =>
+    Array.from(source.layers.values())
+  ).map(entry =>
     `<Style id="${entry.id}"><LineStyle><color>${entry.color}</color><width>5</width></LineStyle></Style>`
   ).join('');
   segments.forEach((seg, index) => {
@@ -3870,9 +3927,9 @@ function buildSelectedKml(segments, peaFeatures = []) {
     const overlap = OVERLAP_META[seg.overlapType] || OVERLAP_META.none;
     const billing = billingRows[index];
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
-    const placemark = `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${kmlExportLayerStyleId(seg)}</styleUrl><ExtendedData>` +
+    const placemark = `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${kmlExportStyleId(seg)}</styleUrl><ExtendedData>` +
       `<Data name="source_layer"><value>${xmlEscape(sourceFileColumnValue(seg))}</value></Data>` +
-      `<Data name="kml_layer"><value>${xmlEscape(kmlExportLayerName(seg))}</value></Data>` +
+      `<Data name="kml_layer"><value>${xmlEscape(kmlExportFolderName(seg))}</value></Data>` +
       `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
@@ -3898,10 +3955,16 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
       `<Data name="cost_baht"><value>${billing.cost.toFixed(2)}</value></Data>` +
       `</ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coordinates}</coordinates></LineString></Placemark>`;
-    sourceEntries.get(kmlExportLayerStyleId(seg))?.placemarks.push(placemark);
+    sourceEntries.get(`folder-${kmlSafeId(kmlTopFolderKey(seg))}`)?.layers.get(kmlExportStyleId(seg))?.placemarks.push(placemark);
   });
-  const placemarks = Array.from(sourceEntries.values()).map(entry =>
-    `<Folder><name>${xmlEscape(entry.name)}</name><open>1</open>${entry.placemarks.join('')}</Folder>`
+  const placemarks = Array.from(sourceEntries.values()).map(source =>
+    `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>` +
+    Array.from(source.layers.values()).map(layer =>
+      layer.name === source.name
+        ? layer.placemarks.join('')
+        : `<Folder><name>${xmlEscape(layer.name)}</name><open>1</open><visibility>1</visibility>${layer.placemarks.join('')}</Folder>`
+    ).join('') +
+    `</Folder>`
   ).join('');
   const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
