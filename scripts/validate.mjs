@@ -133,8 +133,11 @@ if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlS
 if (!html.includes('function kmlExportLayerKey(') || !html.includes("name.includes('maxi')") || !html.includes('function kmlMaxiStatusColor(') || !html.includes('<Data name="kml_layer">')) {
   throw new Error('KML/KMZ export must split Maxi layers and colors by source status');
 }
-if (!html.includes('function kmlTopFolderName(') || !html.includes('function kmlExportStyleId(') || !html.includes('<visibility>1</visibility>') || !html.includes('source.categories.values()') || !html.includes('return maxiCategoryColor(reference, fallbackColor)')) {
+if (!html.includes('function kmlTopFolderName(') || !html.includes('function kmlExportStyleId(') || !html.includes('<visibility>1</visibility>') || !html.includes('source.categories.values()') || !html.includes('DATASET_LINE_COLORS[Math.abs(hash >>> 0) % DATASET_LINE_COLORS.length]')) {
   throw new Error('KML/KMZ export must use selectable parent source folders and KML-safe hex colors');
+}
+if (!html.includes('kmlExportColor(segment, fallbackColor, styleSuffix)') || !html.includes('hash = Math.imul(hash, 16777619)')) {
+  throw new Error('KML/KMZ export styles must use distinct deterministic colors per source, category and status');
 }
 if (!html.includes('function kmlCategoryFolderKey(') || !html.includes('function kmlCategoryFolderName(') || !html.includes("network: 'Network'") || !html.includes("'ready-access': 'Ready Access'") || !html.includes("customer: 'Customer'")) {
   throw new Error('KML/KMZ export must let Maxi data be selected by Network, Ready Access, and Customer folders');

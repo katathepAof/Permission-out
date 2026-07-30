@@ -4409,9 +4409,14 @@ function kmlExportStyleId(segment) {
   const suffix = `${kmlCategoryFolderKey(segment)}:status:${getSegCableStatus(reference) || 'unknown'}`;
   return `route-${kmlSafeId(suffix)}`;
 }
-function kmlExportColor(segment, fallbackColor) {
-  const reference = kmlFolderReference(segment);
-  return maxiCategoryColor(reference, fallbackColor);
+function kmlExportColor(segment, fallbackColor, styleKey = '') {
+  const key = String(styleKey || kmlExportStyleId(segment));
+  let hash = 2166136261;
+  for (let index = 0; index < key.length; index++) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return DATASET_LINE_COLORS[Math.abs(hash >>> 0) % DATASET_LINE_COLORS.length] || fallbackColor;
 }
 function kmlExportMeta(segment) {
   const reference = kmlFolderReference(segment);
@@ -4424,7 +4429,7 @@ function kmlExportMeta(segment) {
   const styleSuffix = `${categoryKey}:status:${getSegCableStatus(reference) || 'unknown'}`;
   const styleId = `route-${kmlSafeId(styleSuffix)}`;
   const fallbackColor = segment.sourceColor || (STATUS_META[segment.status] || STATUS_META.new).color;
-  const lineColor = kmlExportColor(segment, fallbackColor);
+  const lineColor = kmlExportColor(segment, fallbackColor, styleSuffix);
   return {
     reference,
     referenceIsMaxi,
