@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260730-trim-engine">
+<link rel="stylesheet" href="ux-refresh.css?v=20260730-auto-trim">
 </head>
 <body>
 
@@ -1488,12 +1488,13 @@ table.report td.num{
           <small id="osmReferenceStatus">ข้อมูลจากคลังภายใน</small>
         </div>
         <div class="trim-control" aria-label="ตัดปลายเส้นอัตโนมัติ">
-          <label>ถนน <input type="number" id="trimRoadBuffer" value="20" min="5" max="100" step="5"> ม.</label>
-          <label>ขั้นต่ำ <input type="number" id="trimMinLength" value="15" min="5" max="500" step="5"> ม.</label>
-          <button type="button" id="trimPreviewBtn">หาและ Preview จุดตัด</button>
+          <strong>Auto Trim ปลายเส้น Maxi</strong>
+          <label>ระยะเกิน <input type="number" id="trimMinLength" value="100" min="10" max="1000" step="10">–<input type="number" id="trimMaxLength" value="200" min="20" max="2000" step="10"> ม.</label>
+          <label title="ระยะยอมรับว่าเส้น Maxi อยู่บนแนวอ้างอิง">แนวอ้างอิง ±<input type="number" id="trimRoadBuffer" value="20" min="5" max="100" step="5"> ม.</label>
+          <button type="button" id="trimPreviewBtn">ตรวจและ Preview อัตโนมัติ</button>
           <button type="button" id="trimApplyBtn" disabled>ใช้ผล Trim</button>
           <button type="button" id="trimUndoBtn" disabled>Undo</button>
-          <small id="trimStatus" role="status" aria-live="polite">ยังไม่ได้ตรวจ Trim</small>
+          <small id="trimStatus" role="status" aria-live="polite">ใช้ RD03/PEA เป็นแนวอ้างอิงได้โดยไม่ต้องอัปโหลดถนน</small>
         </div>
         <div class="map-search-wrap">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2834,16 +2835,26 @@ function trimReferenceData() {
   });
   return { roads, buildings };
 }
+function trimInternalReferenceLines() {
+  return (state.mapSourceLines || [])
+    .filter(line => !isMaxiSourceLine(line) && Array.isArray(line.coords) && line.coords.length > 1)
+    .map(line => ({ coords: line.coords }));
+}
 function calculateTrimPreview() {
   const { roads, buildings } = trimReferenceData();
   const status = document.getElementById('trimStatus');
-  if (!roads.length) {
-    status.textContent = 'ไม่พบ Road centerline ในขอบเขตแผนที่ กรุณาเปิดชั้นถนนและซูมไปยังเส้น';
+  const internalReferences = trimInternalReferenceLines();
+  const references = roads.length ? roads : internalReferences;
+  const referenceMode = roads.length ? 'road' : 'internal';
+  if (!references.length) {
+    status.dataset.referenceMode = 'missing';
+    status.textContent = 'ไม่พบเส้นฐาน RD03/PEA สำหรับอ้างอิง กรุณาเลือกชุดฐานและวิเคราะห์อีกครั้ง';
     return [];
   }
   const roadBuffer = Math.max(5, Number(document.getElementById('trimRoadBuffer').value) || 20);
-  const minimumTrim = Math.max(5, Number(document.getElementById('trimMinLength').value) || 15);
-  const roadIndex = buildSegmentIndex(roads, Math.max(roadBuffer * 2, 40));
+  const minimumTrim = Math.max(10, Number(document.getElementById('trimMinLength').value) || 100);
+  const maximumTrim = Math.max(minimumTrim, Number(document.getElementById('trimMaxLength').value) || 200);
+  const roadIndex = buildSegmentIndex(references, Math.max(roadBuffer * 2, 40));
   const results = [];
   (state.mapSourceLines || []).filter(isMaxiSourceLine).forEach(line => {
     const samples = sampleLine(line.coords || [], 5);
@@ -2855,9 +2866,9 @@ function calculateTrimPreview() {
     const total = samples[samples.length - 1].dist;
     const startRemovedM = samples[firstRoad].dist;
     const endRemovedM = total - samples[lastRoad].dist;
-    const trimStart = startRemovedM >= minimumTrim &&
+    const trimStart = startRemovedM >= minimumTrim && startRemovedM <= maximumTrim &&
       (buildings.some(geometry => trimPointInGeometry(samples[0].coord, geometry)) || !onRoad[0]);
-    const trimEnd = endRemovedM >= minimumTrim &&
+    const trimEnd = endRemovedM >= minimumTrim && endRemovedM <= maximumTrim &&
       (buildings.some(geometry => trimPointInGeometry(samples[samples.length - 1].coord, geometry)) || !onRoad[onRoad.length - 1]);
     if (!trimStart && !trimEnd) return;
     const startIndex = trimStart ? firstRoad : 0;
@@ -2870,9 +2881,10 @@ function calculateTrimPreview() {
       removedStart: trimStart ? samples.slice(0, startIndex + 1).map(sample => sample.coord) : [],
       removedEnd: trimEnd ? samples.slice(endIndex).map(sample => sample.coord) : [],
       removedLengthM: (trimStart ? startRemovedM : 0) + (trimEnd ? endRemovedM : 0),
-      reason: buildings.length ? 'road_or_building_endpoint' : 'off_road_endpoint'
+      reason: referenceMode === 'road' ? 'road_or_building_endpoint' : 'internal_reference_endpoint'
     });
   });
+  status.dataset.referenceMode = referenceMode;
   return results;
 }
 function renderTrimPreview(results) {
@@ -4583,9 +4595,16 @@ document.getElementById('trimPreviewBtn')?.addEventListener('click', () => {
   document.getElementById('trimApplyBtn').disabled = trimPreviewResults.length === 0;
   document.getElementById('trimUndoBtn').disabled = trimPreviewResults.length === 0;
   const removed = trimPreviewResults.reduce((sum, result) => sum + result.removedLengthM, 0);
-  document.getElementById('trimStatus').textContent = trimPreviewResults.length
-    ? `พบ ${trimPreviewResults.length.toLocaleString('th-TH')} เส้น · เสนอให้ตัด ${removed.toLocaleString('th-TH', { maximumFractionDigits: 1 })} เมตร (แดง)`
-    : 'ไม่พบปลายเส้นที่เข้าเงื่อนไขตัด';
+  const trimStatus = document.getElementById('trimStatus');
+  if (trimStatus.dataset.referenceMode === 'missing') return;
+  const referenceLabel = trimStatus.dataset.referenceMode === 'road'
+    ? 'Road centerline'
+    : 'เส้นฐาน RD03/PEA';
+  const minimumTrim = Math.max(10, Number(document.getElementById('trimMinLength').value) || 100);
+  const maximumTrim = Math.max(minimumTrim, Number(document.getElementById('trimMaxLength').value) || 200);
+  trimStatus.textContent = trimPreviewResults.length
+    ? `พบ ${trimPreviewResults.length.toLocaleString('th-TH')} เส้นจาก ${referenceLabel} · เสนอให้ตัด ${removed.toLocaleString('th-TH', { maximumFractionDigits: 1 })} เมตร (แดง)`
+    : `ไม่พบปลายเส้นช่วง ${minimumTrim.toLocaleString('th-TH')}–${maximumTrim.toLocaleString('th-TH')} เมตรที่เกินจาก${referenceLabel}`;
 });
 document.getElementById('trimApplyBtn')?.addEventListener('click', () => {
   applyTrimResults();
@@ -4824,7 +4843,7 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260730-trim-engine"></script>
+<script src="production.js?v=20260730-auto-trim"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
 <script src="ux-refresh.js?v=20260730-export-feedback"></script>
