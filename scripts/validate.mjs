@@ -49,8 +49,8 @@ for (const marker of ['CATALOG_RENDER_PAGE_SIZE', 'baseCatalogIndex', 'compareCa
 for (const marker of ['id="osmRoadToggle"', 'id="osmBuildingToggle"', 'id="osmReferenceStatus"']) {
   if (!html.includes(marker)) throw new Error(`OSM reference control is missing: ${marker}`);
 }
-for (const marker of ['id="trimPreviewBtn"', 'id="trimApplyBtn"', 'id="trimUndoBtn"', 'function calculateTrimPreview(', 'function applyTrimResults(', 'function undoTrimResults(', 'function exportCoordsForLine(', 'trim_status', 'removed_length_m']) {
-  if (!html.includes(marker)) throw new Error(`MOD 1 Trim engine marker is missing: ${marker}`);
+for (const marker of ['id="trimPreviewBtn"', 'id="trimApplyBtn"', 'id="trimUndoBtn"', 'id="trimRoadBuffer"', 'id="trimMinLength"']) {
+  if (html.includes(marker)) throw new Error(`Removed MOD 1 Trim control is still visible: ${marker}`);
 }
 for (const marker of ['/api/data/reference', 'managedReferenceFeatures(', "supabase.rpc('managed_reference_features'"]) {
   if (!`${production}\n${workerSource}`.includes(marker)) throw new Error(`OSM reference runtime marker is missing: ${marker}`);
