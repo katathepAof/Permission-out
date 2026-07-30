@@ -4727,6 +4727,7 @@ function requestKmlExportOptions(format) {
 }
 async function runExport(format, button, exporter, optionsConfirmed = false) {
   if (exportInProgress) return;
+  button = button || document.getElementById(`export${format[0]}${format.slice(1).toLowerCase()}Btn`);
   if (state.segmentsB.length === 0 && state.totalB === 0) {
     alert('กรุณานำเข้าและวิเคราะห์เส้นทางก่อน Export');
     setExportStatus('ยังไม่มีผลวิเคราะห์สำหรับส่งออก', 'error');
@@ -4773,10 +4774,12 @@ document.getElementById('exportCsvBtn').addEventListener('click', event => {
   runExport('CSV', event.currentTarget, exportCSV);
 });
 document.getElementById('exportKmlBtn').addEventListener('click', async event => {
-  if (await requestKmlExportOptions('KML')) runExport('KML', event.currentTarget, exportKML, true);
+  const button = event.currentTarget;
+  if (await requestKmlExportOptions('KML')) runExport('KML', button, exportKML, true);
 });
 document.getElementById('exportKmzBtn').addEventListener('click', async event => {
-  if (await requestKmlExportOptions('KMZ')) runExport('KMZ', event.currentTarget, exportKMZ, true);
+  const button = event.currentTarget;
+  if (await requestKmlExportOptions('KMZ')) runExport('KMZ', button, exportKMZ, true);
 });
 exportModeSelect?.addEventListener('change', () => {
   updateExportModeHint();
