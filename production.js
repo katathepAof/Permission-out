@@ -420,6 +420,7 @@
     const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier;
     const measured = propertyValue(properties, [/^measured$/i, /ระยะ.*วัด/i]);
     const calculated = propertyValue(properties, [/^calculated$/i, /ระยะ.*คำนวณ/i]);
+    const province = propertyValue(properties, [/^province$/i, /^prov(?:ince)?[_\s-]*name$/i, /^changwat$/i, /จังหวัด/i]);
     const categoryText = [
       line.importCategory,
       line.import_category,
@@ -453,7 +454,7 @@
       rawType,
       cableStatus,
       importCategory,
-      sourceMetadata: { code: sourceCode, originalName, measured, calculated },
+      sourceMetadata: { code: sourceCode, originalName, province, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item?.name || line.sourceFile || '',
       sourceDatasetId: item?.id || line.sourceDatasetId || ''

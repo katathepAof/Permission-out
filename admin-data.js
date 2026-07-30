@@ -67,6 +67,7 @@
       name: line.name || '',
       code: source.code || '',
       original_name: source.originalName || '',
+      province: source.province || '',
       measured: source.measured || '',
       calculated: source.calculated || '',
       pole_count: source.poleCount || '',

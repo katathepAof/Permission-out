@@ -158,8 +158,8 @@ if (!html.includes('name="kmlExportDataset"') || !html.includes('value="rd03" ch
 if (!html.includes('id="kmlProvinceFolders"') || !html.includes('function renderKmlLayerPlacemarks(') || !html.includes('function kmlProvinceFolderName(') || !html.includes('function renderKmlSourceContent(') || !html.includes('function renderKmlSourceFolder(')) {
   throw new Error('KML/KMZ province Folder option is missing');
 }
-if (!html.includes("return getSegProvinces(segment)[0] || 'ไม่ระบุจังหวัด';")) {
-  throw new Error('KML/KMZ province Folder names must contain one primary province');
+if (!html.includes('function kmlExportProvinceName(segment)') || !html.includes('segment?.sourceMetadata?.province') || !html.includes('isMaxiSourceLine(segment)')) {
+  throw new Error('KML/KMZ MaxiFiber folders must prefer the source province');
 }
 if (!html.includes('id="kmlExportDialog"') || !html.includes('function requestKmlExportOptions(') || !html.includes('dialog.showModal()')) {
   throw new Error('KML/KMZ pre-export options dialog is missing');

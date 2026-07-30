@@ -2297,6 +2297,7 @@ function parseKML(text, sourceName = '') {
       const sourceMetadata = {
         code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier,
         originalName,
+        province: pickExtField(ext, [/^\s*province\s*$/i, /^\s*prov(?:ince)?[_\s-]*name\s*$/i, /^\s*changwat\s*$/i, /จังหวัด/i]) || '',
         measured: pickExtField(ext, [/^\s*measured\s*$/i, /ระยะ.*วัด/i]) || '',
         calculated: pickExtField(ext, [/^\s*calculated\s*$/i, /ระยะ.*คำนวณ/i]) || '',
         poleCount: pickExtField(ext, [/^\s*(?:poles?|pole[_\s-]*count|number[_\s-]*of[_\s-]*poles?|no\.?[_\s-]*(?:of[_\s-]*)?poles?|qty[_\s-]*poles?)\s*$/i, /(?:จำนวน|เลข).*เสา/i, /เสา.*(?:จำนวน|ต้น)/i]) || ''
@@ -4450,7 +4451,7 @@ function kmlPopupHtmlEscape(value) {
 function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
   const selected = selectedKmlPopupFields();
   const rows = [
-    ['province', 'จังหวัด', getSegProvince(seg) || '-'],
+    ['province', 'จังหวัด', kmlExportProvinceName(seg)],
     ['source', 'แหล่งข้อมูล', sourceFileColumnValue(seg) || '-'],
     ['status', 'Status', getSegCableStatus(seg) || status.th || '-'],
     ['relationship', 'ความสัมพันธ์', overlap.th || '-'],
@@ -4468,7 +4469,15 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
   return `<description>${xmlEscape(html)}</description>`;
 }
 function kmlProvinceFolderName(segment) {
-  return getSegProvinces(segment)[0] || 'ไม่ระบุจังหวัด';
+  return kmlExportProvinceName(segment);
+}
+function kmlExportProvinceName(segment) {
+  const maxiProvince = isMaxiSourceLine(segment)
+    ? String(segment?.sourceMetadata?.province || segment?.province || '').trim()
+    : '';
+  return maxiProvince.split(/[|,;/]/).map(value => value.trim()).find(Boolean) ||
+    getSegProvinces(segment)[0] ||
+    'ไม่ระบุจังหวัด';
 }
 function renderKmlLayerPlacemarks(layer, province = null) {
   return layer.placemarks
@@ -4562,7 +4571,7 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="maxi_reference_layer"><value>${xmlEscape(exportMeta.referenceIsMaxi ? sourceFileColumnValue(kmlReference) : '')}</value></Data>` +
       `<Data name="maxi_reference_category"><value>${xmlEscape(exportMeta.referenceIsMaxi ? exportMeta.categoryName : '')}</value></Data>` +
       `<Data name="maxi_reference_status"><value>${xmlEscape(exportMeta.referenceIsMaxi ? getSegCableStatus(kmlReference) : '')}</value></Data>` +
-      `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
+      `<Data name="province"><value>${xmlEscape(kmlExportProvinceName(seg))}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
       `<Data name="pea_office_types"><value>${xmlEscape(peaAreaExportValue(seg, 'officeType'))}</value></Data>` +
