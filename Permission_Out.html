@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260730-managed-reference">
+<link rel="stylesheet" href="ux-refresh.css?v=20260730-trim-engine">
 </head>
 <body>
 
@@ -1486,6 +1486,14 @@ table.report td.num{
           <label><input type="checkbox" id="osmRoadToggle"> ถนน</label>
           <label><input type="checkbox" id="osmBuildingToggle"> อาคาร</label>
           <small id="osmReferenceStatus">ข้อมูลจากคลังภายใน</small>
+        </div>
+        <div class="trim-control" aria-label="ตัดปลายเส้นอัตโนมัติ">
+          <label>ถนน <input type="number" id="trimRoadBuffer" value="20" min="5" max="100" step="5"> ม.</label>
+          <label>ขั้นต่ำ <input type="number" id="trimMinLength" value="15" min="5" max="500" step="5"> ม.</label>
+          <button type="button" id="trimPreviewBtn">หาและ Preview จุดตัด</button>
+          <button type="button" id="trimApplyBtn" disabled>ใช้ผล Trim</button>
+          <button type="button" id="trimUndoBtn" disabled>Undo</button>
+          <small id="trimStatus" role="status" aria-live="polite">ยังไม่ได้ตรวจ Trim</small>
         </div>
         <div class="map-search-wrap">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2791,6 +2799,123 @@ function pointInRingsParity(lon, lat, rings) {
   return inside;
 }
 
+let trimPreviewLayer = null;
+let trimPreviewResults = [];
+let trimUseResults = false;
+
+function trimPointInRing(point, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if (((yi > point[1]) !== (yj > point[1])) &&
+        point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function trimPointInGeometry(point, geometry) {
+  const inPolygon = polygon => trimPointInRing(point, polygon[0] || []) &&
+    !(polygon.slice(1).some(ring => trimPointInRing(point, ring)));
+  if (geometry?.type === 'Polygon') return inPolygon(geometry.coordinates);
+  if (geometry?.type === 'MultiPolygon') return geometry.coordinates.some(inPolygon);
+  return false;
+}
+function trimReferenceData() {
+  const features = window.permissionOutReferenceFeatures || [];
+  const roads = [];
+  const buildings = [];
+  features.forEach(feature => {
+    const type = feature.properties?.reference_type;
+    if (type === 'building') buildings.push(feature.geometry);
+    if (type === 'road') {
+      const parts = feature.geometry?.type === 'MultiLineString'
+        ? feature.geometry.coordinates : [feature.geometry?.coordinates];
+      parts.forEach(coords => { if (Array.isArray(coords) && coords.length > 1) roads.push({ coords }); });
+    }
+  });
+  return { roads, buildings };
+}
+function calculateTrimPreview() {
+  const { roads, buildings } = trimReferenceData();
+  const status = document.getElementById('trimStatus');
+  if (!roads.length) {
+    status.textContent = 'ไม่พบ Road centerline ในขอบเขตแผนที่ กรุณาเปิดชั้นถนนและซูมไปยังเส้น';
+    return [];
+  }
+  const roadBuffer = Math.max(5, Number(document.getElementById('trimRoadBuffer').value) || 20);
+  const minimumTrim = Math.max(5, Number(document.getElementById('trimMinLength').value) || 15);
+  const roadIndex = buildSegmentIndex(roads, Math.max(roadBuffer * 2, 40));
+  const results = [];
+  (state.mapSourceLines || []).filter(isMaxiSourceLine).forEach(line => {
+    const samples = sampleLine(line.coords || [], 5);
+    if (samples.length < 3) return;
+    const onRoad = samples.map(sample => isWithinThreshold(sample.coord, roadIndex, roadBuffer));
+    const firstRoad = onRoad.indexOf(true);
+    const lastRoad = onRoad.lastIndexOf(true);
+    if (firstRoad < 0 || lastRoad <= firstRoad) return;
+    const total = samples[samples.length - 1].dist;
+    const startRemovedM = samples[firstRoad].dist;
+    const endRemovedM = total - samples[lastRoad].dist;
+    const trimStart = startRemovedM >= minimumTrim &&
+      (buildings.some(geometry => trimPointInGeometry(samples[0].coord, geometry)) || !onRoad[0]);
+    const trimEnd = endRemovedM >= minimumTrim &&
+      (buildings.some(geometry => trimPointInGeometry(samples[samples.length - 1].coord, geometry)) || !onRoad[onRoad.length - 1]);
+    if (!trimStart && !trimEnd) return;
+    const startIndex = trimStart ? firstRoad : 0;
+    const endIndex = trimEnd ? lastRoad : samples.length - 1;
+    const keptCoords = samples.slice(startIndex, endIndex + 1).map(sample => sample.coord);
+    if (lineLengthMeters(keptCoords) < 10) return;
+    results.push({
+      line,
+      keptCoords,
+      removedStart: trimStart ? samples.slice(0, startIndex + 1).map(sample => sample.coord) : [],
+      removedEnd: trimEnd ? samples.slice(endIndex).map(sample => sample.coord) : [],
+      removedLengthM: (trimStart ? startRemovedM : 0) + (trimEnd ? endRemovedM : 0),
+      reason: buildings.length ? 'road_or_building_endpoint' : 'off_road_endpoint'
+    });
+  });
+  return results;
+}
+function renderTrimPreview(results) {
+  if (trimPreviewLayer && layerGroup?.hasLayer(trimPreviewLayer)) layerGroup.removeLayer(trimPreviewLayer);
+  trimPreviewLayer = L.layerGroup().addTo(layerGroup);
+  results.forEach(result => {
+    L.polyline(toLatLngs(result.keptCoords), { color: '#15803D', weight: 6, opacity: 0.9, interactive: false }).addTo(trimPreviewLayer);
+    [result.removedStart, result.removedEnd].filter(coords => coords.length > 1).forEach(coords => {
+      L.polyline(toLatLngs(coords), { color: '#DC2626', weight: 7, opacity: 0.95, dashArray: '5,5', interactive: false }).addTo(trimPreviewLayer);
+    });
+  });
+}
+function applyTrimResults() {
+  trimUseResults = true;
+  trimPreviewResults.forEach(result => {
+    result.line._trimmedCoords = result.keptCoords;
+    result.line._trimMeta = {
+      status: 'trimmed',
+      reason: result.reason,
+      originalLengthM: lineLengthMeters(result.line.coords || []),
+      trimmedLengthM: lineLengthMeters(result.keptCoords),
+      removedLengthM: result.removedLengthM
+    };
+  });
+  kmlExportSelectionCache.key = '';
+  exportOverlapGroupCache.clear();
+}
+function undoTrimResults() {
+  trimUseResults = false;
+  (state.mapSourceLines || []).forEach(line => {
+    delete line._trimmedCoords;
+    delete line._trimMeta;
+  });
+  trimPreviewResults = [];
+  if (trimPreviewLayer && layerGroup?.hasLayer(trimPreviewLayer)) layerGroup.removeLayer(trimPreviewLayer);
+  trimPreviewLayer = null;
+  kmlExportSelectionCache.key = '';
+  exportOverlapGroupCache.clear();
+}
+function exportCoordsForLine(line) {
+  return trimUseResults && Array.isArray(line?._trimmedCoords) ? line._trimmedCoords : line.coords;
+}
+
 function bboxDist(lon, lat, bbox) {
   const dx = Math.max(bbox[0] - lon, 0, lon - bbox[2]);
   const dy = Math.max(bbox[1] - lat, 0, lat - bbox[3]);
@@ -3264,6 +3389,7 @@ function recomputeAll() {
 });
 
 async function runAnalysis() {
+  undoTrimResults();
   errBox.style.display = 'none';
   const hasBase = hasBaseSources();
   const hasCompare = hasCompareSources();
@@ -3969,7 +4095,8 @@ function selectedSourceLinesForKmlExport() {
     .map(line => {
       const exportLine = {
       ...line,
-      length: Number(line.length) || lineLengthMeters(line.coords || []),
+      coords: exportCoordsForLine(line),
+      length: lineLengthMeters(exportCoordsForLine(line) || []),
       status: line.status || 'new',
       overlapType: sourceOverlapGroups.has(line) ? 'partial' : 'none'
       };
@@ -4264,6 +4391,11 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="source_measured"><value>${xmlEscape(seg.sourceMetadata?.measured || '')}</value></Data>` +
       `<Data name="source_calculated"><value>${xmlEscape(seg.sourceMetadata?.calculated || '')}</value></Data>` +
       `<Data name="overlap_type"><value>${xmlEscape(overlap.th)}</value></Data>` +
+      `<Data name="trim_status"><value>${xmlEscape(seg._trimMeta?.status || 'original')}</value></Data>` +
+      `<Data name="trim_reason"><value>${xmlEscape(seg._trimMeta?.reason || '')}</value></Data>` +
+      `<Data name="original_length_m"><value>${Number(seg._trimMeta?.originalLengthM || seg.length || 0).toFixed(2)}</value></Data>` +
+      `<Data name="trimmed_length_m"><value>${Number(seg._trimMeta?.trimmedLengthM || seg.length || 0).toFixed(2)}</value></Data>` +
+      `<Data name="removed_length_m"><value>${Number(seg._trimMeta?.removedLengthM || 0).toFixed(2)}</value></Data>` +
       `<Data name="length_km"><value>${(seg.length / 1000).toFixed(3)}</value></Data>` +
       `<Data name="diameter_mm"><value>${billing.diameter}</value></Data>` +
       `<Data name="diameter_source"><value>${xmlEscape(segmentDiameterSourceLabel(seg))}</value></Data>` +
@@ -4443,6 +4575,29 @@ exportModeSelect?.addEventListener('change', () => {
   setExportStatus('ปรับโหมด Export แล้ว พร้อมส่งออกด้วยตัวกรองปัจจุบัน');
 });
 updateExportModeHint();
+
+document.getElementById('trimPreviewBtn')?.addEventListener('click', () => {
+  trimUseResults = false;
+  trimPreviewResults = calculateTrimPreview();
+  renderTrimPreview(trimPreviewResults);
+  document.getElementById('trimApplyBtn').disabled = trimPreviewResults.length === 0;
+  document.getElementById('trimUndoBtn').disabled = trimPreviewResults.length === 0;
+  const removed = trimPreviewResults.reduce((sum, result) => sum + result.removedLengthM, 0);
+  document.getElementById('trimStatus').textContent = trimPreviewResults.length
+    ? `พบ ${trimPreviewResults.length.toLocaleString('th-TH')} เส้น · เสนอให้ตัด ${removed.toLocaleString('th-TH', { maximumFractionDigits: 1 })} เมตร (แดง)`
+    : 'ไม่พบปลายเส้นที่เข้าเงื่อนไขตัด';
+});
+document.getElementById('trimApplyBtn')?.addEventListener('click', () => {
+  applyTrimResults();
+  document.getElementById('trimApplyBtn').disabled = true;
+  document.getElementById('trimStatus').textContent = `ใช้ผล Trim แล้ว ${trimPreviewResults.length.toLocaleString('th-TH')} เส้น · KML/KMZ จะใช้เส้นสีเขียว`;
+});
+document.getElementById('trimUndoBtn')?.addEventListener('click', () => {
+  undoTrimResults();
+  document.getElementById('trimApplyBtn').disabled = true;
+  document.getElementById('trimUndoBtn').disabled = true;
+  document.getElementById('trimStatus').textContent = 'ยกเลิกผล Trim แล้ว · Export จะใช้เส้นต้นฉบับ';
+});
 
 const swapSourceRolesButton = document.getElementById('swapSourceRoles');
 swapSourceRolesButton?.addEventListener('click', async () => {
@@ -4669,7 +4824,7 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260730-managed-reference"></script>
+<script src="production.js?v=20260730-trim-engine"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
 <script src="ux-refresh.js?v=20260730-export-feedback"></script>

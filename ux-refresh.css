@@ -616,6 +616,15 @@ body.ux-enhanced #billingCard .totalBanner-val .currency{
 }
 .osm-reference-control label{display:flex;align-items:center;gap:4px;white-space:nowrap;}
 .osm-reference-control small{color:var(--ux-text-muted);white-space:nowrap;}
+.trim-control{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:5px 8px;border:1px solid #d7e0eb;border-radius:10px;background:#fff;
+  font-size:.66rem;
+}
+.trim-control label{display:flex;align-items:center;gap:3px;white-space:nowrap;}
+.trim-control input{width:48px;padding:3px 4px;}
+.trim-control button{padding:5px 7px;border-radius:7px;font-size:.65rem;}
+.trim-control small{flex:1 1 100%;color:var(--ux-text-muted);}
 .billing-export-actions{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));

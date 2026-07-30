@@ -44,6 +44,7 @@
   const osmReferenceStatus = document.getElementById('osmReferenceStatus');
   let osmReferenceLayer = null;
   let osmReferenceTimer = null;
+  window.permissionOutReferenceFeatures = [];
   const baseFileInput = document.getElementById('fileBase');
   const baseCatalogList = document.getElementById('baseCatalogList');
   const baseCatalogSearch = document.getElementById('baseCatalogSearch');
@@ -158,6 +159,8 @@
       osmReferenceLayer = null;
     }
     if (!types.length) {
+      window.permissionOutReferenceFeatures = [];
+      window.dispatchEvent(new CustomEvent('permissionout:reference-data', { detail: { features: [] } }));
       if (osmReferenceStatus) osmReferenceStatus.textContent = 'ข้อมูลจากคลังภายใน';
       return;
     }
@@ -177,6 +180,8 @@
         interactive: false
       }).addTo(map);
       const count = Array.isArray(data.features) ? data.features.length : 0;
+      window.permissionOutReferenceFeatures = Array.isArray(data.features) ? data.features : [];
+      window.dispatchEvent(new CustomEvent('permissionout:reference-data', { detail: { features: window.permissionOutReferenceFeatures } }));
       if (osmReferenceStatus) osmReferenceStatus.textContent = `${count.toLocaleString('th-TH')} รายการ · คลังภายใน`;
     } catch (error) {
       if (osmReferenceStatus) osmReferenceStatus.textContent = `โหลดข้อมูลอ้างอิงไม่สำเร็จ: ${error.message}`;
