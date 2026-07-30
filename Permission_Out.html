@@ -1318,6 +1318,10 @@ table.report td.num{
             <input type="radio" name="reportOverlapMode" value="dedupe">
             <span><strong>ตัดเส้นที่ทับกัน</strong><small>ตัดเส้นซ้ำก่อนสร้างรายงาน</small></span>
           </label>
+          <label>
+            <input type="radio" name="reportOverlapMode" value="overlap-only">
+            <span><strong>แสดงเฉพาะช่วงที่ทับกันจริง</strong><small>ตัดเส้นที่ไม่ทับและส่วนเกินออกจากแผนที่/Export</small></span>
+          </label>
         </div>
       </div>
       <button class="primary" id="analyzeBtn">วิเคราะห์เส้นทาง</button>
@@ -3115,6 +3119,18 @@ function getActiveOverlaps() {
   document.querySelectorAll('.overlapFilter').forEach(cb => { active[cb.value] = cb.checked; });
   return active;
 }
+function getReportOverlapMode() {
+  return document.querySelector('input[name="reportOverlapMode"]:checked')?.value || 'keep';
+}
+function overlapOnlyReportModeEnabled() {
+  return getReportOverlapMode() === 'overlap-only';
+}
+function reportOverlapModeLabel() {
+  const mode = getReportOverlapMode();
+  if (mode === 'dedupe') return 'ตัดเส้นที่ทับกัน';
+  if (mode === 'overlap-only') return 'แสดงเฉพาะช่วงที่ทับกันจริง';
+  return 'ไม่ตัดเส้นที่ทับกัน';
+}
 
 function recomputeAll() {
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
@@ -3196,7 +3212,8 @@ async function runAnalysis() {
   }
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = Math.max(1, parseFloat(document.getElementById('interval').value) || 5);
-  const dedupeEnabled = document.querySelector('input[name="reportOverlapMode"]:checked')?.value === 'dedupe';
+  const reportOverlapMode = getReportOverlapMode();
+  const dedupeEnabled = reportOverlapMode === 'dedupe';
 
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
@@ -3267,6 +3284,9 @@ async function runAnalysis() {
       resB = segmentsFromLinesDirect(linesB, 'remove'); // มีเฉพาะ C/D → ไม่มีในฐาน → Remove
     } else {
       resB = segmentsFromLinesDirect(linesA, 'new');    // มีเฉพาะ A/B → ไม่มีในเปรียบเทียบ → New
+    }
+    if (reportOverlapMode === 'overlap-only') {
+      resB = { segments: resB.segments.filter(seg => seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' })) };
     }
     const elapsedMs = Math.round(performance.now() - t0);
 
@@ -3575,7 +3595,7 @@ async function exportCSV() {
   rows.push(['เสาต่อระยะทาง (ต้น/กม.)', polesPerKm]);
   rows.push(['อัตราค่าบริการพาดสาย (บาท/เส้น/มม./ต้น)', rateB]);
   rows.push(['ประเภทข้อมูลที่เลือกในรายงาน', Array.from(new Set(exportSegments.map(segment => segment.importCategory || 'network'))).join(', ') || '-']);
-  rows.push(['รูปแบบรายงาน', document.querySelector('input[name="reportOverlapMode"]:checked')?.value === 'dedupe' ? 'ตัดเส้นที่ทับกัน' : 'ไม่ตัดเส้นที่ทับกัน']);
+  rows.push(['รูปแบบรายงาน', reportOverlapModeLabel()]);
   rows.push(['จังหวัดที่เลือกสำหรับส่งออก', provinceLabel]);
   rows.push(['Status (จากไฟล์) ที่เลือกสำหรับส่งออก', cableStatusLabel]);
   rows.push([]);
@@ -3776,6 +3796,7 @@ function selectedSegmentsForExport() {
   );
 }
 function selectedSourceLinesForKmlExport() {
+  if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();
   const selectedProvinces = getSelectedProvinces();
   const selectedCableStatuses = getSelectedCableStatuses();
   const activeCategories = getActiveCategories();
@@ -3864,9 +3885,18 @@ function kmlExportFolderName(segment) {
     ? `Status: ${getSegCableStatus(segment) || 'ไม่ระบุ'}`
     : kmlTopFolderName(segment);
 }
+function kmlCategoryFolderKey(segment) {
+  if (!mod1ComparisonFileName(segment).includes('maxi')) return kmlTopFolderKey(segment);
+  return `${kmlTopFolderKey(segment)}:category:${normalizeImportCategory(segment.importCategory)}`;
+}
+function kmlCategoryFolderName(segment) {
+  if (!mod1ComparisonFileName(segment).includes('maxi')) return kmlTopFolderName(segment);
+  const labels = { network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' };
+  return labels[normalizeImportCategory(segment.importCategory)] || 'Network';
+}
 function kmlExportStyleId(segment) {
   const suffix = mod1ComparisonFileName(segment).includes('maxi')
-    ? `${kmlTopFolderKey(segment)}:status:${getSegCableStatus(segment) || 'unknown'}`
+    ? `${kmlCategoryFolderKey(segment)}:status:${getSegCableStatus(segment) || 'unknown'}`
     : kmlTopFolderKey(segment);
   return `route-${kmlSafeId(suffix)}`;
 }
@@ -3902,14 +3932,23 @@ function buildSelectedKml(segments, peaFeatures = []) {
       sourceEntries.set(topId, {
         id: topId,
         name: kmlTopFolderName(seg),
-        layers: new Map()
+        categories: new Map()
       });
     }
     const sourceEntry = sourceEntries.get(topId);
+    const categoryId = `category-${kmlSafeId(kmlCategoryFolderKey(seg))}`;
+    if (!sourceEntry.categories.has(categoryId)) {
+      sourceEntry.categories.set(categoryId, {
+        id: categoryId,
+        name: kmlCategoryFolderName(seg),
+        layers: new Map()
+      });
+    }
+    const categoryEntry = sourceEntry.categories.get(categoryId);
     const id = kmlExportStyleId(seg);
-    if (!sourceEntry.layers.has(id)) {
+    if (!categoryEntry.layers.has(id)) {
       const fallbackColor = seg.sourceColor || (STATUS_META[seg.status] || STATUS_META.new).color;
-      sourceEntry.layers.set(id, {
+      categoryEntry.layers.set(id, {
         id,
         name: kmlExportFolderName(seg),
         color: kmlColorFromCss(kmlExportColor(seg, fallbackColor), fallbackColor),
@@ -3918,7 +3957,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
     }
   });
   const styles = Array.from(sourceEntries.values()).flatMap(source =>
-    Array.from(source.layers.values())
+    Array.from(source.categories.values()).flatMap(category => Array.from(category.layers.values()))
   ).map(entry =>
     `<Style id="${entry.id}"><LineStyle><color>${entry.color}</color><width>5</width></LineStyle></Style>`
   ).join('');
@@ -3955,14 +3994,20 @@ function buildSelectedKml(segments, peaFeatures = []) {
       `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
       `<Data name="cost_baht"><value>${billing.cost.toFixed(2)}</value></Data>` +
       `</ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coordinates}</coordinates></LineString></Placemark>`;
-    sourceEntries.get(`folder-${kmlSafeId(kmlTopFolderKey(seg))}`)?.layers.get(kmlExportStyleId(seg))?.placemarks.push(placemark);
+    sourceEntries.get(`folder-${kmlSafeId(kmlTopFolderKey(seg))}`)?.categories.get(`category-${kmlSafeId(kmlCategoryFolderKey(seg))}`)?.layers.get(kmlExportStyleId(seg))?.placemarks.push(placemark);
   });
   const placemarks = Array.from(sourceEntries.values()).map(source =>
     `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>` +
-    Array.from(source.layers.values()).map(layer =>
-      layer.name === source.name
-        ? layer.placemarks.join('')
-        : `<Folder><name>${xmlEscape(layer.name)}</name><open>1</open><visibility>1</visibility>${layer.placemarks.join('')}</Folder>`
+    Array.from(source.categories.values()).map(category =>
+      category.name === source.name
+        ? Array.from(category.layers.values()).map(layer => layer.placemarks.join('')).join('')
+        : `<Folder><name>${xmlEscape(category.name)}</name><open>1</open><visibility>1</visibility>` +
+          Array.from(category.layers.values()).map(layer =>
+            layer.name === category.name
+              ? layer.placemarks.join('')
+              : `<Folder><name>${xmlEscape(layer.name)}</name><open>1</open><visibility>1</visibility>${layer.placemarks.join('')}</Folder>`
+          ).join('') +
+          `</Folder>`
     ).join('') +
     `</Folder>`
   ).join('');
@@ -4049,6 +4094,9 @@ document.querySelectorAll('input[name="reportOverlapMode"]').forEach(radio => {
   radio.addEventListener('change', () => {
     const legacy = document.getElementById('dedupeToggle');
     if (legacy) legacy.checked = radio.value === 'dedupe';
+    if ((hasBaseSources() || hasCompareSources()) && (state.segmentsB.length || state.mapSourceLines.length)) {
+      runAnalysis();
+    }
   });
 });
 
