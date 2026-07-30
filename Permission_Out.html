@@ -4080,6 +4080,40 @@ function kmlExportColor(segment, fallbackColor) {
   for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
   return DATASET_LINE_COLORS[Math.abs(hash) % DATASET_LINE_COLORS.length];
 }
+function kmlExportMeta(segment) {
+  const reference = kmlFolderReference(segment);
+  const referenceIsMaxi = kmlIsMaxiSegment(reference);
+  const topKey = reference.sourceKey || reference.sourceDatasetId || reference.sourceFile || 'source';
+  const topName = sourceFileColumnValue(reference) || mod1ComparisonFileName(reference) || 'Selected source';
+  const categoryKey = referenceIsMaxi
+    ? `${topKey}:category:${normalizeImportCategory(reference.importCategory)}`
+    : topKey;
+  const categoryName = referenceIsMaxi
+    ? ({ network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' }[normalizeImportCategory(reference.importCategory)] || 'Network')
+    : topName;
+  const folderName = referenceIsMaxi
+    ? `Status: ${getSegCableStatus(reference) || 'ไม่ระบุ'}`
+    : topName;
+  const styleSuffix = referenceIsMaxi
+    ? `${categoryKey}:status:${getSegCableStatus(reference) || 'unknown'}`
+    : topKey;
+  const styleId = `route-${kmlSafeId(styleSuffix)}`;
+  const fallbackColor = segment.sourceColor || (STATUS_META[segment.status] || STATUS_META.new).color;
+  const lineColor = referenceIsMaxi
+    ? kmlExportColor(segment, fallbackColor)
+    : fallbackColor;
+  return {
+    reference,
+    referenceIsMaxi,
+    topId: `folder-${kmlSafeId(topKey)}`,
+    topName,
+    categoryId: `category-${kmlSafeId(categoryKey)}`,
+    categoryName,
+    folderName,
+    styleId,
+    color: kmlColorFromCss(lineColor, fallbackColor)
+  };
+}
 function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups = null) {
   const provinceList = getSelectedProvinces();
   const provinceLabel = provinceList.length === 0 || provinceList.includes('__ALL__') ? 'ทุกจังหวัด' : provinceList.join(', ');
@@ -4098,32 +4132,30 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
   );
   const overlapGroupCount = new Set(overlapGroups.values()).size;
   const sourceEntries = new Map();
-  segments.forEach(seg => {
-    const topId = `folder-${kmlSafeId(kmlTopFolderKey(seg))}`;
-    if (!sourceEntries.has(topId)) {
-      sourceEntries.set(topId, {
-        id: topId,
-        name: kmlTopFolderName(seg),
+  const exportMetaRows = segments.map(kmlExportMeta);
+  segments.forEach((seg, index) => {
+    const meta = exportMetaRows[index];
+    if (!sourceEntries.has(meta.topId)) {
+      sourceEntries.set(meta.topId, {
+        id: meta.topId,
+        name: meta.topName,
         categories: new Map()
       });
     }
-    const sourceEntry = sourceEntries.get(topId);
-    const categoryId = `category-${kmlSafeId(kmlCategoryFolderKey(seg))}`;
-    if (!sourceEntry.categories.has(categoryId)) {
-      sourceEntry.categories.set(categoryId, {
-        id: categoryId,
-        name: kmlCategoryFolderName(seg),
+    const sourceEntry = sourceEntries.get(meta.topId);
+    if (!sourceEntry.categories.has(meta.categoryId)) {
+      sourceEntry.categories.set(meta.categoryId, {
+        id: meta.categoryId,
+        name: meta.categoryName,
         layers: new Map()
       });
     }
-    const categoryEntry = sourceEntry.categories.get(categoryId);
-    const id = kmlExportStyleId(seg);
-    if (!categoryEntry.layers.has(id)) {
-      const fallbackColor = seg.sourceColor || (STATUS_META[seg.status] || STATUS_META.new).color;
-      categoryEntry.layers.set(id, {
-        id,
-        name: kmlExportFolderName(seg),
-        color: kmlColorFromCss(kmlExportColor(seg, fallbackColor), fallbackColor),
+    const categoryEntry = sourceEntry.categories.get(meta.categoryId);
+    if (!categoryEntry.layers.has(meta.styleId)) {
+      categoryEntry.layers.set(meta.styleId, {
+        id: meta.styleId,
+        name: meta.folderName,
+        color: meta.color,
         placemarks: []
       });
     }
@@ -4137,14 +4169,15 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
     const status = STATUS_META[seg.status] || STATUS_META.new;
     const overlap = OVERLAP_META[seg.overlapType] || OVERLAP_META.none;
     const billing = billingRows[index];
-    const kmlReference = kmlFolderReference(seg);
+    const exportMeta = exportMetaRows[index];
+    const kmlReference = exportMeta.reference;
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
-    const placemark = `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${kmlExportStyleId(seg)}</styleUrl><ExtendedData>` +
+    const placemark = `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${exportMeta.styleId}</styleUrl><ExtendedData>` +
       `<Data name="source_layer"><value>${xmlEscape(sourceFileColumnValue(seg))}</value></Data>` +
-      `<Data name="kml_layer"><value>${xmlEscape(kmlExportFolderName(seg))}</value></Data>` +
-      `<Data name="maxi_reference_layer"><value>${xmlEscape(kmlIsMaxiSegment(kmlReference) ? sourceFileColumnValue(kmlReference) : '')}</value></Data>` +
-      `<Data name="maxi_reference_category"><value>${xmlEscape(kmlIsMaxiSegment(kmlReference) ? kmlCategoryFolderName(seg) : '')}</value></Data>` +
-      `<Data name="maxi_reference_status"><value>${xmlEscape(kmlIsMaxiSegment(kmlReference) ? getSegCableStatus(kmlReference) : '')}</value></Data>` +
+      `<Data name="kml_layer"><value>${xmlEscape(exportMeta.folderName)}</value></Data>` +
+      `<Data name="maxi_reference_layer"><value>${xmlEscape(exportMeta.referenceIsMaxi ? sourceFileColumnValue(kmlReference) : '')}</value></Data>` +
+      `<Data name="maxi_reference_category"><value>${xmlEscape(exportMeta.referenceIsMaxi ? exportMeta.categoryName : '')}</value></Data>` +
+      `<Data name="maxi_reference_status"><value>${xmlEscape(exportMeta.referenceIsMaxi ? getSegCableStatus(kmlReference) : '')}</value></Data>` +
       `<Data name="province"><value>${xmlEscape(getSegProvince(seg))}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
@@ -4170,7 +4203,7 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="rate_baht_per_line_mm_pole"><value>${rateB}</value></Data>` +
       `<Data name="cost_baht"><value>${billing.cost.toFixed(2)}</value></Data>` +
       `</ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coordinates}</coordinates></LineString></Placemark>`;
-    sourceEntries.get(`folder-${kmlSafeId(kmlTopFolderKey(seg))}`)?.categories.get(`category-${kmlSafeId(kmlCategoryFolderKey(seg))}`)?.layers.get(kmlExportStyleId(seg))?.placemarks.push(placemark);
+    sourceEntries.get(exportMeta.topId)?.categories.get(exportMeta.categoryId)?.layers.get(exportMeta.styleId)?.placemarks.push(placemark);
   });
   const placemarks = Array.from(sourceEntries.values()).map(source =>
     `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>` +
@@ -4229,7 +4262,10 @@ async function exportKMZ() {
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
   const zip = new JSZip();
   zip.file('doc.kml', buildSelectedKml(segments, peaFeatures, overlapGroups));
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const fastExport = !exportIncludesPeaDetails();
+  const blob = await zip.generateAsync(fastExport
+    ? { type: 'blob', compression: 'STORE' }
+    : { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
   downloadBlob(blob, `kml_compare_selected_${exportTimestamp()}.kmz`);
 }
 
