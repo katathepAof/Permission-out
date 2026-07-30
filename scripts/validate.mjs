@@ -117,8 +117,8 @@ if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA A
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
   throw new Error('Logical PEA/UFM dataset grouping or province map focus is missing');
 }
-if (!html.includes('function getSegProvinces(seg)') || !html.includes('state.segmentsB.flatMap(getSegProvinces)') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))')) {
-  throw new Error('MOD 1 province filtering must include every province crossed by a segment');
+if (!html.includes('function getSegProvinces(seg)') || !html.includes('function provinceFilterSourceSegments()') || !html.includes('provinceSources.flatMap(getSegProvinces)') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))')) {
+  throw new Error('MOD 1 province filtering must include provinces from result segments and selected rd03/Maxi source data');
 }
 if (!html.includes("[...state.segmentsB, ...(state.mapSourceLines || [])].map(getSegCableStatus)")) {
   throw new Error('MOD 1 cable status filter must include source-line statuses');

@@ -2804,6 +2804,10 @@ function getSegProvinces(seg) {
   return seg._provinces;
 }
 
+function provinceFilterSourceSegments() {
+  return [...state.segmentsB, ...(state.mapSourceLines || [])];
+}
+
 /* ===================== Report / cost UI ===================== */
 
 function fmtKm(meters) { return (meters / 1000).toFixed(3); }
@@ -2926,10 +2930,11 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
   else try { seg._mapLayer && seg._mapLayer.openPopup(); } catch (err) { /* layer no longer on map — bounds already zoomed, ignore */ }
 });
 
-// เติมรายชื่อจังหวัดจากผลวิเคราะห์ลงใน dropdown
+// เติมรายชื่อจังหวัดจากผลวิเคราะห์และข้อมูลต้นทาง rd03/Maxi ลงใน dropdown
 function populateProvinceFilter() {
   const container = document.getElementById('provinceFilter');
   if (!container) return;
+  const provinceSources = provinceFilterSourceSegments();
   const prev = Array.from(container.querySelectorAll('.provinceFilterOption:checked')).map(o => o.value);
   const token = ++provinceBuildToken;
   const renderOptions = provinces => {
@@ -2941,8 +2946,8 @@ function populateProvinceFilter() {
       provinces.map(p => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;"><input type="checkbox" class="provinceFilterOption" value="${p}" ${!useAll && selected.includes(p) ? 'checked' : ''}>${p}</label>`).join('');
     bindProvinceFilterOptions();
   };
-  if (state.segmentsB.length <= LARGE_RESULT_THRESHOLD) {
-    renderOptions(Array.from(new Set(state.segmentsB.flatMap(getSegProvinces).filter(p => p && p !== '-'))));
+  if (provinceSources.length <= LARGE_RESULT_THRESHOLD) {
+    renderOptions(Array.from(new Set(provinceSources.flatMap(getSegProvinces).filter(p => p && p !== '-'))));
     return;
   }
   container.innerHTML = '<label style="display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" checked>ทุกจังหวัด</label><span style="font-size:.76rem;color:var(--ink-mute);">กำลังเตรียมตัวกรองจังหวัดเบื้องหลัง…</span>';
@@ -2950,13 +2955,13 @@ function populateProvinceFilter() {
   let cursor = 0;
   const processChunk = () => {
     if (token !== provinceBuildToken) return;
-    const end = Math.min(cursor + 180, state.segmentsB.length);
+    const end = Math.min(cursor + 180, provinceSources.length);
     for (; cursor < end; cursor++) {
-      getSegProvinces(state.segmentsB[cursor]).forEach(province => {
+      getSegProvinces(provinceSources[cursor]).forEach(province => {
         if (province && province !== '-') provinces.add(province);
       });
     }
-    if (cursor < state.segmentsB.length) setTimeout(processChunk, 0);
+    if (cursor < provinceSources.length) setTimeout(processChunk, 0);
     else renderOptions(Array.from(provinces));
   };
   setTimeout(processChunk, 0);
@@ -3429,11 +3434,41 @@ function sourceLineOverlapMatches(line, sourceExportLines, sourceOverlapGroups) 
   return matches.length ? matches : sourceExportLines.filter(item => item !== line && sourceOverlapGroups.get(item) === group);
 }
 
-function rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups) {
+function buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups) {
+  const linesByOverlapGroup = new Map();
+  sourceExportLines.forEach(line => {
+    const group = sourceOverlapGroups.get(line);
+    if (!group) return;
+    const lines = linesByOverlapGroup.get(group) || [];
+    lines.push(line);
+    linesByOverlapGroup.set(group, lines);
+  });
+  const matchesByLine = new Map();
+  sourceExportLines.forEach(line => {
+    const group = sourceOverlapGroups.get(line);
+    if (!group) {
+      matchesByLine.set(line, []);
+      return;
+    }
+    const peers = (linesByOverlapGroup.get(group) || []).filter(item => item !== line);
+    const lineGroup = sourceLineGroup(line);
+    const crossGroup = peers.filter(item => sourceLineGroup(item) !== lineGroup);
+    matchesByLine.set(line, crossGroup.length ? crossGroup : peers);
+  });
+  return matchesByLine;
+}
+
+function sourceLineMatchedWithFast(line, sourceOverlapMatchIndex) {
+  return (sourceOverlapMatchIndex.get(line) || [])
+    .map(item => `${sourceFileColumnValue(item)} / ${placemarkDisplayText(item)}`)
+    .join(' | ');
+}
+
+function rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups, sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups)) {
   return sourceExportLines
     .filter(line => sourceLineGroup(line) === 'BASE' && mod1ComparisonFileName(line).includes('rd03'))
     .flatMap(rd03Line => {
-      const matches = sourceLineOverlapMatches(rd03Line, sourceExportLines, sourceOverlapGroups)
+      const matches = (sourceOverlapMatchIndex.get(rd03Line) || [])
         .filter(item => mod1ComparisonFileName(item).includes('maxi'));
       return matches.map((maxiLine, matchIndex) => ({ rd03Line, maxiLine, matchIndex, totalMatches: matches.length }));
     });
@@ -3562,6 +3597,7 @@ async function exportCSV() {
     sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories)
   );
   const sourceOverlapGroups = buildExportOverlapGroups(sourceExportLines, threshold, interval);
+  const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
   const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
   const billingSourceKeys = new Set(exportSegments.map(sourceLineRouteKey));
   const sourceOverlapLineCount = sourceExportLines.filter(line => sourceOverlapGroups.has(line)).length;
@@ -3700,7 +3736,7 @@ async function exportCSV() {
     const coords = line.coords || [];
     const sourceMetadata = line.sourceMetadata || {};
     const overlapGroup = sourceOverlapGroups.get(line) || '';
-    const overlapMatches = sourceLineOverlapMatches(line, sourceExportLines, sourceOverlapGroups);
+    const overlapMatches = sourceOverlapMatchIndex.get(line) || [];
     rows.push([
       index + 1,
       GROUP_LABELS[sourceLineGroup(line)] || sourceLineGroup(line) || '-',
@@ -3708,7 +3744,7 @@ async function exportCSV() {
       overlapGroup ? 'ทับกัน' : 'ไม่ทับกัน',
       overlapGroup,
       overlapMatches.length,
-      sourceLineMatchedWith(line, sourceExportLines, sourceOverlapGroups),
+      sourceLineMatchedWithFast(line, sourceOverlapMatchIndex),
       sourceLineBillingNote(line, billingSourceKeys, sourceOverlapGroups),
       sourceFileColumnValue(line),
       line.sourceDatasetId || '',
@@ -3731,7 +3767,7 @@ async function exportCSV() {
     ]);
   });
 
-  const rd03MaxiRows = rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups);
+  const rd03MaxiRows = rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups, sourceOverlapMatchIndex);
   rows.push([]);
   rows.push(['rd03 to Maxi match detail']);
   rows.push(['Count', rd03MaxiRows.length]);
@@ -3795,7 +3831,25 @@ function selectedSegmentsForExport() {
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
 }
+let kmlExportSelectionCache = { key: '', segments: [], overlapGroups: new Map() };
+function kmlExportFilterCacheKey() {
+  const selectedProvinces = getSelectedProvinces().filter(Boolean).sort();
+  const selectedCableStatuses = getSelectedCableStatuses().filter(Boolean).sort();
+  const activeCategories = getActiveCategories();
+  const activeOverlaps = getActiveOverlaps();
+  return JSON.stringify({
+    sourceCount: (state.mapSourceLines || []).length,
+    threshold: parseFloat(document.getElementById('threshold').value) || 20,
+    interval: parseFloat(document.getElementById('interval').value) || 5,
+    provinces: selectedProvinces,
+    cableStatuses: selectedCableStatuses,
+    categories: activeCategories,
+    overlaps: activeOverlaps
+  });
+}
 function selectedSourceLinesForKmlExport() {
+  const cacheKey = kmlExportFilterCacheKey();
+  if (kmlExportSelectionCache.key === cacheKey) return kmlExportSelectionCache.segments;
   const selectedProvinces = getSelectedProvinces();
   const selectedCableStatuses = getSelectedCableStatuses();
   const activeCategories = getActiveCategories();
@@ -3806,14 +3860,22 @@ function selectedSourceLinesForKmlExport() {
     .filter(line => sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories));
   const sourceOverlapGroups = buildExportOverlapGroups(candidates, threshold, interval);
   const includeOverlapping = Boolean(activeOverlaps.partial || activeOverlaps.full);
-  return candidates
+  const selectedOverlapGroups = new Map();
+  const selectedLines = candidates
     .filter(line => sourceOverlapGroups.has(line) ? includeOverlapping : activeOverlaps.none)
-    .map(line => ({
+    .map(line => {
+      const exportLine = {
       ...line,
       length: Number(line.length) || lineLengthMeters(line.coords || []),
       status: line.status || 'new',
       overlapType: sourceOverlapGroups.has(line) ? 'partial' : 'none'
-    }));
+      };
+      const group = sourceOverlapGroups.get(line);
+      if (group) selectedOverlapGroups.set(exportLine, group);
+      return exportLine;
+    });
+  kmlExportSelectionCache = { key: cacheKey, segments: selectedLines, overlapGroups: selectedOverlapGroups };
+  return selectedLines;
 }
 function xmlEscape(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -3951,7 +4013,7 @@ function kmlExportColor(segment, fallbackColor) {
   for (let i = 0; i < status.length; i++) hash = ((hash << 5) - hash + status.charCodeAt(i)) | 0;
   return DATASET_LINE_COLORS[Math.abs(hash) % DATASET_LINE_COLORS.length];
 }
-function buildSelectedKml(segments, peaFeatures = []) {
+function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups = null) {
   const provinceList = getSelectedProvinces();
   const provinceLabel = provinceList.length === 0 || provinceList.includes('__ALL__') ? 'ทุกจังหวัด' : provinceList.join(', ');
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
@@ -3962,7 +4024,7 @@ function buildSelectedKml(segments, peaFeatures = []) {
   const surcharge = subtotal * surchargePct / 100;
   const total = subtotal + surcharge;
   const formula = activeBillingFormula();
-  const overlapGroups = buildExportOverlapGroups(
+  const overlapGroups = precomputedOverlapGroups || buildExportOverlapGroups(
     segments,
     parseFloat(document.getElementById('threshold').value) || 20,
     parseFloat(document.getElementById('interval').value) || 5
@@ -4088,7 +4150,8 @@ async function exportKML() {
   const segments = selectedSourceLinesForKmlExport();
   await ensurePeaAreasForExport(segments);
   const peaFeatures = typeof window.permissionOutPeaFeaturesForSegments === 'function' ? await window.permissionOutPeaFeaturesForSegments(segments) : [];
-  downloadBlob(new Blob([buildSelectedKml(segments, peaFeatures)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' }), `kml_compare_selected_${exportTimestamp()}.kml`);
+  const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
+  downloadBlob(new Blob([buildSelectedKml(segments, peaFeatures, overlapGroups)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' }), `kml_compare_selected_${exportTimestamp()}.kml`);
 }
 async function exportKMZ() {
   if (!ensureSegmentsAvailableForExport()) return;
@@ -4096,8 +4159,9 @@ async function exportKMZ() {
   const segments = selectedSourceLinesForKmlExport();
   await ensurePeaAreasForExport(segments);
   const peaFeatures = typeof window.permissionOutPeaFeaturesForSegments === 'function' ? await window.permissionOutPeaFeaturesForSegments(segments) : [];
+  const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
   const zip = new JSZip();
-  zip.file('doc.kml', buildSelectedKml(segments, peaFeatures));
+  zip.file('doc.kml', buildSelectedKml(segments, peaFeatures, overlapGroups));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   downloadBlob(blob, `kml_compare_selected_${exportTimestamp()}.kmz`);
 }
