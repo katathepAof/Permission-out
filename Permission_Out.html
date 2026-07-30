@@ -4281,6 +4281,17 @@ function kmlBoundsCanOverlap(left, right, thresholdMeters) {
     left.minLat - latitudePadding <= right.maxLat &&
     left.maxLat + latitudePadding >= right.minLat;
 }
+function kmlBoundsCenterDistanceScore(left, right) {
+  if (!left || !right) return Infinity;
+  const leftLng = (left.minLng + left.maxLng) / 2;
+  const leftLat = (left.minLat + left.maxLat) / 2;
+  const rightLng = (right.minLng + right.maxLng) / 2;
+  const rightLat = (right.minLat + right.maxLat) / 2;
+  const latitudeScale = Math.cos(((leftLat + rightLat) / 2) * Math.PI / 180);
+  const dx = (leftLng - rightLng) * latitudeScale;
+  const dy = leftLat - rightLat;
+  return dx * dx + dy * dy;
+}
 function kmlMaxiSpatialEntries() {
   if (kmlMaxiSpatialCache.revision === exportSelectionRevision) return kmlMaxiSpatialCache;
   const cellSize = 0.02;
@@ -4335,9 +4346,13 @@ function kmlMaxiReference(segment) {
   const cacheKey = `${exportSelectionRevision}|${threshold}|${interval}|${segment._exportCacheId}`;
   if (kmlMaxiReferenceCache.has(cacheKey)) return kmlMaxiReferenceCache.get(cacheKey);
   const segmentBounds = kmlCoordinateBounds(segment.coords);
-  const samples = sampleLine(segment.coords || [], Math.max(15, interval || 5));
+  const segmentLength = Number(segment.length) || lineLengthMeters(segment.coords || []);
+  const referenceSampleInterval = Math.max(50, segmentLength / 8, interval || 5);
+  const samples = sampleLine(segment.coords || [], referenceSampleInterval);
   const maxiLines = kmlNearbyMaxiEntries(segmentBounds, threshold)
     .filter(entry => kmlBoundsCanOverlap(segmentBounds, entry.bounds, threshold))
+    .sort((left, right) => kmlBoundsCenterDistanceScore(segmentBounds, left.bounds) - kmlBoundsCenterDistanceScore(segmentBounds, right.bounds))
+    .slice(0, 24)
     .map(entry => entry.line);
   let best = null, bestRatio = 0;
   maxiLines.forEach(line => {
