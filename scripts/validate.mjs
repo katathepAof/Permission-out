@@ -70,7 +70,7 @@ if (csvSection.includes('document.querySelector(`.diamInput')) {
   throw new Error('CSV export must not depend on rendered report rows');
 }
 if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
-if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExport(exportSegments)')) throw new Error('CSV PEA area export is missing');
+if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExportMode(exportSegments)') || !html.includes('function exportIncludesPeaDetails()') || !html.includes('id="exportDetailMode"')) throw new Error('CSV PEA area export mode is missing');
 if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('selectedSourceLinesForKmlExport()') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'") || !csvSection.includes('Source dataset ID') || !csvSection.includes('Included in billing') || !csvSection.includes('Matched with') || !csvSection.includes('Overlap count') || !csvSection.includes('Overlap marker')) {
   throw new Error('CSV export must include the complete imported source-line audit section');
 }
@@ -92,6 +92,9 @@ if (csvSection.includes("placemarkCode(seg) || '-'")) {
 for (const marker of ['function buildExportOverlapGroups(', "'กลุ่มเส้นทับกัน'", '`ทับกัน ${groupIndex + 1}`', 'exportOverlapGroups.get(seg)']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 same-road-side export grouping marker is missing: ${marker}`);
 }
+if (!html.includes('function getCachedExportOverlapGroups(') || !html.includes('exportOverlapGroupCache.clear()') || !html.includes('getCachedExportOverlapGroups(state.mapSourceLines, threshold, interval)')) {
+  throw new Error('MOD 1 export overlap grouping must be cached after analysis');
+}
 if (!html.includes('name="overlap_group"') || !html.includes('same_road_side_group_count')) {
   throw new Error('KML/KMZ same-road-side export grouping is missing');
 }
@@ -110,7 +113,7 @@ if (!html.includes('function kmlTopFolderName(') || !html.includes('function kml
 if (!html.includes('function kmlCategoryFolderKey(') || !html.includes('function kmlCategoryFolderName(') || !html.includes("network: 'Network'") || !html.includes("'ready-access': 'Ready Access'") || !html.includes("customer: 'Customer'")) {
   throw new Error('KML/KMZ export must let Maxi data be selected by Network, Ready Access, and Customer folders');
 }
-if (!html.includes('function kmlMaxiReference(') || !html.includes('function kmlFolderReference(') || !html.includes('kmlSegmentNearLineRatio(segment, line, threshold, interval)') || !html.includes('maxi_reference_category') || !html.includes('normalizeImportCategory(reference.importCategory)')) {
+if (!html.includes('function kmlMaxiReference(') || !html.includes('kmlMaxiReferenceCache.has(cacheKey)') || !html.includes('function kmlFolderReference(') || !html.includes('kmlSegmentNearLineRatio(segment, line, threshold, interval)') || !html.includes('maxi_reference_category') || !html.includes('normalizeImportCategory(reference.importCategory)')) {
   throw new Error('KML/KMZ export must derive overlap-only category folders from overlapping Maxi data');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
