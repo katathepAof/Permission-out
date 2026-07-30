@@ -1764,6 +1764,7 @@ let aggregateRenderer = null;
 let provinceBuildToken = 0;
 let exportOverlapGroupCache = new Map();
 let kmlMaxiReferenceCache = new Map();
+let kmlMaxiSpatialCache = { revision: -1, lines: [] };
 
 const fileBase = document.getElementById('fileBase');
 const fileCompare = document.getElementById('fileCompare');
@@ -3322,6 +3323,7 @@ async function runAnalysis() {
     exportSelectionRevision++;
     exportOverlapGroupCache.clear();
     kmlMaxiReferenceCache.clear();
+    kmlMaxiSpatialCache = { revision: -1, lines: [] };
     getCachedExportOverlapGroups(state.segmentsB, threshold, interval);
     getCachedExportOverlapGroups(state.mapSourceLines, threshold, interval);
     state.removedA = dedupeA.removedCount;
@@ -4002,8 +4004,8 @@ function kmlSafeId(value, fallback = 'route') {
 function kmlIsMaxiSegment(segment) {
   return mod1ComparisonFileName(segment).includes('maxi');
 }
-function kmlSegmentNearLineRatio(segment, line, threshold, interval) {
-  const samples = sampleLine(segment.coords || [], Math.max(2, interval || 5));
+function kmlSegmentNearLineRatio(segment, line, threshold, interval, preparedSamples = null) {
+  const samples = preparedSamples || sampleLine(segment.coords || [], Math.max(2, interval || 5));
   if (!samples.length || !Array.isArray(line?.coords) || line.coords.length < 2) return 0;
   let hits = 0;
   samples.forEach(sample => {
@@ -4016,6 +4018,40 @@ function kmlSegmentNearLineRatio(segment, line, threshold, interval) {
   });
   return hits / samples.length;
 }
+function kmlCoordinateBounds(coords) {
+  if (!Array.isArray(coords) || coords.length === 0) return null;
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  coords.forEach(coord => {
+    const lng = Number(coord?.[0]), lat = Number(coord?.[1]);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  });
+  return Number.isFinite(minLng) ? { minLng, minLat, maxLng, maxLat } : null;
+}
+function kmlBoundsCanOverlap(left, right, thresholdMeters) {
+  if (!left || !right) return true;
+  const maxLatitude = Math.min(89, Math.max(
+    Math.abs(left.minLat), Math.abs(left.maxLat),
+    Math.abs(right.minLat), Math.abs(right.maxLat)
+  ));
+  const latitudePadding = thresholdMeters / 110574;
+  const longitudePadding = thresholdMeters / Math.max(111320 * Math.cos(maxLatitude * Math.PI / 180), 1000);
+  return left.minLng - longitudePadding <= right.maxLng &&
+    left.maxLng + longitudePadding >= right.minLng &&
+    left.minLat - latitudePadding <= right.maxLat &&
+    left.maxLat + latitudePadding >= right.minLat;
+}
+function kmlMaxiSpatialEntries() {
+  if (kmlMaxiSpatialCache.revision === exportSelectionRevision) return kmlMaxiSpatialCache.lines;
+  const lines = (state.mapSourceLines || [])
+    .filter(kmlIsMaxiSegment)
+    .map(line => ({ line, bounds: kmlCoordinateBounds(line.coords) }));
+  kmlMaxiSpatialCache = { revision: exportSelectionRevision, lines };
+  return lines;
+}
 function kmlMaxiReference(segment) {
   if (kmlIsMaxiSegment(segment)) return segment;
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
@@ -4023,10 +4059,14 @@ function kmlMaxiReference(segment) {
   if (!segment._exportCacheId) segment._exportCacheId = `seg-${exportSelectionRevision}-ref-${Math.random().toString(36).slice(2)}`;
   const cacheKey = `${exportSelectionRevision}|${threshold}|${interval}|${segment._exportCacheId}`;
   if (kmlMaxiReferenceCache.has(cacheKey)) return kmlMaxiReferenceCache.get(cacheKey);
-  const maxiLines = (state.mapSourceLines || []).filter(kmlIsMaxiSegment);
+  const segmentBounds = kmlCoordinateBounds(segment.coords);
+  const samples = sampleLine(segment.coords || [], Math.max(2, interval || 5));
+  const maxiLines = kmlMaxiSpatialEntries()
+    .filter(entry => kmlBoundsCanOverlap(segmentBounds, entry.bounds, threshold))
+    .map(entry => entry.line);
   let best = null, bestRatio = 0;
   maxiLines.forEach(line => {
-    const ratio = kmlSegmentNearLineRatio(segment, line, threshold, interval);
+    const ratio = kmlSegmentNearLineRatio(segment, line, threshold, interval, samples);
     if (ratio > bestRatio) {
       bestRatio = ratio;
       best = line;

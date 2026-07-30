@@ -113,7 +113,7 @@ if (!html.includes('function kmlTopFolderName(') || !html.includes('function kml
 if (!html.includes('function kmlCategoryFolderKey(') || !html.includes('function kmlCategoryFolderName(') || !html.includes("network: 'Network'") || !html.includes("'ready-access': 'Ready Access'") || !html.includes("customer: 'Customer'")) {
   throw new Error('KML/KMZ export must let Maxi data be selected by Network, Ready Access, and Customer folders');
 }
-if (!html.includes('function kmlMaxiReference(') || !html.includes('kmlMaxiReferenceCache.has(cacheKey)') || !html.includes('function kmlFolderReference(') || !html.includes('kmlSegmentNearLineRatio(segment, line, threshold, interval)') || !html.includes('maxi_reference_category') || !html.includes('normalizeImportCategory(reference.importCategory)')) {
+if (!html.includes('function kmlMaxiReference(') || !html.includes('kmlMaxiReferenceCache.has(cacheKey)') || !html.includes('function kmlFolderReference(') || !html.includes('kmlSegmentNearLineRatio(segment, line, threshold, interval, samples)') || !html.includes('kmlMaxiSpatialEntries()') || !html.includes('kmlBoundsCanOverlap(segmentBounds, entry.bounds, threshold)') || !html.includes('maxi_reference_category') || !html.includes('normalizeImportCategory(reference.importCategory)')) {
   throw new Error('KML/KMZ export must derive overlap-only category folders from overlapping Maxi data');
 }
 if (!html.includes('function kmlExportMeta(segment)') || !html.includes('const exportMetaRows = segments.map(kmlExportMeta)') || !html.includes("compression: 'STORE'") || !html.includes('compressionOptions: { level: 3 }')) {
