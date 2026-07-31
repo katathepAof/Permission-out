@@ -167,8 +167,11 @@ if (!html.includes('name="kmlExportDataset"') || !html.includes('value="rd03" ch
 if (!html.includes('id="kmlProvinceFolders"') || !html.includes('function renderKmlLayerPlacemarks(') || !html.includes('function kmlProvinceFolderName(') || !html.includes('function renderKmlSourceContent(') || !html.includes('function renderKmlSourceFolder(')) {
   throw new Error('KML/KMZ province Folder option is missing');
 }
-if (!html.includes('function kmlExportProvinceName(segment)') || !html.includes('segment?.sourceMetadata?.province') || !html.includes('isMaxiSourceLine(segment)')) {
-  throw new Error('KML/KMZ MaxiFiber folders must prefer the source province');
+if (!html.includes('function kmlExportProvinceName(segment)') || !html.includes('function kmlSourceProvinceName(segment)') || !html.includes('function kmlGeometryPrimaryProvince(segment)')) {
+  throw new Error('KML/KMZ folders must prefer source provinces with a geometry fallback');
+}
+if (!html.includes('seg._primaryProvince = Array.from(counts.entries())') || !html.includes('function kmlProvinceMismatch(segment)') || !html.includes('name="traversed_provinces"') || !html.includes('name="province_mismatch"')) {
+  throw new Error('KML/KMZ exports must include dominant and traversed province quality metadata');
 }
 if (!html.includes('id="kmlExportDialog"') || !html.includes('function requestKmlExportOptions(') || !html.includes('dialog.showModal()')) {
   throw new Error('KML/KMZ pre-export options dialog is missing');

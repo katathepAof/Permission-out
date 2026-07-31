@@ -3019,7 +3019,10 @@ function getSegProvince(seg) {
 }
 
 function getSegProvinces(seg) {
-  if (Array.isArray(seg._provinces)) return seg._provinces;
+  if (Array.isArray(seg._provinces)) {
+    if (!seg._primaryProvince) seg._primaryProvince = seg._provinces[0] || '';
+    return seg._provinces;
+  }
   const coords = Array.isArray(seg.coords) ? seg.coords : [];
   if (!coords.length) {
     seg._provinces = [];
@@ -3031,13 +3034,18 @@ function getSegProvinces(seg) {
   const points = [coords[0], coords[coords.length - 1], ...samples];
   const provinces = [];
   const seen = new Set();
+  const counts = new Map();
   points.forEach(point => {
     const province = point ? findProvince(point[0], point[1]) : null;
-    if (province && province !== '-' && !seen.has(province)) {
-      seen.add(province);
-      provinces.push(province);
+    if (province && province !== '-') {
+      counts.set(province, (counts.get(province) || 0) + 1);
+      if (!seen.has(province)) {
+        seen.add(province);
+        provinces.push(province);
+      }
     }
   });
+  seg._primaryProvince = Array.from(counts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] || provinces[0] || '';
   seg._provinces = provinces;
   seg._province = provinces.length ? provinces.join(' | ') : '-';
   return seg._provinces;
@@ -4469,7 +4477,9 @@ function kmlPopupHtmlEscape(value) {
 function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
   const selected = selectedKmlPopupFields();
   const rows = [
-    ['province', 'จังหวัด', kmlExportProvinceName(seg)],
+    ['province', 'จังหวัดหลัก', kmlExportProvinceName(seg)],
+    ['province', 'จังหวัดที่เส้นทางผ่าน', kmlTraversedProvinceNames(seg)],
+    ['province', 'การตรวจสอบจังหวัด', kmlProvinceMismatch(seg) ? 'จังหวัดจากไฟล์ไม่ตรงกับพิกัด' : 'ตรงกัน'],
     ['source', 'แหล่งข้อมูล', sourceFileColumnValue(seg) || '-'],
     ['status', 'Status', getSegCableStatus(seg) || status.th || '-'],
     ['relationship', 'ความสัมพันธ์', overlap.th || '-'],
@@ -4491,13 +4501,31 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
 function kmlProvinceFolderName(segment) {
   return kmlExportProvinceName(segment);
 }
+function normalizeKmlProvinceName(value) {
+  return String(value || '').trim().replace(/^จังหวัด\s*/, '').replace(/\s+/g, '');
+}
+function kmlSourceProvinceName(segment) {
+  return String(segment?.sourceMetadata?.province || segment?.province || '')
+    .split(/[|,;/]/)
+    .map(value => value.trim())
+    .find(Boolean) || '';
+}
+function kmlGeometryPrimaryProvince(segment) {
+  const provinces = getSegProvinces(segment);
+  return segment._primaryProvince || provinces[0] || '';
+}
 function kmlExportProvinceName(segment) {
-  const maxiProvince = isMaxiSourceLine(segment)
-    ? String(segment?.sourceMetadata?.province || segment?.province || '').trim()
-    : '';
-  return maxiProvince.split(/[|,;/]/).map(value => value.trim()).find(Boolean) ||
-    getSegProvinces(segment)[0] ||
+  return kmlSourceProvinceName(segment) ||
+    kmlGeometryPrimaryProvince(segment) ||
     'ไม่ระบุจังหวัด';
+}
+function kmlTraversedProvinceNames(segment) {
+  return getSegProvinces(segment).join(' | ') || kmlExportProvinceName(segment);
+}
+function kmlProvinceMismatch(segment) {
+  const sourceProvince = normalizeKmlProvinceName(kmlSourceProvinceName(segment));
+  const geometryProvinces = getSegProvinces(segment).map(normalizeKmlProvinceName).filter(Boolean);
+  return Boolean(sourceProvince && geometryProvinces.length && !geometryProvinces.includes(sourceProvince));
 }
 function renderKmlLayerPlacemarks(layer, province = null) {
   return layer.placemarks
@@ -4592,6 +4620,9 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="maxi_reference_category"><value>${xmlEscape(exportMeta.referenceIsMaxi ? exportMeta.categoryName : '')}</value></Data>` +
       `<Data name="maxi_reference_status"><value>${xmlEscape(exportMeta.referenceIsMaxi ? getSegCableStatus(kmlReference) : '')}</value></Data>` +
       `<Data name="province"><value>${xmlEscape(kmlExportProvinceName(seg))}</value></Data>` +
+      `<Data name="traversed_provinces"><value>${xmlEscape(kmlTraversedProvinceNames(seg))}</value></Data>` +
+      `<Data name="province_source"><value>${kmlSourceProvinceName(seg) ? 'source' : 'geometry'}</value></Data>` +
+      `<Data name="province_mismatch"><value>${kmlProvinceMismatch(seg) ? 'true' : 'false'}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
       `<Data name="pea_office_types"><value>${xmlEscape(peaAreaExportValue(seg, 'officeType'))}</value></Data>` +
