@@ -4076,7 +4076,6 @@ async function exportCSV() {
     activeCsv[STATUS_META[seg.status] ? seg.status : 'new'] &&
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
-  await ensurePeaAreasForExportMode(exportSegments);
   const exportOverlapGroups = await getCachedExportOverlapGroupsAsync(exportSegments, threshold, interval, progress => {
     setExportStatus(`กำลังจัดกลุ่มผลวิเคราะห์ ${progress.completed.toLocaleString('th-TH')} / ${progress.total.toLocaleString('th-TH')} ช่วง…`, 'busy');
   });
@@ -4084,6 +4083,7 @@ async function exportCSV() {
   const formula = activeBillingFormula();
   const activeCategories = getActiveCategories();
   const sourceExportLines = await prepareSourceLinesForKmlExport();
+  await ensurePeaAreasForExport([...exportSegments, ...sourceExportLines]);
   const sourceOverlapGroups = kmlExportSelectionCache.overlapGroups;
   const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
   const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
@@ -4181,12 +4181,13 @@ async function exportCSV() {
   });
 
   const detailStartIndex = rows.length - exportSegments.length;
-  rows[detailStartIndex - 1].splice(5, 0, 'PEA Area IDs', 'PEA Area Names', 'PEA Office Types', 'PEA Assignment Method');
+  rows[detailStartIndex - 1].splice(5, 0, 'เขตการไฟฟ้าหลัก', 'เขตการไฟฟ้าที่เส้นทางผ่าน', 'PEA Area IDs', 'PEA Office Types', 'PEA Assignment Method');
   rows[detailStartIndex - 1].push('Measured', 'Calculated');
   exportSegments.forEach((segment, index) => {
     rows[detailStartIndex + index].splice(5, 0,
-      peaAreaExportValue(segment, 'id'),
+      kmlPeaAreaFolderName(segment),
       peaAreaExportValue(segment, 'name'),
+      peaAreaExportValue(segment, 'id'),
       peaAreaExportValue(segment, 'officeType'),
       peaAreaExportValue(segment, 'assignmentMethod'));
     const sourceMetadata = segment.sourceMetadata || {};
@@ -4220,7 +4221,7 @@ async function exportCSV() {
   rows.push(['Imported source lines included in this export']);
   rows.push(['Count', sourceExportLines.length]);
   rows.push(['Overlapping groups', sourceOverlapGroupCount]);
-  rows.push(['No.', 'Group', 'Overlap marker', 'Overlap status', 'Overlap group', 'Overlap count', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'Placemark code', 'Placemark name', 'Province', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
+  rows.push(['No.', 'Group', 'Overlap marker', 'Overlap status', 'Overlap group', 'Overlap count', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'Placemark code', 'Placemark name', 'Province', 'เขตการไฟฟ้าหลัก', 'เขตการไฟฟ้าที่เส้นทางผ่าน', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
   sourceExportLines.forEach((line, index) => {
     const coords = line.coords || [];
     const sourceMetadata = line.sourceMetadata || {};
@@ -4241,6 +4242,8 @@ async function exportCSV() {
       placemarkCode(line),
       placemarkName(line),
       getSegProvince(line),
+      kmlPeaAreaFolderName(line),
+      peaAreaExportValue(line, 'name'),
       normalizeImportCategory(line.importCategory),
       line.cableStatus || '-',
       line.cableType || '-',
@@ -4260,7 +4263,7 @@ async function exportCSV() {
   rows.push([]);
   rows.push(['rd03 to Maxi match detail']);
   rows.push(['Count', rd03MaxiRows.length]);
-  rows.push(['rd03 No.', 'Match No.', 'Maxi count for rd03', 'Match marker', 'Overlap group', 'rd03 source file', 'rd03 code', 'rd03 name', 'rd03 province', 'rd03 length (km)', 'Maxi source file', 'Maxi dataset ID', 'Maxi source key', 'Maxi code', 'Maxi name', 'Maxi province', 'Maxi import category', 'Maxi status from file', 'Maxi cable_type', 'Maxi Type', 'Maxi Core', 'Maxi Diameter (mm)', 'Maxi length (km)', 'Maxi start (Lat, Lon)', 'Maxi end (Lat, Lon)', 'Maxi measured', 'Maxi calculated']);
+  rows.push(['rd03 No.', 'Match No.', 'Maxi count for rd03', 'Match marker', 'Overlap group', 'rd03 source file', 'rd03 code', 'rd03 name', 'rd03 province', 'rd03 เขตการไฟฟ้าหลัก', 'rd03 เขตการไฟฟ้าที่ผ่าน', 'rd03 length (km)', 'Maxi source file', 'Maxi dataset ID', 'Maxi source key', 'Maxi code', 'Maxi name', 'Maxi province', 'Maxi เขตการไฟฟ้าหลัก', 'Maxi เขตการไฟฟ้าที่ผ่าน', 'Maxi import category', 'Maxi status from file', 'Maxi cable_type', 'Maxi Type', 'Maxi Core', 'Maxi Diameter (mm)', 'Maxi length (km)', 'Maxi start (Lat, Lon)', 'Maxi end (Lat, Lon)', 'Maxi measured', 'Maxi calculated']);
   rd03MaxiRows.forEach(({ rd03Line, maxiLine, matchIndex, totalMatches }, index) => {
     const rd03Coords = rd03Line.coords || [];
     const maxiCoords = maxiLine.coords || [];
@@ -4275,6 +4278,8 @@ async function exportCSV() {
       placemarkCode(rd03Line),
       placemarkName(rd03Line),
       getSegProvince(rd03Line),
+      kmlPeaAreaFolderName(rd03Line),
+      peaAreaExportValue(rd03Line, 'name'),
       (lineLengthMeters(rd03Coords) / 1000).toFixed(3),
       sourceFileColumnValue(maxiLine),
       maxiLine.sourceDatasetId || '',
@@ -4282,6 +4287,8 @@ async function exportCSV() {
       placemarkCode(maxiLine),
       placemarkName(maxiLine),
       getSegProvince(maxiLine),
+      kmlPeaAreaFolderName(maxiLine),
+      peaAreaExportValue(maxiLine, 'name'),
       normalizeImportCategory(maxiLine.importCategory),
       maxiLine.cableStatus || '-',
       maxiLine.cableType || '-',

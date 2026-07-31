@@ -99,7 +99,7 @@ if (csvSection.includes('document.querySelector(`.diamInput')) {
   throw new Error('CSV export must not depend on rendered report rows');
 }
 if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
-if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExportMode(exportSegments)') || !html.includes('function exportIncludesPeaDetails()') || !html.includes('id="exportDetailMode"')) throw new Error('CSV PEA area export mode is missing');
+if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('await ensurePeaAreasForExport([...exportSegments, ...sourceExportLines])') || !csvSection.includes('เขตการไฟฟ้าหลัก') || !csvSection.includes("peaAreaExportValue(line, 'name')") || !html.includes('function exportIncludesPeaDetails()') || !html.includes('id="exportDetailMode"')) throw new Error('CSV PEA area export data is missing');
 if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('prepareSourceLinesForKmlExport()') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'") || !csvSection.includes('Source dataset ID') || !csvSection.includes('Included in billing') || !csvSection.includes('Matched with') || !csvSection.includes('Overlap count') || !csvSection.includes('Overlap marker')) {
   throw new Error('CSV export must include the complete imported source-line audit section');
 }
