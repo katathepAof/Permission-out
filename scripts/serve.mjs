@@ -48,6 +48,10 @@ async function serveWorkerApi(nodeRequest, nodeResponse) {
   });
   const workerResponse = await worker.fetch(request, localEnv);
   const headers = Object.fromEntries(workerResponse.headers.entries());
+  // Node's fetch transparently decompresses upstream bodies. Forwarding the
+  // original encoding/length would make the browser try to decode them again.
+  delete headers['content-encoding'];
+  delete headers['content-length'];
   nodeResponse.writeHead(workerResponse.status, headers);
   nodeResponse.end(Buffer.from(await workerResponse.arrayBuffer()));
 }

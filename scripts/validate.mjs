@@ -173,6 +173,9 @@ if (!html.includes('id="kmlProvinceFolders"') || !html.includes('function render
 if (!html.includes('function kmlExportProvinceName(segment)') || !html.includes('function kmlSourceProvinceName(segment)') || !html.includes('function kmlGeometryPrimaryProvince(segment)')) {
   throw new Error('KML/KMZ folders must prefer source provinces with a geometry fallback');
 }
+for (const marker of ['function kmlPrimaryPeaArea(segment)', 'function kmlPeaAreaFolderName(segment)', 'primary_pea_area_name', 'peaArea: kmlPeaAreaFolderName(seg)', 'renderKmlSourceContent(source, province, peaArea)']) {
+  if (!html.includes(marker)) throw new Error(`KML/KMZ PEA area folder marker is missing: ${marker}`);
+}
 if (!html.includes('seg._primaryProvince = Array.from(counts.entries())') || !html.includes('function kmlProvinceMismatch(segment)') || !html.includes('name="traversed_provinces"') || !html.includes('name="province_mismatch"')) {
   throw new Error('KML/KMZ exports must include dominant and traversed province quality metadata');
 }

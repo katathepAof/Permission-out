@@ -873,16 +873,22 @@
         for (const item of sample.candidates) {
           const feature = featureById.get(String(item.id));
           if (feature && pointInPeaGeometry(sample.point, feature.geometry)) {
-            matches.set(String(item.id), {
-              id: String(item.id),
+            const key = String(item.id);
+            const match = matches.get(key) || {
+              id: key,
               name: item.name || feature.properties?.name || '',
               officeType: item.officeType || feature.properties?.office_type || '',
-              assignmentMethod: 'densified_point_in_polygon_0.02deg'
-            });
+              assignmentMethod: 'densified_point_in_polygon_0.02deg',
+              sampleCount: 0
+            };
+            match.sampleCount += 1;
+            matches.set(key, match);
           }
         }
       }
-      job.segment._peaAreas = [...matches.values()];
+      job.segment._peaAreas = [...matches.values()]
+        .map(area => ({ ...area, coverageRatio: job.samples.length ? area.sampleCount / job.samples.length : 0 }))
+        .sort((left, right) => right.sampleCount - left.sampleCount || left.name.localeCompare(right.name, 'th'));
     }
     return { resolvedSegments: unresolved.length, loadedChunks: chunkPaths.length };
   }

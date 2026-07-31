@@ -3699,6 +3699,19 @@ function peaAreaExportValue(segment, field) {
   return (segment._peaAreas || []).map(area => area[field] || '').filter(Boolean).join(' | ');
 }
 
+function kmlPrimaryPeaArea(segment) {
+  const areas = Array.isArray(segment?._peaAreas) ? segment._peaAreas : [];
+  return areas.slice().sort((left, right) =>
+    Number(right.sampleCount || 0) - Number(left.sampleCount || 0) ||
+    String(left.name || left.id || '').localeCompare(String(right.name || right.id || ''), 'th')
+  )[0] || null;
+}
+
+function kmlPeaAreaFolderName(segment) {
+  const area = kmlPrimaryPeaArea(segment);
+  return String(area?.name || area?.id || '').trim() || 'ไม่พบเขตการไฟฟ้า';
+}
+
 function activeBillingFormula() {
   return window.permissionOutBillingFormula || { code: 'permission_fee', version: 1, source: 'local-fallback' };
 }
@@ -4501,7 +4514,8 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
     ['diameter', 'ขนาดสาย', `${billing.diameter} มม.`],
     ['poles', 'จำนวนเสา', `${billing.poles} ต้น`],
     ['cost', 'ค่าบริการ', `${Number(billing.cost).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`],
-    ['pea', 'พื้นที่ PEA', peaAreaExportValue(seg, 'name') || '-']
+    ['pea', 'เขตการไฟฟ้าหลัก', kmlPeaAreaFolderName(seg)],
+    ['pea', 'เขตการไฟฟ้าที่เส้นทางผ่าน', peaAreaExportValue(seg, 'name') || '-']
   ].filter(([key]) => selected.has(key));
   if (!rows.length) return '';
   const title = placemarkDisplayText(seg) || placemarkName(seg) || exportMeta.folderName;
@@ -4539,16 +4553,19 @@ function kmlProvinceMismatch(segment) {
   const geometryProvinces = getSegProvinces(segment).map(normalizeKmlProvinceName).filter(Boolean);
   return Boolean(sourceProvince && geometryProvinces.length && !geometryProvinces.includes(sourceProvince));
 }
-function renderKmlLayerPlacemarks(layer, province = null) {
+function renderKmlLayerPlacemarks(layer, province = null, peaArea = null) {
   return layer.placemarks
-    .filter(item => province === null || item.province === province)
+    .filter(item =>
+      (province === null || item.province === province) &&
+      (peaArea === null || item.peaArea === peaArea)
+    )
     .map(item => item.kml)
     .join('');
 }
-function renderKmlSourceContent(source, province = null) {
+function renderKmlSourceContent(source, province = null, peaArea = null) {
   return Array.from(source.categories.values()).map(category => {
     const categoryContent = Array.from(category.layers.values()).map(layer => {
-      const layerContent = renderKmlLayerPlacemarks(layer, province);
+      const layerContent = renderKmlLayerPlacemarks(layer, province, peaArea);
       if (!layerContent) return '';
       return layer.name === category.name
         ? layerContent
@@ -4561,7 +4578,16 @@ function renderKmlSourceContent(source, province = null) {
   }).join('');
 }
 function renderKmlSourceFolder(source, province = null) {
-  const content = renderKmlSourceContent(source, province);
+  const peaAreas = new Set();
+  source.categories.forEach(category => category.layers.forEach(layer =>
+    layer.placemarks
+      .filter(item => province === null || item.province === province)
+      .forEach(item => peaAreas.add(item.peaArea))
+  ));
+  const content = Array.from(peaAreas)
+    .sort((left, right) => left.localeCompare(right, 'th'))
+    .map(peaArea => `<Folder><name>${xmlEscape(peaArea)}</name><open>1</open><visibility>1</visibility>${renderKmlSourceContent(source, province, peaArea)}</Folder>`)
+    .join('');
   return content
     ? `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${content}</Folder>`
     : '';
@@ -4637,6 +4663,8 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="province_mismatch"><value>${kmlProvinceMismatch(seg) ? 'true' : 'false'}</value></Data>` +
       `<Data name="pea_area_ids"><value>${xmlEscape(peaAreaExportValue(seg, 'id'))}</value></Data>` +
       `<Data name="pea_area_names"><value>${xmlEscape(peaAreaExportValue(seg, 'name'))}</value></Data>` +
+      `<Data name="primary_pea_area_id"><value>${xmlEscape(kmlPrimaryPeaArea(seg)?.id || '')}</value></Data>` +
+      `<Data name="primary_pea_area_name"><value>${xmlEscape(kmlPeaAreaFolderName(seg))}</value></Data>` +
       `<Data name="pea_office_types"><value>${xmlEscape(peaAreaExportValue(seg, 'officeType'))}</value></Data>` +
       `<Data name="pea_assignment_method"><value>${xmlEscape(peaAreaExportValue(seg, 'assignmentMethod'))}</value></Data>` +
       `<Data name="status"><value>${xmlEscape(status.th)}</value></Data>` +
@@ -4666,6 +4694,7 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `</ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coordinates}</coordinates></LineString></Placemark>`;
     sourceEntries.get(exportMeta.topId)?.categories.get(exportMeta.categoryId)?.layers.get(exportMeta.styleId)?.placemarks.push({
       province: kmlProvinceFolderName(seg),
+      peaArea: kmlPeaAreaFolderName(seg),
       kml: placemark
     });
   });
@@ -4678,7 +4707,19 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
         ));
         const provinceFolders = Array.from(provinces)
           .sort((left, right) => left.localeCompare(right, 'th'))
-          .map(province => `<Folder><name>${xmlEscape(province)}</name><open>1</open><visibility>1</visibility>${renderKmlSourceContent(source, province)}</Folder>`)
+          .map(province => {
+            const peaAreas = new Set();
+            source.categories.forEach(category => category.layers.forEach(layer =>
+              layer.placemarks
+                .filter(item => item.province === province)
+                .forEach(item => peaAreas.add(item.peaArea))
+            ));
+            const areaFolders = Array.from(peaAreas)
+              .sort((left, right) => left.localeCompare(right, 'th'))
+              .map(peaArea => `<Folder><name>${xmlEscape(peaArea)}</name><open>1</open><visibility>1</visibility>${renderKmlSourceContent(source, province, peaArea)}</Folder>`)
+              .join('');
+            return `<Folder><name>${xmlEscape(province)}</name><open>1</open><visibility>1</visibility>${areaFolders}</Folder>`;
+          })
           .join('');
         return `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${provinceFolders}</Folder>`;
       }).join('')
@@ -4711,7 +4752,7 @@ function ensureSegmentsAvailableForExport() {
 async function exportKML() {
   if (!ensureSegmentsAvailableForExport()) return;
   const segments = selectedSourceLinesForKmlExport();
-  await ensurePeaAreasForExportMode(segments);
+  await ensurePeaAreasForExport(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
   const blob = new Blob([buildSelectedKml(segments, peaFeatures, overlapGroups)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
@@ -4723,7 +4764,7 @@ async function exportKMZ() {
   if (!ensureSegmentsAvailableForExport()) return;
   if (typeof JSZip === 'undefined') { alert('ไม่สามารถสร้างไฟล์ KMZ ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่'); return; }
   const segments = selectedSourceLinesForKmlExport();
-  await ensurePeaAreasForExportMode(segments);
+  await ensurePeaAreasForExport(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
   const zip = new JSZip();
