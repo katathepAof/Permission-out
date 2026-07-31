@@ -167,6 +167,9 @@ if (!html.includes('name="kmlPopupField"') || !html.includes('function kmlPopupD
 if (!html.includes('name="kmlPopupField" value="type" checked') || !html.includes('name="kmlPopupField" value="core" checked') || !html.includes("['type', 'Type', seg.rawType || seg.type || '-']") || !html.includes("['core', 'Core', seg.core ?? '-']")) {
   throw new Error('KML/KMZ Popup Type and Core fields are missing');
 }
+if (!html.includes("'พื้นที่การไฟฟ้าหลัก', 'พื้นที่การไฟฟ้าที่เส้นทางผ่าน'") || !production.includes('segment._peaAreasResolved = true')) {
+  throw new Error('CSV exports must include resolved PEA service-area columns');
+}
 if (!html.includes('name="kmlExportDataset"') || !html.includes('value="rd03" checked') || !html.includes('value="maxi" checked') || !html.includes('function selectedKmlExportDatasets()') || !html.includes("const dataset = isMaxiSourceLine(line) ? 'maxi' : 'rd03';")) {
   throw new Error('KML/KMZ rd03 and Maxi dataset selectors are missing');
 }

@@ -879,7 +879,9 @@
   async function resolvePeaAreasForSegments(segments, onProgress = null) {
     if (!peaManifest) await initializePeaLayers();
     if (!peaManifest) throw new Error('PEA area manifest is unavailable');
-    const unresolved = segments.filter(segment => !Array.isArray(segment._peaAreas));
+    // An empty array may have been created by an older fast-export fallback.
+    // Only trust results that this resolver has explicitly completed.
+    const unresolved = segments.filter(segment => segment._peaAreasResolved !== true);
     const batchSize = 300;
     for (let offset = 0; offset < unresolved.length; offset += batchSize) {
       const batch = unresolved.slice(offset, offset + batchSize);
@@ -914,6 +916,7 @@
         job.segment._peaAreas = [...matches.values()]
           .map(area => ({ ...area, coverageRatio: job.samples.length ? area.sampleCount / job.samples.length : 0 }))
           .sort((left, right) => right.sampleCount - left.sampleCount || left.name.localeCompare(right.name, 'th'));
+        job.segment._peaAreasResolved = true;
       }
       const completed = Math.min(offset + batch.length, unresolved.length);
       onProgress?.({ completed, total: unresolved.length });

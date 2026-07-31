@@ -3709,7 +3709,10 @@ async function ensurePeaAreasForExport(segments) {
       setExportStatus(`กำลังตรวจเขตการไฟฟ้า ${completed.toLocaleString('th-TH')} / ${total.toLocaleString('th-TH')} เส้น…`, 'busy');
     });
   } else {
-    segments.forEach(segment => { if (!Array.isArray(segment._peaAreas)) segment._peaAreas = []; });
+    segments.forEach(segment => {
+      if (!Array.isArray(segment._peaAreas)) segment._peaAreas = [];
+      segment._peaAreasResolved = false;
+    });
   }
 }
 
@@ -4162,7 +4165,7 @@ async function exportCSV() {
   rows.push([]);
   rows.push(['รายละเอียดช่วง (New = ฐาน A+B, Remove = เปรียบเทียบ C+D, Same = เหมือนกัน) พร้อมสถานะและความสัมพันธ์เส้นทาง']);
   rows.push(['ขอบเขตการคิดค่าบริการ', 'เส้นที่ตรงกับตัวกรองในการ์ด 4 (ค่าเริ่มต้นคือทุกเส้นที่ Import)']);
-  rows.push(['ลำดับ', 'ชื่อไฟล์', 'รหัส Placemark', 'ชื่อ Placemark', 'กลุ่มเส้นทับกัน', 'จังหวัด', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)']);
+  rows.push(['ลำดับ', 'ชื่อไฟล์', 'รหัส Placemark', 'ชื่อ Placemark', 'กลุ่มเส้นทับกัน', 'จังหวัด', 'พื้นที่การไฟฟ้าหลัก', 'พื้นที่การไฟฟ้าที่เส้นทางผ่าน', 'PEA Area IDs', 'PEA Office Types', 'PEA Assignment Method', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)', 'Measured', 'Calculated']);
 
   const costByStatus = { new: 0, same: 0, remove: 0 };
   let filteredSubtotal = 0;
@@ -4183,21 +4186,14 @@ async function exportCSV() {
     costByStatus[st] += cost;
     filteredSubtotal += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
-    rows.push([i + 1, srcFile, placemarkCode(seg), placemarkName(seg), exportOverlapGroups.get(seg) || '', province, m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal, (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles, fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2)]);
-  });
-
-  const detailStartIndex = rows.length - exportSegments.length;
-  rows[detailStartIndex - 1].splice(5, 0, 'เขตการไฟฟ้าหลัก', 'เขตการไฟฟ้าที่เส้นทางผ่าน', 'PEA Area IDs', 'PEA Office Types', 'PEA Assignment Method');
-  rows[detailStartIndex - 1].push('Measured', 'Calculated');
-  exportSegments.forEach((segment, index) => {
-    rows[detailStartIndex + index].splice(5, 0,
-      kmlPeaAreaFolderName(segment),
-      peaAreaExportValue(segment, 'name'),
-      peaAreaExportValue(segment, 'id'),
-      peaAreaExportValue(segment, 'officeType'),
-      peaAreaExportValue(segment, 'assignmentMethod'));
-    const sourceMetadata = segment.sourceMetadata || {};
-    rows[detailStartIndex + index].push(sourceMetadata.measured || '', sourceMetadata.calculated || '');
+    const sourceMetadata = seg.sourceMetadata || {};
+    rows.push([i + 1, srcFile, placemarkCode(seg), placemarkName(seg), exportOverlapGroups.get(seg) || '', province,
+      kmlPeaAreaFolderName(seg), peaAreaExportValue(seg, 'name'), peaAreaExportValue(seg, 'id'),
+      peaAreaExportValue(seg, 'officeType'), peaAreaExportValue(seg, 'assignmentMethod'),
+      m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal,
+      (seg.core !== null && seg.core !== undefined) ? seg.core : '-', diam, sourceLabel, km.toFixed(3), poles,
+      fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1]), cost.toFixed(2),
+      sourceMetadata.measured || '', sourceMetadata.calculated || '']);
   });
 
   const subtotal = filteredSubtotal;
