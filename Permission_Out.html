@@ -2651,7 +2651,6 @@ function drawResults(resB) {
       };
     });
     renderAggregateResults(resB.segments, true);
-    renderSourceColorOverlay(state.mapSourceLines);
     map.on('click', handleAggregateMapClick);
     return;
   }
@@ -2673,8 +2672,14 @@ function drawResults(resB) {
     seg._mapBounds = ll;
     searchableLayers.push({ name: placemarkDisplayText(seg), routeLabel: `${seg.status === 'remove' ? 'C+D' : seg.status === 'same' ? 'A+B∩C+D' : 'A+B'} · ${m.th}`, layer: polyline, bounds: ll });
   });
-  renderSourceColorOverlay(state.mapSourceLines);
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+}
+
+function clearSourceColorOverlay() {
+  if (sourceOverlayLayerGroup && layerGroup?.hasLayer(sourceOverlayLayerGroup)) {
+    layerGroup.removeLayer(sourceOverlayLayerGroup);
+  }
+  sourceOverlayLayerGroup = null;
 }
 
 function renderSourceColorOverlay(lines = []) {
@@ -3285,10 +3290,6 @@ function applyProvinceFilter(fitMapToSelection = false) {
   const selectedCableStatuses = getSelectedCableStatuses();
   const activeCategories = getActiveCategories();
   const matching = [];
-  const matchingSourceLines = (state.mapSourceLines || []).filter(seg => {
-    const statusOk = active[STATUS_META[seg.status] ? seg.status : 'new'];
-    return statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses, activeCategories);
-  });
   state.segmentsB.forEach(seg => {
     const statusOk = active[STATUS_META[seg.status] ? seg.status : 'new'];
     const match = statusOk && segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses, activeCategories);
@@ -3310,9 +3311,9 @@ function applyProvinceFilter(fitMapToSelection = false) {
     });
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 12 });
   }
-  // Keep source/category colors, but display only lines matching the filters
-  // selected in the result panel.
-  renderSourceColorOverlay(matchingSourceLines);
+  // Result mode must mirror the report table exactly. Source lines are useful
+  // during preview, but would otherwise remain visible behind filtered results.
+  clearSourceColorOverlay();
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');

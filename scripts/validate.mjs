@@ -85,8 +85,8 @@ for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Obj
 for (const marker of ['mapSourceLines', 'function renderSourceColorOverlay(', 'uniqueSources.size <= 1', 'interactive: false']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 multi-source map color overlay marker is missing: ${marker}`);
 }
-if (!html.includes('const matchingSourceLines = (state.mapSourceLines || []).filter(') || !html.includes('renderSourceColorOverlay(matchingSourceLines);')) {
-  throw new Error('MOD 1 result filters must update source lines displayed on the map');
+if (!html.includes('function clearSourceColorOverlay()') || !html.includes('clearSourceColorOverlay();')) {
+  throw new Error('MOD 1 result filters must hide source overlays so the map matches the report table');
 }
 for (const marker of ['lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters)', 'const lengthMeters = Number(line.length) || lineLengthMeters(line.coords);']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 source-color map overlay popup marker is missing: ${marker}`);
@@ -193,6 +193,9 @@ for (const marker of ['id="exportStatus"', 'function confirmExport(', 'function 
 }
 if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includes("window.permissionOutLoadGroupLines('COMPARE')") || !html.includes('applyProvinceFilter(true)')) {
   throw new Error('Logical PEA/UFM dataset grouping or province map focus is missing');
+}
+if (!html.includes('function clearSourceColorOverlay()') || !html.includes('// Result mode must mirror the report table exactly.')) {
+  throw new Error('MOD 1 report filters must hide unfiltered source overlays from the result map');
 }
 if (!html.includes('function getSegProvinces(seg)') || !html.includes('function provinceFilterSourceSegments()') || !html.includes('provinceSources.flatMap(getSegProvinces)') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))')) {
   throw new Error('MOD 1 province filtering must include provinces from result segments and selected rd03/Maxi source data');
