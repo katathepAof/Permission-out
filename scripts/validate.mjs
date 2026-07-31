@@ -30,6 +30,9 @@ if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis
 if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('billingForSegment(seg, rateB, polesPerKm)')) {
   throw new Error('Shared UI/export billing logic is missing');
 }
+if (!html.includes('FIG8:     { 4: 16, 12: 16, 24: 20, 48: 18 }') || !html.includes('function maxiFiberSpecDiameter(seg)') || !html.includes('lookupDiameterByTypeCore(type, core, true)') || !html.includes("return 'Spec Fiber.xlsx'")) {
+  throw new Error('MaxiFiber Diameter must use the attached Spec Fiber.xlsx exact Type/Core reference');
+}
 if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
 for (const marker of ['class="categoryFilter" value="network"', 'class="categoryFilter" value="ready-access"', 'class="categoryFilter" value="customer"', 'type="checkbox" name="reportOverlapMode"', 'value="limit-two"', 'value="limit-three"', 'function getReportOverlapModes(', 'function limitSelfOverlapCopies(', 'function normalizeImportCategory(', 'function detectImportCategory(', 'function parseKML(text, sourceName', "line.importCategory || 'network'", 'function getActiveCategories()', 'window.permissionOutCompareFiles', 'renderer: aggregateRenderer']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 import/report filter marker is missing: ${marker}`);

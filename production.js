@@ -413,6 +413,14 @@
     const diameterMatch = diameterRaw.match(/[\d.]+/);
     let diameter = diameterMatch ? Number(diameterMatch[0]) : null;
     let diameterSource = diameter !== null ? 'file' : null;
+    const maxiFiber = String(item?.name || item?.sourceName || item?.canonicalName || '').toLowerCase().includes('maxi');
+    const specDiameter = maxiFiber && type && typeof lookupDiameterByTypeCore === 'function'
+      ? lookupDiameterByTypeCore(type, core, true)
+      : null;
+    if (specDiameter !== null) {
+      diameter = specDiameter;
+      diameterSource = 'spec-fiber';
+    }
     if (diameter === null && type && typeof lookupDiameterByTypeCore === 'function') {
       diameter = lookupDiameterByTypeCore(type, core);
       if (diameter !== null) diameterSource = 'table';

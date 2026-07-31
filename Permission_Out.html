@@ -2076,7 +2076,7 @@ const DIAMETER_TABLE = {
   ADSS:     { 4: 8.7, 12: 8.7, 24: 8.7, 48: 8.7, 60: 8.7, 72: 10.5, 96: 12, 120: 13.5, 144: 15 },
   ARSS:     { 12: 11, 24: 11, 48: 12, 60: 12, 120: 15, 144: 17 },
   FRP:      { 12: 11, 24: 11, 48: 12, 96: 13.6, 144: 16.4 },
-  FIG8:     { 4: 16, 12: 20, 24: 20, 48: 20 },
+  FIG8:     { 4: 16, 12: 16, 24: 20, 48: 18 },
   DROPWIRE: { 2: 6.5 }
 };
 
@@ -2090,10 +2090,11 @@ function detectCableType(text) {
   return null;
 }
 
-function lookupDiameterByTypeCore(type, core) {
+function lookupDiameterByTypeCore(type, core, exactOnly = false) {
   const table = DIAMETER_TABLE[type];
   if (!table || core === null || core === undefined || isNaN(core)) return null;
   if (table[core] !== undefined) return table[core];
+  if (exactOnly) return null;
   // no exact core size in the table — round up to the next available size
   const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
   for (const k of keys) if (k >= core) return table[k];
@@ -2180,7 +2181,7 @@ function placemarkIdentifierFromData(pm, ext, description) {
 }
 
 // Look for explicit Type/Core fields in ExtendedData first, then fall back to scanning name/description text.
-function lookupFromReferenceTable(pm, name, description) {
+function lookupFromReferenceTable(pm, name, description, exactOnly = false) {
   let typeVal = null, coreVal = null;
 
   const scanFields = (nodeList) => {
@@ -2212,7 +2213,7 @@ function lookupFromReferenceTable(pm, name, description) {
   }
   if (coreVal === null) return null;
 
-  const diam = lookupDiameterByTypeCore(typeVal, coreVal);
+  const diam = lookupDiameterByTypeCore(typeVal, coreVal, exactOnly);
   if (diam === null || diam === undefined) return null;
   return { value: diam, unit: 'mm', type: typeVal, core: coreVal };
 }
@@ -2310,12 +2311,12 @@ function parseKML(text, sourceName = '') {
       };
       const extKeys = Object.keys(ext).join(', ');
 
-      const tableMatch = lookupFromReferenceTable(pm, name, description);
+      const tableMatch = lookupFromReferenceTable(pm, name, description, String(sourceName).toLowerCase().includes('maxi'));
       if (tableMatch) {
         type = tableMatch.type; core = tableMatch.core;
-        if (diameterInfo.value === null) { // only use table value if the file didn't already give an explicit mm value
+        if (diameterInfo.value === null || String(sourceName).toLowerCase().includes('maxi')) {
           diameterInfo = { value: tableMatch.value, unit: tableMatch.unit };
-          source = 'table';
+          source = String(sourceName).toLowerCase().includes('maxi') ? 'spec-fiber' : 'table';
         }
       }
 
@@ -3064,12 +3065,22 @@ function fmtNum(n) { return n.toLocaleString('th-TH', { minimumFractionDigits: 2
 // instead of reading only the currently rendered (maximum 300) table rows.
 function segmentDiameterValue(seg) {
   if (seg._diameterOverride !== undefined) return seg._diameterOverride;
+  const specDiameter = maxiFiberSpecDiameter(seg);
+  if (specDiameter !== null) return specDiameter;
   if (seg.diameter !== null && seg.diameter !== undefined && !isNaN(seg.diameter)) return Number(seg.diameter);
   return DEFAULT_DIAMETER_MM;
 }
 
+function maxiFiberSpecDiameter(seg) {
+  if (!isMaxiSourceLine(seg)) return null;
+  const type = detectCableType([seg.cableType, seg.rawType, seg.type, seg.name].filter(Boolean).join(' '));
+  const core = Number(seg.core);
+  return type && Number.isFinite(core) ? lookupDiameterByTypeCore(type, core, true) : null;
+}
+
 function segmentDiameterSourceLabel(seg) {
   if (seg._diameterOverride !== undefined) return 'กรอกเอง';
+  if (maxiFiberSpecDiameter(seg) !== null || seg.diameterSource === 'spec-fiber') return 'Spec Fiber.xlsx';
   if (seg.diameterSource === 'table') return 'ตารางอ้างอิง';
   if (seg.diameterSource === 'file') return 'ไฟล์ KML/KMZ';
   return 'ค่าเริ่มต้น';
@@ -3125,7 +3136,8 @@ function buildReportTable() {
     const sourceStatusText = seg.cableStatus
       ? `<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:#e8f7f0;color:#087552;font-weight:600;white-space:nowrap;">${xmlEscape(seg.cableStatus)}</span>${sourceMetadata.measured || sourceMetadata.calculated ? `<div style="font-size:.66rem;color:var(--ink-mute);margin-top:3px;white-space:nowrap;">${sourceMetadata.measured ? `Measured: ${xmlEscape(sourceMetadata.measured)}` : ''}${sourceMetadata.measured && sourceMetadata.calculated ? '<br>' : ''}${sourceMetadata.calculated ? `Calculated: ${xmlEscape(sourceMetadata.calculated)}` : ''}</div>` : ''}`
       : '—';
-    const sourceTag = seg.diameterSource === 'table' ? '<div style="font-size:.7rem;color:var(--emerald);font-weight:500;margin-top:2px;">ตารางอ้างอิง</div>'
+    const sourceTag = maxiFiberSpecDiameter(seg) !== null || seg.diameterSource === 'spec-fiber' ? '<div style="font-size:.7rem;color:var(--emerald);font-weight:500;margin-top:2px;">Spec Fiber.xlsx</div>'
+                     : seg.diameterSource === 'table' ? '<div style="font-size:.7rem;color:var(--emerald);font-weight:500;margin-top:2px;">ตารางอ้างอิง</div>'
                      : seg.diameterSource === 'file' ? '<div style="font-size:.7rem;color:var(--ink-mute);margin-top:2px;">จากไฟล์ KML</div>' : '';
     const startCoord = fmtCoord(seg.coords[0]);
     const endCoord = fmtCoord(seg.coords[seg.coords.length - 1]);
