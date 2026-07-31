@@ -2066,6 +2066,7 @@ function extractUnit(raw) { const m = raw.match(/mm|cm|นิ้ว|inch|in\b|m\
 
 // Fallback diameter (mm) used when no Type/Core or explicit diameter can be found at all.
 const DEFAULT_DIAMETER_MM = 6.5;
+const MAXI_2_CORE_DIAMETER_MM = 6.5;
 
 // สถานะของช่วงเส้นทางจากการเปรียบเทียบฐาน (A+B) กับเปรียบเทียบ (C+D) — ป้ายไทย + อังกฤษ
 //  new    = มีในฐาน ไม่มีในเปรียบเทียบ (คิดค่าบริการ)
@@ -2232,7 +2233,11 @@ function lookupFromReferenceTable(pm, name, description, exactOnly = false) {
   }
   if (coreVal === null) return null;
 
-  const diam = lookupDiameterByTypeCore(typeVal, coreVal, exactOnly);
+  // MaxiFiber calls this lookup with exactOnly=true. Its 2 Core rule applies
+  // to every cable Type, even when that Type has no 2 Core row in the table.
+  const diam = exactOnly && coreVal === 2
+    ? MAXI_2_CORE_DIAMETER_MM
+    : lookupDiameterByTypeCore(typeVal, coreVal, exactOnly);
   if (diam === null || diam === undefined) return null;
   return { value: diam, unit: 'mm', type: typeVal, core: coreVal };
 }
@@ -3098,8 +3103,9 @@ function segmentDiameterValue(seg) {
 
 function maxiFiberSpecDiameter(seg) {
   if (!isMaxiSourceLine(seg)) return null;
-  const type = detectCableType([seg.cableType, seg.rawType, seg.type, seg.name].filter(Boolean).join(' '));
   const core = Number(seg.core);
+  if (core === 2) return MAXI_2_CORE_DIAMETER_MM;
+  const type = detectCableType([seg.cableType, seg.rawType, seg.type, seg.name].filter(Boolean).join(' '));
   return type && Number.isFinite(core) ? lookupDiameterByTypeCore(type, core, true) : null;
 }
 

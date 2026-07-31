@@ -414,9 +414,11 @@
     let diameter = diameterMatch ? Number(diameterMatch[0]) : null;
     let diameterSource = diameter !== null ? 'file' : null;
     const maxiFiber = String(item?.name || item?.sourceName || item?.canonicalName || '').toLowerCase().includes('maxi');
-    const specDiameter = maxiFiber && type && typeof lookupDiameterByTypeCore === 'function'
-      ? lookupDiameterByTypeCore(type, core, true)
-      : null;
+    const specDiameter = maxiFiber && core === 2
+      ? 6.5
+      : maxiFiber && type && typeof lookupDiameterByTypeCore === 'function'
+        ? lookupDiameterByTypeCore(type, core, true)
+        : null;
     if (specDiameter !== null) {
       diameter = specDiameter;
       diameterSource = 'spec-fiber';
