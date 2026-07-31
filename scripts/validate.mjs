@@ -158,6 +158,9 @@ if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA A
 if (!html.includes('name="kmlPopupField"') || !html.includes('function kmlPopupDescription(') || !html.includes('selectedKmlPopupFields()')) {
   throw new Error('KML/KMZ selectable Popup fields are missing');
 }
+if (!html.includes('name="kmlPopupField" value="type" checked') || !html.includes('name="kmlPopupField" value="core" checked') || !html.includes("['type', 'Type', seg.rawType || seg.type || '-']") || !html.includes("['core', 'Core', seg.core ?? '-']")) {
+  throw new Error('KML/KMZ Popup Type and Core fields are missing');
+}
 if (!html.includes('name="kmlExportDataset"') || !html.includes('value="rd03" checked') || !html.includes('value="maxi" checked') || !html.includes('function selectedKmlExportDatasets()') || !html.includes("const dataset = isMaxiSourceLine(line) ? 'maxi' : 'rd03';")) {
   throw new Error('KML/KMZ rd03 and Maxi dataset selectors are missing');
 }

@@ -1474,6 +1474,8 @@ table.report td.num{
       <label><input type="checkbox" name="kmlPopupField" value="status" checked> Status</label>
       <label><input type="checkbox" name="kmlPopupField" value="relationship" checked> ความสัมพันธ์</label>
       <label><input type="checkbox" name="kmlPopupField" value="length" checked> ระยะทาง</label>
+      <label><input type="checkbox" name="kmlPopupField" value="type" checked> Type</label>
+      <label><input type="checkbox" name="kmlPopupField" value="core" checked> Core</label>
       <label><input type="checkbox" name="kmlPopupField" value="diameter"> ขนาดสาย</label>
       <label><input type="checkbox" name="kmlPopupField" value="poles"> จำนวนเสา</label>
       <label><input type="checkbox" name="kmlPopupField" value="cost"> ค่าบริการ</label>
@@ -4472,6 +4474,8 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
     ['status', 'Status', getSegCableStatus(seg) || status.th || '-'],
     ['relationship', 'ความสัมพันธ์', overlap.th || '-'],
     ['length', 'ระยะทาง', `${(Number(seg.length) / 1000).toFixed(3)} กม.`],
+    ['type', 'Type', seg.rawType || seg.type || '-'],
+    ['core', 'Core', seg.core ?? '-'],
     ['diameter', 'ขนาดสาย', `${billing.diameter} มม.`],
     ['poles', 'จำนวนเสา', `${billing.poles} ต้น`],
     ['cost', 'ค่าบริการ', `${Number(billing.cost).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`],
