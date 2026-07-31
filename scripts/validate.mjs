@@ -31,8 +31,11 @@ if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('bill
   throw new Error('Shared UI/export billing logic is missing');
 }
 if (!html.includes('function existingPoleCountForSegment(seg)')) throw new Error('Provided-pole billing fallback is missing');
-for (const marker of ['class="categoryFilter" value="network"', 'class="categoryFilter" value="ready-access"', 'class="categoryFilter" value="customer"', 'type="checkbox" name="reportOverlapMode"', 'value="limit-two"', 'function getReportOverlapModes(', 'function limitSelfOverlapCopies(', 'function normalizeImportCategory(', 'function detectImportCategory(', 'function parseKML(text, sourceName', "line.importCategory || 'network'", 'function getActiveCategories()', 'window.permissionOutCompareFiles', 'renderer: aggregateRenderer']) {
+for (const marker of ['class="categoryFilter" value="network"', 'class="categoryFilter" value="ready-access"', 'class="categoryFilter" value="customer"', 'type="checkbox" name="reportOverlapMode"', 'value="limit-two"', 'value="limit-three"', 'function getReportOverlapModes(', 'function limitSelfOverlapCopies(', 'function normalizeImportCategory(', 'function detectImportCategory(', 'function parseKML(text, sourceName', "line.importCategory || 'network'", 'function getActiveCategories()', 'window.permissionOutCompareFiles', 'renderer: aggregateRenderer']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 import/report filter marker is missing: ${marker}`);
+}
+for (const marker of ["reportOverlapModes.has('limit-three')", 'limitSelfOverlapCopies(linesA, threshold, interval, 3)', 'limitSelfOverlapCopies(linesB, threshold, interval, 3)', "['limit-two', 'limit-three'].includes(input.value)"]) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 three-copy overlap limit marker is missing: ${marker}`);
 }
 if (!production.includes('importCategory') || !production.includes('reportCategories: Array.from') || !production.includes('item?.category') || !production.includes('Array.isArray(line.c) ? line.c : line.coords')) {
   throw new Error('Optimized MOD 1 data or saved projects do not preserve report category filters');
