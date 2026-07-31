@@ -366,6 +366,12 @@
     input.type = 'file';
     input.accept = '.kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz';
     input.multiple = true;
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files || []);
+      if (files.length && files.every(file => /(?:^|[_\s-])maxi(?:fiber)?(?:[_\s.-]|$)/i.test(file.name))) {
+        source.value = 'ufm';
+      }
+    });
     fileField.appendChild(input);
     const upload = el('button', 'data-upload-button', 'นำเข้า Staging');
     upload.id = 'adminDataUpload';

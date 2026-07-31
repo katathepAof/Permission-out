@@ -3547,11 +3547,15 @@ async function runAnalysis() {
         return line;
       })
     ));
-    const selectedComparisonLines = [...linesA, ...linesB];
-    linesA = filterMod1ComparisonPair(selectedComparisonLines, 'BASE');
-    linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE');
-    if (!linesA.length || !linesB.length) {
-      throw new Error('ต้องมีข้อมูลฝั่งฐาน rd03 และฝั่งเปรียบเทียบ Maxi.kmz เพื่อวิเคราะห์ MOD 1');
+    if (!singleFileMode) {
+      const selectedComparisonLines = [...linesA, ...linesB];
+      linesA = filterMod1ComparisonPair(selectedComparisonLines, 'BASE');
+      linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE');
+      if (!linesA.length || !linesB.length) {
+        throw new Error('การเปรียบเทียบต้องมีข้อมูลฝั่งฐาน rd03 และฝั่งเปรียบเทียบ Maxi.kmz');
+      }
+    } else if (!linesA.length && !linesB.length) {
+      throw new Error('ไม่พบเส้นทางในชุดข้อมูลที่เลือกสำหรับคำนวณค่าบริการ');
     }
     const datasetColorEntries = applyDatasetLineColors({ BASE: linesA, COMPARE: linesB });
     renderDatasetColorLegend(datasetColorEntries);
@@ -3584,7 +3588,7 @@ async function runAnalysis() {
     } else {
       resB = segmentsFromLinesDirect(linesA, 'new');    // มีเฉพาะ A/B → ไม่มีในเปรียบเทียบ → New
     }
-    if (reportOverlapModes.has('overlap-only')) {
+    if (!singleFileMode && reportOverlapModes.has('overlap-only')) {
       resB = { segments: resB.segments.filter(seg => seg.status === 'same').map(seg => ({ ...seg, overlapType: 'full' })) };
     }
     const elapsedMs = Math.round(performance.now() - t0);
@@ -3603,8 +3607,6 @@ async function runAnalysis() {
     exportOverlapGroupCache.clear();
     kmlMaxiReferenceCache.clear();
     kmlMaxiSpatialCache = { revision: -1, lines: [], grid: new Map(), overflow: [], cellSize: 0.02 };
-    getCachedExportOverlapGroups(state.segmentsB, threshold, interval);
-    getCachedExportOverlapGroups(state.mapSourceLines, threshold, interval);
     state.removedA = dedupeA.removedCount;
     state.removedB = dedupeB.removedCount;
 
@@ -3666,7 +3668,11 @@ function csvEscape(val) {
 
 async function ensurePeaAreasForExport(segments) {
   if (typeof window.permissionOutResolvePeaAreas === 'function') {
-    await window.permissionOutResolvePeaAreas(segments);
+    await window.permissionOutResolvePeaAreas(segments, progress => {
+      const completed = Number(progress?.completed) || 0;
+      const total = Number(progress?.total) || segments.length;
+      setExportStatus(`กำลังตรวจเขตการไฟฟ้า ${completed.toLocaleString('th-TH')} / ${total.toLocaleString('th-TH')} เส้น…`, 'busy');
+    });
   } else {
     segments.forEach(segment => { if (!Array.isArray(segment._peaAreas)) segment._peaAreas = []; });
   }
@@ -3683,8 +3689,6 @@ function exportIncludesPeaDetails() {
 async function ensurePeaAreasForExportMode(segments) {
   if (exportIncludesPeaDetails()) {
     await ensurePeaAreasForExport(segments);
-  } else {
-    segments.forEach(segment => { segment._peaAreas = []; });
   }
 }
 
@@ -3906,6 +3910,95 @@ function buildExportOverlapGroups(segments, threshold, interval) {
   return labels;
 }
 
+async function buildExportOverlapGroupsAsync(segments, threshold, interval, onProgress = null) {
+  const labels = new Map();
+  if (!Array.isArray(segments) || segments.length < 2) return labels;
+  const distanceMeters = Math.max(0.5, Number(threshold) || 20);
+  const sampleInterval = Math.max(2, Math.min(Number(interval) || 5, 15));
+  const cellSizeDeg = Math.max(distanceMeters * 1.5, 30) / 111320;
+  const grid = new Map();
+  const parent = segments.map((_, index) => index);
+  const rank = segments.map(() => 0);
+  const find = value => {
+    let root = value;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[value] !== value) {
+      const next = parent[value];
+      parent[value] = root;
+      value = next;
+    }
+    return root;
+  };
+  const union = (left, right) => {
+    let rootLeft = find(left), rootRight = find(right);
+    if (rootLeft === rootRight) return;
+    if (rank[rootLeft] < rank[rootRight]) [rootLeft, rootRight] = [rootRight, rootLeft];
+    parent[rootRight] = rootLeft;
+    if (rank[rootLeft] === rank[rootRight]) rank[rootLeft]++;
+  };
+  const yieldEvery = 40;
+  for (let ownerIndex = 0; ownerIndex < segments.length; ownerIndex++) {
+    const coords = segments[ownerIndex].coords || [];
+    for (let coordIndex = 0; coordIndex < coords.length - 1; coordIndex++) {
+      const p1 = coords[coordIndex], p2 = coords[coordIndex + 1];
+      const edge = { ownerIndex, p1, p2 };
+      const minCellX = Math.floor(Math.min(p1[0], p2[0]) / cellSizeDeg);
+      const maxCellX = Math.floor(Math.max(p1[0], p2[0]) / cellSizeDeg);
+      const minCellY = Math.floor(Math.min(p1[1], p2[1]) / cellSizeDeg);
+      const maxCellY = Math.floor(Math.max(p1[1], p2[1]) / cellSizeDeg);
+      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+        for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+          const key = `${cellX},${cellY}`;
+          const edges = grid.get(key) || [];
+          edges.push(edge);
+          grid.set(key, edges);
+        }
+      }
+    }
+    if ((ownerIndex + 1) % yieldEvery === 0) await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+    const samples = sampleLine(segments[segmentIndex].coords || [], sampleInterval);
+    const hitsByOwner = new Map();
+    samples.forEach(sample => {
+      const cellX = Math.floor(sample.coord[0] / cellSizeDeg);
+      const cellY = Math.floor(sample.coord[1] / cellSizeDeg);
+      const nearbyOwners = new Set();
+      for (let offsetX = -1; offsetX <= 1; offsetX++) {
+        for (let offsetY = -1; offsetY <= 1; offsetY++) {
+          const edges = grid.get(`${cellX + offsetX},${cellY + offsetY}`) || [];
+          for (const edge of edges) {
+            if (edge.ownerIndex === segmentIndex || nearbyOwners.has(edge.ownerIndex)) continue;
+            if (pointToSegmentMeters(sample.coord, edge.p1, edge.p2) <= distanceMeters) nearbyOwners.add(edge.ownerIndex);
+          }
+        }
+      }
+      nearbyOwners.forEach(ownerIndex => hitsByOwner.set(ownerIndex, (hitsByOwner.get(ownerIndex) || 0) + 1));
+    });
+    hitsByOwner.forEach((hitCount, ownerIndex) => {
+      if (samples.length && hitCount / samples.length >= 0.6) union(segmentIndex, ownerIndex);
+    });
+    if ((segmentIndex + 1) % yieldEvery === 0 || segmentIndex === segments.length - 1) {
+      onProgress?.({ completed: segmentIndex + 1, total: segments.length });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+  const membersByRoot = new Map();
+  segments.forEach((_, index) => {
+    const root = find(index);
+    const members = membersByRoot.get(root) || [];
+    members.push(index);
+    membersByRoot.set(root, members);
+  });
+  Array.from(membersByRoot.values())
+    .filter(members => members.length > 1)
+    .sort((left, right) => left[0] - right[0])
+    .forEach((members, groupIndex) => {
+      members.forEach(memberIndex => labels.set(segments[memberIndex], `ทับกัน ${groupIndex + 1}`));
+    });
+  return labels;
+}
+
 function exportOverlapCacheKey(segments, threshold, interval) {
   const distanceMeters = Math.max(0.5, Number(threshold) || 20);
   const sampleInterval = Math.max(2, Math.min(Number(interval) || 5, 15));
@@ -3924,6 +4017,14 @@ function getCachedExportOverlapGroups(segments, threshold, interval) {
   const key = exportOverlapCacheKey(segments, threshold, interval);
   if (exportOverlapGroupCache.has(key)) return exportOverlapGroupCache.get(key);
   const groups = buildExportOverlapGroups(segments, threshold, interval);
+  exportOverlapGroupCache.set(key, groups);
+  return groups;
+}
+
+async function getCachedExportOverlapGroupsAsync(segments, threshold, interval, onProgress = null) {
+  const key = exportOverlapCacheKey(segments, threshold, interval);
+  if (exportOverlapGroupCache.has(key)) return exportOverlapGroupCache.get(key);
+  const groups = await buildExportOverlapGroupsAsync(segments, threshold, interval, onProgress);
   exportOverlapGroupCache.set(key, groups);
   return groups;
 }
@@ -3947,12 +4048,14 @@ async function exportCSV() {
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
   await ensurePeaAreasForExportMode(exportSegments);
-  const exportOverlapGroups = getCachedExportOverlapGroups(exportSegments, threshold, interval);
+  const exportOverlapGroups = await getCachedExportOverlapGroupsAsync(exportSegments, threshold, interval, progress => {
+    setExportStatus(`กำลังจัดกลุ่มผลวิเคราะห์ ${progress.completed.toLocaleString('th-TH')} / ${progress.total.toLocaleString('th-TH')} ช่วง…`, 'busy');
+  });
   const overlapGroupCount = new Set(exportOverlapGroups.values()).size;
   const formula = activeBillingFormula();
   const activeCategories = getActiveCategories();
-  const sourceExportLines = selectedSourceLinesForKmlExport();
-  const sourceOverlapGroups = getCachedExportOverlapGroups(sourceExportLines, threshold, interval);
+  const sourceExportLines = await prepareSourceLinesForKmlExport();
+  const sourceOverlapGroups = kmlExportSelectionCache.overlapGroups;
   const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
   const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
   const billingSourceKeys = new Set(exportSegments.map(sourceLineRouteKey));
@@ -4202,26 +4305,37 @@ function kmlExportFilterCacheKey() {
     exportDatasets
   });
 }
-function selectedSourceLinesForKmlExport() {
-  const cacheKey = kmlExportFilterCacheKey();
-  if (kmlExportSelectionCache.key === cacheKey) return kmlExportSelectionCache.segments;
+function kmlSourceLineCandidates() {
   const selectedProvinces = getSelectedProvinces();
   const selectedCableStatuses = getSelectedCableStatuses();
   const activeCategories = getActiveCategories();
-  const activeOverlaps = getActiveOverlaps();
   const exportDatasets = selectedKmlExportDatasets();
+  return (state.mapSourceLines || []).filter(line => {
+    const dataset = isMaxiSourceLine(line) ? 'maxi' : 'rd03';
+    return exportDatasets.has(dataset) &&
+      sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories);
+  });
+}
+
+function selectedSourceLinesForKmlExport() {
+  const cacheKey = kmlExportFilterCacheKey();
+  if (kmlExportSelectionCache.key === cacheKey) return kmlExportSelectionCache.segments;
+  return kmlSourceLineCandidates();
+}
+
+async function prepareSourceLinesForKmlExport() {
+  const cacheKey = kmlExportFilterCacheKey();
+  if (kmlExportSelectionCache.key === cacheKey) return kmlExportSelectionCache.segments;
+  const activeOverlaps = getActiveOverlaps();
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = parseFloat(document.getElementById('interval').value) || 5;
   const sourceLines = state.mapSourceLines || [];
-  const candidates = sourceLines
-    .filter(line => {
-      const dataset = isMaxiSourceLine(line) ? 'maxi' : 'rd03';
-      return exportDatasets.has(dataset) &&
-        sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableStatuses, activeCategories);
-    });
-  // The complete source set is pre-cached after analysis. Reuse it here instead
-  // of recalculating the expensive same-road-side grouping for every filter.
-  const sourceOverlapGroups = getCachedExportOverlapGroups(sourceLines, threshold, interval);
+  const candidates = kmlSourceLineCandidates();
+  const sourceOverlapGroups = await getCachedExportOverlapGroupsAsync(sourceLines, threshold, interval, progress => {
+    const completed = Number(progress?.completed) || 0;
+    const total = Number(progress?.total) || sourceLines.length;
+    setExportStatus(`กำลังจัดกลุ่มเส้น ${completed.toLocaleString('th-TH')} / ${total.toLocaleString('th-TH')} เส้น…`, 'busy');
+  });
   const includeOverlapping = Boolean(activeOverlaps.partial || activeOverlaps.full);
   const selectedOverlapGroups = new Map();
   const selectedLines = candidates
@@ -4751,10 +4865,12 @@ function ensureSegmentsAvailableForExport() {
 }
 async function exportKML() {
   if (!ensureSegmentsAvailableForExport()) return;
-  const segments = selectedSourceLinesForKmlExport();
+  const segments = await prepareSourceLinesForKmlExport();
   await ensurePeaAreasForExport(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
+  setExportStatus(`กำลังสร้าง KML ${segments.length.toLocaleString('th-TH')} เส้น…`, 'busy');
+  await new Promise(resolve => setTimeout(resolve, 0));
   const blob = new Blob([buildSelectedKml(segments, peaFeatures, overlapGroups)], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
   const filename = `kml_compare_selected_${exportTimestamp()}.kml`;
   downloadBlob(blob, filename);
@@ -4763,16 +4879,19 @@ async function exportKML() {
 async function exportKMZ() {
   if (!ensureSegmentsAvailableForExport()) return;
   if (typeof JSZip === 'undefined') { alert('ไม่สามารถสร้างไฟล์ KMZ ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่'); return; }
-  const segments = selectedSourceLinesForKmlExport();
+  const segments = await prepareSourceLinesForKmlExport();
   await ensurePeaAreasForExport(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
   const zip = new JSZip();
+  setExportStatus(`กำลังสร้างข้อมูล KMZ ${segments.length.toLocaleString('th-TH')} เส้น…`, 'busy');
+  await new Promise(resolve => setTimeout(resolve, 0));
   zip.file('doc.kml', buildSelectedKml(segments, peaFeatures, overlapGroups));
   const fastExport = !exportIncludesPeaDetails();
   const blob = await zip.generateAsync(fastExport
     ? { type: 'blob', compression: 'STORE' }
-    : { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+    : { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } },
+    metadata => setExportStatus(`กำลังบีบอัด KMZ ${Math.round(metadata.percent || 0)}%…`, 'busy'));
   const filename = `kml_compare_selected_${exportTimestamp()}.kmz`;
   downloadBlob(blob, filename);
   return { filename, itemCount: segments.length, size: blob.size };

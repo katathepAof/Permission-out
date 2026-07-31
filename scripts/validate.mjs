@@ -100,7 +100,7 @@ if (csvSection.includes('document.querySelector(`.diamInput')) {
 }
 if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
 if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('ensurePeaAreasForExportMode(exportSegments)') || !html.includes('function exportIncludesPeaDetails()') || !html.includes('id="exportDetailMode"')) throw new Error('CSV PEA area export mode is missing');
-if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('selectedSourceLinesForKmlExport()') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'") || !csvSection.includes('Source dataset ID') || !csvSection.includes('Included in billing') || !csvSection.includes('Matched with') || !csvSection.includes('Overlap count') || !csvSection.includes('Overlap marker')) {
+if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('prepareSourceLinesForKmlExport()') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'") || !csvSection.includes('Source dataset ID') || !csvSection.includes('Included in billing') || !csvSection.includes('Matched with') || !csvSection.includes('Overlap count') || !csvSection.includes('Overlap marker')) {
   throw new Error('CSV export must include the complete imported source-line audit section');
 }
 if (!html.includes('function sourceLineMatchedWith(') || !html.includes('function sourceLineBillingNote(') || !html.includes('function sourceLineOverlapMatches(') || !csvSection.includes('=== Export Summary ===')) {
@@ -121,16 +121,16 @@ if (csvSection.includes("placemarkCode(seg) || '-'")) {
 for (const marker of ['function buildExportOverlapGroups(', "'กลุ่มเส้นทับกัน'", '`ทับกัน ${groupIndex + 1}`', 'exportOverlapGroups.get(seg)']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 same-road-side export grouping marker is missing: ${marker}`);
 }
-if (!html.includes('function getCachedExportOverlapGroups(') || !html.includes('exportOverlapGroupCache.clear()') || !html.includes('getCachedExportOverlapGroups(state.mapSourceLines, threshold, interval)')) {
-  throw new Error('MOD 1 export overlap grouping must be cached after analysis');
+if (!html.includes('function getCachedExportOverlapGroupsAsync(') || !html.includes('exportOverlapGroupCache.clear()') || !html.includes('await buildExportOverlapGroupsAsync(')) {
+  throw new Error('MOD 1 export overlap grouping must be cached and processed asynchronously');
 }
 if (!html.includes('name="overlap_group"') || !html.includes('same_road_side_group_count')) {
   throw new Error('KML/KMZ same-road-side export grouping is missing');
 }
-if (!html.includes('function selectedSourceLinesForKmlExport()') || !html.includes('const segments = selectedSourceLinesForKmlExport();') || !html.includes('const activeOverlaps = getActiveOverlaps();') || !html.includes('sourceOverlapGroups.has(line) ? includeOverlapping : activeOverlaps.none')) {
+if (!html.includes('function selectedSourceLinesForKmlExport()') || !html.includes('await prepareSourceLinesForKmlExport()') || !html.includes('const activeOverlaps = getActiveOverlaps();') || !html.includes('sourceOverlapGroups.has(line) ? includeOverlapping : activeOverlaps.none')) {
   throw new Error('KML/KMZ export must include all selected MOD 1 source datasets');
 }
-if (!html.includes('const sourceLines = state.mapSourceLines || [];') || !html.includes('getCachedExportOverlapGroups(sourceLines, threshold, interval)')) {
+if (!html.includes('const sourceLines = state.mapSourceLines || [];') || !html.includes('getCachedExportOverlapGroupsAsync(sourceLines, threshold, interval')) {
   throw new Error('KML/KMZ export must reuse the full source overlap cache');
 }
 if (!html.includes('function kmlColorFromCss(') || !html.includes('function kmlSourceStyleId(') || !html.includes('<Data name="source_layer">') || !html.includes('<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>')) {
@@ -202,6 +202,9 @@ if (!html.includes("[...state.segmentsB, ...(state.mapSourceLines || [])].map(ge
 }
 if (!html.includes('function filterMod1ComparisonPair(lines, groupKey)') || !html.includes("name.includes('rd03')") || !html.includes("name.includes('maxi')") || !html.includes('const selectedComparisonLines = [...linesA, ...linesB]') || !html.includes("linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE')")) {
   throw new Error('MOD 1 comparison must be limited to rd03 base routes and Maxi compare routes');
+}
+if (!html.includes("resB = segmentsFromLinesDirect(linesB, 'remove')") || !html.includes("resB = segmentsFromLinesDirect(linesA, 'new')") || !html.includes("if (!singleFileMode && reportOverlapModes.has('overlap-only'))")) {
+  throw new Error('MOD 1 single-side billing mode is missing');
 }
 for (const marker of ['peaCompareCatalogSelected', 'ufmBaseCatalogSelected', 'baseCatalogSelectCompare', 'compareCatalogSelectBase']) {
   if (!`${html}\n${production}`.includes(marker)) throw new Error(`Dual-source MOD 1 role selection is missing: ${marker}`);
@@ -306,6 +309,9 @@ for (const marker of ['permissionOutOpenAdminUsers', '/api/admin/users', 'admin-
 }
 for (const marker of ['permissionOutOpenAdminData', '/api/admin/data/uploads', 'uploadToSignedUrl', 'logical_id']) {
   if (!adminData.includes(marker)) throw new Error(`Admin data marker is missing: ${marker}`);
+}
+if (!workerSource.includes('function sourceForDatasetFile(') || !adminData.includes("source.value = 'ufm'")) {
+  throw new Error('MaxiFiber uploads must be assigned to the UFM dataset side automatically');
 }
 for (const marker of ['workflow-nav', 'dataset-drawer', 'workspace-view-tabs', 'advanced-settings', 'has-analysis']) {
   if (!uxRefresh.includes(marker)) throw new Error(`UX refresh marker is missing: ${marker}`);

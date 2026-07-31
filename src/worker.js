@@ -444,6 +444,11 @@ function cleanDatasetFileName(value) {
   };
 }
 
+function sourceForDatasetFile(selectedSource, fileName) {
+  if (selectedSource === 'pea' && /(?:^|[_\s-])maxi(?:fiber)?(?:[_\s.-]|$)/i.test(fileName)) return 'ufm';
+  return selectedSource;
+}
+
 function cleanSha256(value) {
   const hash = String(value || '').toLowerCase();
   if (!SHA256_PATTERN.test(hash)) throw new HttpError(400, 'SHA-256 ของไฟล์ไม่ถูกต้อง', 'validation_error');
@@ -518,8 +523,8 @@ async function listManagedDatasets(request, env) {
 async function createDatasetUpload(request, env) {
   const { supabase, user } = await requireModuleAccess(request, env, 'mod1', 'update');
   const payload = await requestJson(request, 30_000);
-  const source = cleanDataSource(payload.source);
   const { displayName, canonicalName } = cleanDatasetFileName(payload.fileName);
+  const source = sourceForDatasetFile(cleanDataSource(payload.source), displayName);
   const rawSha256 = cleanSha256(payload.sha256);
   const rawSize = cleanFileSize(payload.size);
 

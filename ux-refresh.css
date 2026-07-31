@@ -747,6 +747,13 @@ body.ux-enhanced #billingCard #exportCsvBtn{
   padding:var(--ux-space-4)!important;
   text-align:start!important;
 }
+.dataset-drawer-body .fileBox:hover{
+  transform:none;
+  border-color:var(--border-strong);
+  box-shadow:none;
+}
+.dataset-drawer-body .fileBox:hover::before{opacity:0}
+.dataset-drawer-body .base-catalog-option:hover{background:transparent}
 .dataset-drawer-body .base-catalog-list{
   max-height:none;
   flex:1;
@@ -779,7 +786,7 @@ body.ux-enhanced #billingCard #exportCsvBtn{
 }
 .dataset-drawer-body .base-catalog-tools button{min-width:0;padding-inline:7px;overflow:hidden;text-overflow:ellipsis}
 .dataset-drawer-body .catalog-role-choice{min-height:32px;padding:5px 8px;transition:border-color .15s,background .15s,transform .15s}
-.dataset-drawer-body .catalog-role-choice:hover{transform:translateY(-1px)}
+.dataset-drawer-body .catalog-role-choice:hover{transform:none}
 .dataset-drawer-body .base-catalog-option.has-role-choices:has(.catalog-role-choice input:checked){background:#fbfdff}
 .catalog-load-more{
   width:calc(100% - 16px);

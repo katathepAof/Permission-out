@@ -851,46 +851,72 @@
         ]);
       }
     }
-    return samples;
+    const maximumSamples = 96;
+    if (samples.length <= maximumSamples) return samples;
+    const reduced = [];
+    for (let index = 0; index < maximumSamples; index += 1) {
+      reduced.push(samples[Math.round(index * (samples.length - 1) / (maximumSamples - 1))]);
+    }
+    return reduced;
   }
 
-  async function resolvePeaAreasForSegments(segments) {
+  async function mapWithConcurrency(items, concurrency, worker) {
+    const results = new Array(items.length);
+    let cursor = 0;
+    const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (cursor < items.length) {
+        const index = cursor++;
+        results[index] = await worker(items[index], index);
+      }
+    });
+    await Promise.all(runners);
+    return results;
+  }
+
+  async function resolvePeaAreasForSegments(segments, onProgress = null) {
     if (!peaManifest) await initializePeaLayers();
     if (!peaManifest) throw new Error('PEA area manifest is unavailable');
     const unresolved = segments.filter(segment => !Array.isArray(segment._peaAreas));
-    const jobs = unresolved.map(segment => ({
-      segment,
-      samples: segmentSamplePoints(segment).map(point => ({ point, candidates: peaCandidatesForPoint(point) }))
-    }));
-    const chunkPaths = [...new Set(jobs.flatMap(job => job.samples.flatMap(sample => sample.candidates.map(item => item.chunk))))];
-    const chunks = await Promise.all(chunkPaths.map(fetchPeaChunk));
-    const featureById = new Map(chunks.flatMap(chunk => chunk.features || []).map(feature => [
-      String(feature.id || feature.properties?.pea_id), feature
-    ]));
-    for (const job of jobs) {
-      const matches = new Map();
-      for (const sample of job.samples) {
-        for (const item of sample.candidates) {
-          const feature = featureById.get(String(item.id));
-          if (feature && pointInPeaGeometry(sample.point, feature.geometry)) {
-            const key = String(item.id);
-            const match = matches.get(key) || {
-              id: key,
-              name: item.name || feature.properties?.name || '',
-              officeType: item.officeType || feature.properties?.office_type || '',
-              assignmentMethod: 'densified_point_in_polygon_0.02deg',
-              sampleCount: 0
-            };
-            match.sampleCount += 1;
-            matches.set(key, match);
+    const batchSize = 300;
+    for (let offset = 0; offset < unresolved.length; offset += batchSize) {
+      const batch = unresolved.slice(offset, offset + batchSize);
+      const jobs = batch.map(segment => ({
+        segment,
+        samples: segmentSamplePoints(segment).map(point => ({ point, candidates: peaCandidatesForPoint(point) }))
+      }));
+      const chunkPaths = [...new Set(jobs.flatMap(job => job.samples.flatMap(sample => sample.candidates.map(item => item.chunk))))];
+      const chunks = await mapWithConcurrency(chunkPaths, 4, fetchPeaChunk);
+      const featureById = new Map(chunks.flatMap(chunk => chunk.features || []).map(feature => [
+        String(feature.id || feature.properties?.pea_id), feature
+      ]));
+      for (const job of jobs) {
+        const matches = new Map();
+        for (const sample of job.samples) {
+          for (const item of sample.candidates) {
+            const feature = featureById.get(String(item.id));
+            if (feature && pointInPeaGeometry(sample.point, feature.geometry)) {
+              const key = String(item.id);
+              const match = matches.get(key) || {
+                id: key,
+                name: item.name || feature.properties?.name || '',
+                officeType: item.officeType || feature.properties?.office_type || '',
+                assignmentMethod: 'densified_point_in_polygon_0.02deg',
+                sampleCount: 0
+              };
+              match.sampleCount += 1;
+              matches.set(key, match);
+            }
           }
         }
+        job.segment._peaAreas = [...matches.values()]
+          .map(area => ({ ...area, coverageRatio: job.samples.length ? area.sampleCount / job.samples.length : 0 }))
+          .sort((left, right) => right.sampleCount - left.sampleCount || left.name.localeCompare(right.name, 'th'));
       }
-      job.segment._peaAreas = [...matches.values()]
-        .map(area => ({ ...area, coverageRatio: job.samples.length ? area.sampleCount / job.samples.length : 0 }))
-        .sort((left, right) => right.sampleCount - left.sampleCount || left.name.localeCompare(right.name, 'th'));
+      const completed = Math.min(offset + batch.length, unresolved.length);
+      onProgress?.({ completed, total: unresolved.length });
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
-    return { resolvedSegments: unresolved.length, loadedChunks: chunkPaths.length };
+    return { resolvedSegments: unresolved.length, cachedChunks: peaChunkCache.size };
   }
 
   window.permissionOutResolvePeaAreas = resolvePeaAreasForSegments;
