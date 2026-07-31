@@ -1798,6 +1798,7 @@ function parallelDiffDeg(a, b) {
 
 let map, layerGroup;
 let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], mapSourceLines: [], removedA: 0, removedB: 0 };
+let analysisRunRevision = 0;
 let exportSelectionRevision = 0;
 const LARGE_RESULT_THRESHOLD = 1500;
 const REPORT_ROW_LIMIT = 300;
@@ -1957,6 +1958,24 @@ function isMod1ComparisonPairLine(line, groupKey = '') {
 
 function filterMod1ComparisonPair(lines, groupKey) {
   return (lines || []).filter(line => isMod1ComparisonPairLine(line, groupKey));
+}
+
+function stableAnalysisLineKey(line) {
+  const coords = Array.isArray(line?.coords) ? line.coords : [];
+  const first = coords[0] || [];
+  const last = coords[coords.length - 1] || [];
+  return [
+    line?.sourceDatasetId || line?.sourceFile || '',
+    Number.isSafeInteger(line?.sourceIndex) ? String(line.sourceIndex).padStart(10, '0') : '',
+    line?.sourceMetadata?.code || line?.name || '',
+    first.join(','), last.join(','), coords.length
+  ].join('|');
+}
+
+function sortLinesForStableAnalysis(lines) {
+  return (lines || []).slice().sort((left, right) =>
+    stableAnalysisLineKey(left).localeCompare(stableAnalysisLineKey(right), 'en')
+  );
 }
 
 function updateSourceRoleUI() {
@@ -2335,6 +2354,7 @@ function parseKML(text, sourceName = '') {
     }
   }
   if (lines.length === 0) throw new Error('ไม่พบเส้นทาง (coordinates) ในไฟล์ KML');
+  lines.forEach((line, index) => { if (!Number.isSafeInteger(line.sourceIndex)) line.sourceIndex = index; });
   return lines;
 }
 
@@ -3209,6 +3229,7 @@ function populateProvinceFilter() {
     container.innerHTML = `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" ${useAll ? 'checked' : ''}>ทุกจังหวัด</label>` +
       provinces.map(p => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;"><input type="checkbox" class="provinceFilterOption" value="${p}" ${!useAll && selected.includes(p) ? 'checked' : ''}>${p}</label>`).join('');
     bindProvinceFilterOptions();
+    if (state.segmentsB.length) applyProvinceFilter();
   };
   if (provinceSources.length <= LARGE_RESULT_THRESHOLD) {
     renderOptions(Array.from(new Set(provinceSources.flatMap(getSegProvinces).filter(p => p && p !== '-'))));
@@ -3500,6 +3521,7 @@ async function runAnalysis() {
     errBox.style.display = 'block';
     return;
   }
+  const runRevision = ++analysisRunRevision;
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
   const interval = Math.max(1, parseFloat(document.getElementById('interval').value) || 5);
   const reportOverlapModes = getReportOverlapModes();
@@ -3534,6 +3556,7 @@ async function runAnalysis() {
         : Promise.resolve([])
     ]);
 
+    if (runRevision !== analysisRunRevision) return;
     let linesA = optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
       parseKML(text, baseFiles[index]?.name || '').map(line => {
         line.sourceFile = baseFiles[index]?.name || '';
@@ -3558,6 +3581,8 @@ async function runAnalysis() {
     } else if (!linesA.length && !linesB.length) {
       throw new Error('ไม่พบเส้นทางในชุดข้อมูลที่เลือกสำหรับคำนวณค่าบริการ');
     }
+    linesA = sortLinesForStableAnalysis(linesA);
+    linesB = sortLinesForStableAnalysis(linesB);
     const datasetColorEntries = applyDatasetLineColors({ BASE: linesA, COMPARE: linesB });
     renderDatasetColorLegend(datasetColorEntries);
 
@@ -3649,13 +3674,16 @@ async function runAnalysis() {
       : 'วิเคราะห์เสร็จแล้ว — ไม่พบช่วงเส้นทาง จึงไม่มีค่าบริการให้คำนวณ';
     window.dispatchEvent(new CustomEvent('permissionout:analysis-complete', { detail: { elapsedMs, segmentCount: state.segmentsB.length } }));
   } catch (e) {
+    if (runRevision !== analysisRunRevision) return;
     errBox.textContent = 'เกิดข้อผิดพลาด: ' + e.message;
     errBox.style.display = 'block';
     costStatus.className = 'dedupeNote';
     costStatus.textContent = 'วิเคราะห์ไม่สำเร็จ — ยังไม่มีผลค่าบริการ';
   } finally {
-    btn.disabled = false;
-    document.getElementById('loading').style.display = 'none';
+    if (runRevision === analysisRunRevision) {
+      btn.disabled = false;
+      document.getElementById('loading').style.display = 'none';
+    }
   }
 }
 

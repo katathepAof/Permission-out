@@ -465,7 +465,8 @@
       sourceMetadata: { code: sourceCode, originalName, province, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item?.name || line.sourceFile || '',
-      sourceDatasetId: item?.id || line.sourceDatasetId || ''
+      sourceDatasetId: item?.id || line.sourceDatasetId || '',
+      sourceIndex: Number.isSafeInteger(line.i) ? line.i : (Number.isSafeInteger(line.sourceIndex) ? line.sourceIndex : 0)
     };
   }
 

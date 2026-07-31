@@ -209,6 +209,9 @@ if (!html.includes('function filterMod1ComparisonPair(lines, groupKey)') || !htm
 if (!html.includes("resB = segmentsFromLinesDirect(linesB, 'remove')") || !html.includes("resB = segmentsFromLinesDirect(linesA, 'new')") || !html.includes("if (!singleFileMode && reportOverlapModes.has('overlap-only'))")) {
   throw new Error('MOD 1 single-side billing mode is missing');
 }
+for (const marker of ['let analysisRunRevision = 0', 'if (runRevision !== analysisRunRevision) return;', 'function sortLinesForStableAnalysis(lines)', 'linesA = sortLinesForStableAnalysis(linesA)', 'sourceIndex: Number.isSafeInteger(line.i)']) {
+  if (!`${html}\n${production}`.includes(marker)) throw new Error(`Deterministic MOD 1 analysis marker is missing: ${marker}`);
+}
 for (const marker of ['peaCompareCatalogSelected', 'ufmBaseCatalogSelected', 'baseCatalogSelectCompare', 'compareCatalogSelectBase']) {
   if (!`${html}\n${production}`.includes(marker)) throw new Error(`Dual-source MOD 1 role selection is missing: ${marker}`);
 }
