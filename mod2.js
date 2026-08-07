@@ -15,6 +15,7 @@
     : null;
   const COMMENT_NOTIFICATIONS_KEY = 'permission-out.mod2.comments.lastSeenAt';
   const MAP_FOCUS_KEY = 'permission-out.mod2.mapFocus';
+  const MAP_VIEW_KEY = 'permission-out.mod2.viewMode';
 
   const state = {
     user: null,
@@ -23,6 +24,7 @@
     filtered: [],
     mapSites: [],
     searchActive: false,
+    viewMode: localStorage.getItem(MAP_VIEW_KEY) || 'overview',
     loaded: false,
     loading: false,
     cluster: true,
@@ -80,6 +82,7 @@
     mapLegendPreview: document.getElementById('mapLegendPreview'),
     mapLegendCount: document.getElementById('mapLegendCount'),
     mapLegendSummary: document.getElementById('mapLegendSummary'),
+    overviewBtn: document.getElementById('overviewBtn'),
     clusterBtn: document.getElementById('clusterBtn'),
     heatBtn: document.getElementById('heatBtn'),
     fitBtn: document.getElementById('fitBtn'),
@@ -98,6 +101,11 @@
     modalClose: document.getElementById('modalClose'),
     toastRegion: document.getElementById('toastRegion')
   };
+  elements.thailandOverviewHud = document.getElementById('thailandOverviewHud');
+  elements.overviewScopeLabel = document.getElementById('overviewScopeLabel');
+  elements.overviewSiteCount = document.getElementById('overviewSiteCount');
+  elements.overviewProvinceCount = document.getElementById('overviewProvinceCount');
+  elements.overviewCustomerCount = document.getElementById('overviewCustomerCount');
   elements.commentNotifications = document.getElementById('commentNotifications');
   elements.commentNotificationBtn = document.getElementById('commentNotificationBtn');
   elements.commentNotificationCount = document.getElementById('commentNotificationCount');
@@ -114,6 +122,7 @@
     owner: document.getElementById('filterOwner')
   };
   const FILTER_CASCADE_ORDER = Object.keys(filterElements);
+  const THAILAND_BOUNDS = L.latLngBounds([5.4, 97.2], [20.7, 105.7]);
 
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
   const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
@@ -127,6 +136,7 @@
     baseMapLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
   });
   const siteLayer = L.layerGroup().addTo(map);
+  const overviewHexLayer = L.layerGroup().addTo(map);
   let searchTimer = 0;
   let notificationTimer = 0;
   let mapRenderFrame = 0;
@@ -596,6 +606,11 @@
     }
     elements.opexReportBtn.hidden = !isAdmin();
     elements.mapEmptyState.hidden = sites.length > 0 || !state.loaded;
+    elements.overviewSiteCount.textContent = sites.length.toLocaleString('th-TH');
+    elements.overviewProvinceCount.textContent = new Set(sites.map(site => site.province).filter(Boolean)).size.toLocaleString('th-TH');
+    elements.overviewCustomerCount.textContent = sites.reduce((sum, site) => sum + site.customers, 0).toLocaleString('th-TH');
+    const activeArea = filterElements.province.value || filterElements.area.value || filterElements.regional.value;
+    elements.overviewScopeLabel.textContent = activeArea ? `ขอบเขต: ${activeArea}` : 'ภาพรวม Site ทั่วประเทศไทย';
   }
 
   function formatBaht(value) {
@@ -1084,6 +1099,76 @@
     return [...groups.values()];
   }
 
+  function roundHex(q, r) {
+    const x = q;
+    const z = r;
+    const y = -x - z;
+    let roundedX = Math.round(x);
+    let roundedY = Math.round(y);
+    let roundedZ = Math.round(z);
+    const deltaX = Math.abs(roundedX - x);
+    const deltaY = Math.abs(roundedY - y);
+    const deltaZ = Math.abs(roundedZ - z);
+    if (deltaX > deltaY && deltaX > deltaZ) roundedX = -roundedY - roundedZ;
+    else if (deltaY > deltaZ) roundedY = -roundedX - roundedZ;
+    else roundedZ = -roundedX - roundedY;
+    return [roundedX, roundedZ];
+  }
+
+  function overviewHexBins(sites) {
+    const projectionZoom = 7;
+    const radius = 12;
+    const bins = new Map();
+    for (const site of sites) {
+      const point = map.project([site.latitude, site.longitude], projectionZoom);
+      const [q, r] = roundHex((Math.sqrt(3) / 3 * point.x - point.y / 3) / radius, (2 * point.y / 3) / radius);
+      const key = `${q}:${r}`;
+      if (!bins.has(key)) bins.set(key, { q, r, sites: [], customers: 0 });
+      const bin = bins.get(key);
+      bin.sites.push(site);
+      bin.customers += site.customers;
+    }
+    return [...bins.values()].map(bin => {
+      const center = L.point(radius * Math.sqrt(3) * (bin.q + bin.r / 2), radius * 1.5 * bin.r);
+      const points = Array.from({ length: 6 }, (_, index) => {
+        const angle = (60 * index - 30) * Math.PI / 180;
+        return map.unproject([center.x + radius * Math.cos(angle), center.y + radius * Math.sin(angle)], projectionZoom);
+      });
+      return { ...bin, points };
+    });
+  }
+
+  function overviewHexColor(ratio) {
+    if (ratio >= .75) return '#ff315d';
+    if (ratio >= .45) return '#a23cff';
+    if (ratio >= .2) return '#2d6cff';
+    return '#222957';
+  }
+
+  function renderThailandOverview(sites) {
+    const bins = overviewHexBins(sites);
+    const maximum = Math.max(1, ...bins.map(bin => bin.sites.length));
+    for (const bin of bins) {
+      const ratio = bin.sites.length / maximum;
+      const provinces = [...new Set(bin.sites.map(site => site.province).filter(Boolean))];
+      L.polygon(bin.points, {
+        renderer: mapRenderer,
+        color: ratio >= .2 ? 'rgba(84,220,255,.72)' : 'rgba(90,101,175,.42)',
+        weight: 1,
+        fillColor: overviewHexColor(ratio),
+        fillOpacity: .72 + ratio * .22,
+        bubblingMouseEvents: false
+      })
+        .bindTooltip(`<strong>${bin.sites.length.toLocaleString('th-TH')} Sites</strong><br>${bin.customers.toLocaleString('th-TH')} Customers${provinces.length ? `<br>${escapeHtml(provinces.slice(0, 3).join(', '))}` : ''}`, { sticky: true, opacity: .96 })
+        .on('click', () => {
+          setViewMode('sites');
+          const bounds = L.latLngBounds(bin.sites.map(site => [site.latitude, site.longitude]));
+          map.flyToBounds(bounds, { padding: [70, 70], maxZoom: 12, duration: .45 });
+        })
+        .addTo(overviewHexLayer);
+    }
+  }
+
   function bindLazySitePopup(layer, site) {
     layer.bindTooltip(`${site.siteCode}${site.siteName ? ` · ${site.siteName}` : ''}`, {
       direction: 'top',
@@ -1114,6 +1199,11 @@
   function renderMapNow() {
     map.closePopup();
     siteLayer.clearLayers();
+    overviewHexLayer.clearLayers();
+    if (state.viewMode === 'overview') {
+      renderThailandOverview(state.filtered);
+      return;
+    }
     const renderSites = map.getZoom() >= 10 && !state.searchActive
       ? state.mapSites.filter(site => map.getBounds().pad(.35).contains([site.latitude, site.longitude]))
       : state.mapSites;
@@ -1211,6 +1301,13 @@
     if (mapAutoFocusFrame) window.cancelAnimationFrame(mapAutoFocusFrame);
     mapAutoFocusFrame = window.requestAnimationFrame(() => {
       mapAutoFocusFrame = 0;
+      if (state.viewMode === 'overview') {
+        const overviewBounds = state.filtered.length
+          ? L.latLngBounds(state.filtered.map(site => [site.latitude, site.longitude]))
+          : THAILAND_BOUNDS;
+        map.flyToBounds(overviewBounds, { padding: [64, 64], maxZoom: 8, duration: .4 });
+        return;
+      }
       if (state.filtered.length === 1) {
         const [site] = state.filtered;
         map.flyTo([site.latitude, site.longitude], 13, { duration: .35 });
@@ -1432,6 +1529,25 @@
     if (elements.mapOutputPanel) elements.mapOutputPanel.hidden = !isExpanded;
   }
 
+  function setViewMode(mode, persist = true) {
+    const nextMode = ['overview', 'sites', 'density'].includes(mode) ? mode : 'overview';
+    state.viewMode = nextMode;
+    state.cluster = nextMode === 'sites';
+    state.density = nextMode === 'density';
+    mapCard?.classList.toggle('is-overview-mode', nextMode === 'overview');
+    elements.thailandOverviewHud.hidden = nextMode !== 'overview';
+    elements.overviewBtn.classList.toggle('is-active', nextMode === 'overview');
+    elements.clusterBtn.classList.toggle('is-active', nextMode === 'sites');
+    elements.heatBtn.classList.toggle('is-active', nextMode === 'density');
+    elements.overviewBtn.setAttribute('aria-pressed', String(nextMode === 'overview'));
+    elements.clusterBtn.setAttribute('aria-pressed', String(nextMode === 'sites'));
+    elements.heatBtn.setAttribute('aria-pressed', String(nextMode === 'density'));
+    if (persist) localStorage.setItem(MAP_VIEW_KEY, nextMode);
+    renderMap();
+    renderLegend();
+    if (nextMode === 'overview') map.flyToBounds(THAILAND_BOUNDS, { padding: [42, 42], maxZoom: 6, duration: .45 });
+  }
+
   elements.opexReportBtn.addEventListener('click', () => {
     setOutputMenuExpanded(false);
     openOpexReport();
@@ -1466,7 +1582,10 @@
     window.clearTimeout(searchTimer);
     syncSiteSearch(event.currentTarget.value);
     applyFilters(false);
-    if (state.filtered.length === 1) focusSite(state.filtered[0], 13);
+    if (state.filtered.length === 1) {
+      setViewMode('sites');
+      focusSite(state.filtered[0], 13);
+    }
     else if (state.filtered.length > 1) fitAll();
   }
 
@@ -1481,24 +1600,9 @@
   elements.clearMapFilters.addEventListener('click', () => resetAllFilters({ focusSearch: true, autoFit: true }));
   elements.emptyResetFilters.addEventListener('click', () => resetAllFilters({ focusSearch: true, autoFit: true }));
   elements.reloadBtn.addEventListener('click', () => loadSites(true).catch(() => {}));
-  elements.clusterBtn.addEventListener('click', () => {
-    state.cluster = !state.cluster;
-    state.density = false;
-    elements.clusterBtn.classList.toggle('is-active', state.cluster);
-    elements.clusterBtn.setAttribute('aria-pressed', String(state.cluster));
-    elements.heatBtn.classList.remove('is-active');
-    elements.heatBtn.setAttribute('aria-pressed', 'false');
-    renderMap();
-  });
-  elements.heatBtn.addEventListener('click', () => {
-    state.density = !state.density;
-    if (state.density) state.cluster = false;
-    elements.heatBtn.classList.toggle('is-active', state.density);
-    elements.heatBtn.setAttribute('aria-pressed', String(state.density));
-    elements.clusterBtn.classList.toggle('is-active', state.cluster);
-    elements.clusterBtn.setAttribute('aria-pressed', String(state.cluster));
-    renderMap();
-  });
+  elements.overviewBtn.addEventListener('click', () => setViewMode('overview'));
+  elements.clusterBtn.addEventListener('click', () => setViewMode('sites'));
+  elements.heatBtn.addEventListener('click', () => setViewMode('density'));
   elements.fitBtn.addEventListener('click', fitAll);
   elements.sidebarToggle?.addEventListener('click', () => {
     setSidebarCollapsed(!elements.workspace?.classList.contains('is-sidebar-collapsed'));
@@ -1593,6 +1697,7 @@
   async function initialize() {
     restoreSidebarState();
     restoreLegendState();
+    setViewMode(state.viewMode, false);
     updateAccountUi();
     if (!client) {
       setHealth('ตั้งค่าไม่ครบ', 'error');
