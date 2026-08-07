@@ -15,7 +15,6 @@
     : null;
   const COMMENT_NOTIFICATIONS_KEY = 'permission-out.mod2.comments.lastSeenAt';
   const MAP_FOCUS_KEY = 'permission-out.mod2.mapFocus';
-  const MAP_VIEW_KEY = 'permission-out.mod2.viewMode';
 
   const state = {
     user: null,
@@ -24,7 +23,7 @@
     filtered: [],
     mapSites: [],
     searchActive: false,
-    viewMode: localStorage.getItem(MAP_VIEW_KEY) || 'overview',
+    viewMode: 'overview',
     loaded: false,
     loading: false,
     cluster: true,
@@ -1161,7 +1160,7 @@
       })
         .bindTooltip(`<strong>${bin.sites.length.toLocaleString('th-TH')} Sites</strong><br>${bin.customers.toLocaleString('th-TH')} Customers${provinces.length ? `<br>${escapeHtml(provinces.slice(0, 3).join(', '))}` : ''}`, { sticky: true, opacity: .96 })
         .on('click', () => {
-          setViewMode('sites');
+          setViewMode('sites', false);
           const bounds = L.latLngBounds(bin.sites.map(site => [site.latitude, site.longitude]));
           map.flyToBounds(bounds, { padding: [70, 70], maxZoom: 12, duration: .45 });
         })
@@ -1542,7 +1541,6 @@
     elements.overviewBtn.setAttribute('aria-pressed', String(nextMode === 'overview'));
     elements.clusterBtn.setAttribute('aria-pressed', String(nextMode === 'sites'));
     elements.heatBtn.setAttribute('aria-pressed', String(nextMode === 'density'));
-    if (persist) localStorage.setItem(MAP_VIEW_KEY, nextMode);
     renderMap();
     renderLegend();
     if (nextMode === 'overview') map.flyToBounds(THAILAND_BOUNDS, { padding: [42, 42], maxZoom: 6, duration: .45 });
@@ -1583,7 +1581,7 @@
     syncSiteSearch(event.currentTarget.value);
     applyFilters(false);
     if (state.filtered.length === 1) {
-      setViewMode('sites');
+      setViewMode('sites', false);
       focusSite(state.filtered[0], 13);
     }
     else if (state.filtered.length > 1) fitAll();
