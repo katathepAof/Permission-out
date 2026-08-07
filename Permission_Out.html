@@ -1803,8 +1803,10 @@ function parallelDiffDeg(a, b) {
 let map, layerGroup, baseTileLayer;
 const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+let usingFallbackMap = false;
 window.addEventListener('permission-theme-change', event => {
-  if (baseTileLayer) baseTileLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
+  if (baseTileLayer && !usingFallbackMap) baseTileLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
 });
 let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], mapSourceLines: [], removedA: 0, removedB: 0 };
 let analysisRunRevision = 0;
@@ -2503,9 +2505,22 @@ let mapResizeBound = false;
 function initMap() {
   if (map) { map.remove(); }
   map = L.map('map', { zoomControl: true, attributionControl: true, preferCanvas: true }).setView([13.7563, 100.5018], 6);
+  usingFallbackMap = false;
+  let tileErrors = 0;
+  let tileLoaded = false;
+  const useFallbackMap = () => {
+    if (usingFallbackMap || !baseTileLayer) return;
+    usingFallbackMap = true;
+    baseTileLayer.setUrl(fallbackMapUrl);
+  };
   baseTileLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
-    subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 20
-  }).addTo(map);
+    subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 20,
+    crossOrigin: true
+  })
+    .on('tileload', () => { tileLoaded = true; tileErrors = 0; })
+    .on('tileerror', () => { tileErrors += 1; if (tileErrors >= 3) useFallbackMap(); })
+    .addTo(map);
+  window.setTimeout(() => { if (!tileLoaded) useFallbackMap(); }, 2600);
   layerGroup = L.layerGroup().addTo(map);
   aggregateRenderer = L.canvas({ padding: 0.35 });
   searchableLayers = [];

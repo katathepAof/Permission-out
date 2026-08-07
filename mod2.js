@@ -126,13 +126,27 @@
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
   const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
   const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  let usingFallbackMap = false;
+  let tileErrors = 0;
+  let tileLoaded = false;
+  const useFallbackMap = () => {
+    if (usingFallbackMap) return;
+    usingFallbackMap = true;
+    baseMapLayer.setUrl(fallbackMapUrl);
+  };
   const baseMapLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
     subdomains: 'abcd',
     maxZoom: 20,
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-  }).addTo(map);
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    crossOrigin: true
+  })
+    .on('tileload', () => { tileLoaded = true; tileErrors = 0; })
+    .on('tileerror', () => { tileErrors += 1; if (tileErrors >= 3) useFallbackMap(); })
+    .addTo(map);
+  window.setTimeout(() => { if (!tileLoaded) useFallbackMap(); }, 2600);
   window.addEventListener('permission-theme-change', event => {
-    baseMapLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
+    if (!usingFallbackMap) baseMapLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
   });
   const siteLayer = L.layerGroup().addTo(map);
   const overviewHexLayer = L.layerGroup().addTo(map);
