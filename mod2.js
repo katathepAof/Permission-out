@@ -1180,7 +1180,7 @@
       autoPan: true,
       autoPanPaddingTopLeft: [24, 88],
       autoPanPaddingBottomRight: [24, 24],
-      keepInView: true,
+      keepInView: false,
       closeButton: true
     });
     return layer;
@@ -1332,7 +1332,7 @@
         autoPan: true,
         autoPanPaddingTopLeft: [24, 88],
         autoPanPaddingBottomRight: [24, 24],
-        keepInView: true,
+        keepInView: false,
         closeButton: true
       })
         .setLatLng([site.latitude, site.longitude])
