@@ -231,9 +231,10 @@
   }
 
   function restoreSidebarState() {
-    let collapsed = false;
+    let collapsed = window.matchMedia('(max-width: 820px)').matches;
     try {
-      collapsed = window.sessionStorage.getItem('permission-out:mod2-sidebar-collapsed') === 'true';
+      const stored = window.sessionStorage.getItem('permission-out:mod2-sidebar-collapsed');
+      if (stored !== null) collapsed = stored === 'true';
     } catch { /* use expanded state */ }
     setSidebarCollapsed(collapsed, { persist: false });
   }
@@ -1607,6 +1608,11 @@
   elements.sidebarToggle?.addEventListener('click', () => {
     setSidebarCollapsed(!elements.workspace?.classList.contains('is-sidebar-collapsed'));
   });
+  elements.mapCard?.addEventListener('click', () => {
+    if (window.matchMedia('(max-width: 820px)').matches && !elements.workspace?.classList.contains('is-sidebar-collapsed')) {
+      setSidebarCollapsed(true);
+    }
+  });
   elements.mapLegendToggle?.addEventListener('click', () => {
     setLegendExpanded(elements.mapLegendToggle.getAttribute('aria-expanded') !== 'true');
   });
@@ -1669,6 +1675,11 @@
     if (event.key === 'Escape' && elements.mapLegendToggle?.getAttribute('aria-expanded') === 'true') {
       setLegendExpanded(false);
       elements.mapLegendToggle.focus();
+      return;
+    }
+    if (event.key === 'Escape' && window.matchMedia('(max-width: 820px)').matches && !elements.workspace?.classList.contains('is-sidebar-collapsed')) {
+      setSidebarCollapsed(true);
+      elements.sidebarToggle?.focus();
       return;
     }
     if (event.key === 'Escape' && document.body.classList.contains('mod2-map-focus')) {

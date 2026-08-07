@@ -389,3 +389,81 @@ body.mod2-body{--mod2-navy:#080b1a;--mod2-blue:#1ed6ff;--mod2-blue-soft:rgba(30,
 .mod2-marker-host,.mod2-cluster-host{background:transparent!important;border:0!important}.mod2-marker-motion{display:grid;width:100%;height:100%;place-items:center;opacity:0;transform:translateY(5px) scale(.72);animation:mod2-marker-enter .24s cubic-bezier(.2,.75,.25,1.15) var(--marker-delay,0ms) forwards;will-change:transform,opacity}.mod2-marker-motion>.mod2-marker,.mod2-marker-motion>.mod2-cluster{display:grid;place-items:center;transition:transform .16s ease,filter .16s ease}.leaflet-marker-icon:hover .mod2-marker-motion>.mod2-marker{transform:translateY(-2px) scale(1.12)}.leaflet-marker-icon:hover .mod2-marker-motion>.mod2-cluster{transform:translateY(-2px) scale(1.07)}
 @keyframes mod2-marker-enter{to{opacity:1;transform:translateY(0) scale(1)}}
 @media(prefers-reduced-motion:reduce){.mod2-marker-motion{opacity:1;transform:none;animation:none}.mod2-marker,.mod2-cluster{transition:none!important}}
+
+/* Production responsive experience: tablet drawer and touch-first map controls */
+@media(max-width:820px){
+  body.mod2-body{height:100dvh;overflow:hidden}
+  .mod2-workspace{position:relative;height:calc(100dvh - var(--shell-h));min-height:0;display:block;overflow:hidden}
+  .mod2-sidebar{position:absolute;z-index:1100;inset:0 auto 0 0;width:min(360px,calc(100vw - 52px));height:100%;display:block!important;overflow-y:auto;overscroll-behavior:contain;border-right:1px solid var(--orion-line);box-shadow:18px 0 48px rgba(0,0,0,.52);transform:translateX(0);opacity:1;transition:transform .24s ease,opacity .2s ease}
+  .mod2-workspace.is-sidebar-collapsed .mod2-sidebar{display:block!important;transform:translateX(calc(-100% - 18px));opacity:0;pointer-events:none}
+  .mod2-sidebar>section{padding:15px 16px}
+  .mod2-content{width:100%;height:100%;padding:8px}
+  .map-card{height:100%;border-radius:14px}
+  .sidebar-toggle,.mod2-workspace.is-sidebar-collapsed .sidebar-toggle{position:absolute;z-index:1200;top:12px;left:min(342px,calc(100vw - 70px));right:auto;width:42px;height:42px;border-radius:12px;transform:none;touch-action:manipulation;transition:left .24s ease,transform .16s ease}
+  .mod2-workspace.is-sidebar-collapsed .sidebar-toggle{left:12px}
+  .sidebar-toggle:hover{transform:none}.sidebar-toggle:active{transform:scale(.96)}
+  .sidebar-toggle-icon{width:26px;height:28px}
+  .map-toolbar{grid-template-columns:minmax(220px,1fr) auto;gap:7px;margin:8px;padding:7px}
+  .map-site-search{height:42px;padding-left:10px}
+  .map-site-search input{font-size:.72rem}
+  .map-actions{gap:5px;min-width:0}
+  .map-actions button{min-height:38px;padding:0 8px;touch-action:manipulation}
+  .map-mode-switch button{min-width:52px}
+  .map-output-panel{max-width:calc(100vw - 32px)}
+  .map-legend-toggle{height:42px}
+  .leaflet-control-zoom a{width:34px!important;height:34px!important;line-height:34px!important}
+  .facility-popup-group>summary,.facility-popup-extra summary{min-height:42px}
+  .facility-popup-header-actions button,.facility-comment-heading button,.facility-admin-actions button{min-height:36px}
+  .mod2-modal-backdrop{padding:12px}
+  .mod2-modal{max-height:calc(100dvh - 24px)}
+  .toast-region{right:10px;bottom:max(10px,env(safe-area-inset-bottom));left:10px}
+  .mod2-toast{max-width:none}
+}
+
+@media(max-width:680px){
+  .mod2-content{padding:0}
+  .map-card{border-width:0;border-radius:0}
+  .map-toolbar{grid-template-columns:1fr;gap:6px;margin:7px}
+  .map-actions{width:100%;overflow-x:auto;justify-content:flex-start;padding-bottom:1px;scrollbar-width:none;overscroll-behavior-x:contain}
+  .map-actions::-webkit-scrollbar{display:none}
+  .map-mode-switch{flex:0 0 auto}
+  .map-navigation-actions,.map-output-menu{flex:0 0 auto}
+  .map-actions button{height:40px;min-height:40px;font-size:.59rem}
+  .map-mode-switch button{min-width:62px}
+  .map-filter-bar{top:112px;left:9px;right:9px;align-items:flex-start}
+  .map-filter-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .map-filter-chips::-webkit-scrollbar{display:none}
+  .map-filter-chip{flex:0 0 auto;max-width:155px;padding:6px 8px}
+  .thailand-overview-hud{top:116px;left:10px;width:min(230px,calc(100vw - 20px));gap:7px;padding:10px 11px}
+  .overview-hud-metrics{gap:4px}.overview-hud-metrics span{padding:6px 5px}
+  .map-legend{left:9px;bottom:max(9px,env(safe-area-inset-bottom))}
+  .map-legend-panel{width:min(300px,calc(100vw - 18px))}
+  .mod2-body .leaflet-control-zoom{margin-top:124px}
+  .facility-popup{width:calc(100vw - 38px);max-height:min(68dvh,560px)}
+  .mod2-body .leaflet-popup-content-wrapper{max-width:calc(100vw - 26px)}
+  .facility-popup-header-actions{gap:7px}
+  .facility-popup-header-actions button{padding:0 10px}
+  .facility-admin-actions{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  .mod2-modal-backdrop{align-items:end;padding:0}
+  .mod2-modal{width:100%;max-height:92dvh;border-radius:18px 18px 0 0;border-bottom:0}
+  .mod2-modal header{padding:15px 16px}.mod2-modal-body{padding:14px 16px max(18px,env(safe-area-inset-bottom))}
+}
+
+@media(max-width:420px){
+  .mod2-sidebar{width:calc(100vw - 42px)}
+  .sidebar-toggle,.mod2-workspace.is-sidebar-collapsed .sidebar-toggle{left:calc(100vw - 60px)}
+  .mod2-workspace.is-sidebar-collapsed .sidebar-toggle{left:9px}
+  .mod2-sidebar>section{padding:13px 14px}
+  .filter-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .filter-grid select{height:42px}
+  .map-toolbar{margin:6px;padding:6px}
+  .map-site-search{height:44px}
+  .map-actions button{min-width:44px}
+  .map-navigation-actions button{font-size:0}.map-navigation-actions button:first-child:after{content:'Fit';font-size:.58rem}.map-navigation-actions #mapFocusToggle>span:first-child{font-size:.9rem}
+  .map-output-toggle>span:first-child{font-size:0}.map-output-toggle>span:first-child:after{content:'Menu';font-size:.58rem}
+  .thailand-overview-hud{width:calc(100vw - 20px)}
+  .overview-hud-metrics span{font-size:.44rem}.overview-hud-metrics b{font-size:.61rem}
+  .facility-popup{width:calc(100vw - 30px);max-height:70dvh}
+  .facility-popup-metrics span{font-size:.52rem}.facility-popup-metrics strong{font-size:.62rem}
+  .facility-popup-row{grid-template-columns:72px minmax(0,1fr)}
+}
