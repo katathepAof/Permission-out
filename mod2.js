@@ -1076,8 +1076,8 @@
     if (markerIconCache.has(cacheKey)) return markerIconCache.get(cacheKey);
     const size = highlighted ? 24 : 18;
     const icon = L.divIcon({
-      className: '',
-      html: `<span class="mod2-marker${highlighted ? ' is-search-match' : ''}" style="width:${size}px;height:${size}px;background:${color}"></span>`,
+      className: 'mod2-marker-host',
+      html: `<span class="mod2-marker-motion"><span class="mod2-marker${highlighted ? ' is-search-match' : ''}" style="width:${size}px;height:${size}px;background:${color}"></span></span>`,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
       popupAnchor: [0, -(size / 2 + 2)]
@@ -1226,7 +1226,7 @@
       ? clusterGroups(renderSites)
       : renderSites.map(site => [site]);
     const matchedIds = new Set(state.filtered.map(site => String(site.id)));
-    for (const group of groups) {
+    for (const [groupIndex, group] of groups.entries()) {
       if (group.length === 1) {
         const site = group[0];
         const marker = L.marker([site.latitude, site.longitude], {
@@ -1235,20 +1235,22 @@
           riseOnHover: true
         });
         bindLazySitePopup(marker, site).addTo(siteLayer);
+        marker.getElement()?.querySelector('.mod2-marker-motion')?.style.setProperty('--marker-delay', `${Math.min(groupIndex, 12) * 14}ms`);
         continue;
       }
       const latitude = group.reduce((sum, site) => sum + site.latitude, 0) / group.length;
       const longitude = group.reduce((sum, site) => sum + site.longitude, 0) / group.length;
       const size = Math.min(36, 21 + Math.log2(group.length) * 2.8);
       const icon = L.divIcon({
-        className: '',
-        html: `<span class="mod2-cluster" style="width:${size}px;height:${size}px">${group.length > 999 ? '999+' : group.length}</span>`,
+        className: 'mod2-cluster-host',
+        html: `<span class="mod2-marker-motion"><span class="mod2-cluster" style="width:${size}px;height:${size}px">${group.length > 999 ? '999+' : group.length}</span></span>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2]
       });
-      L.marker([latitude, longitude], { icon })
+      const clusterMarker = L.marker([latitude, longitude], { icon })
         .on('click', () => map.flyTo([latitude, longitude], Math.min(map.getZoom() + 2, 14), { duration: .35 }))
         .addTo(siteLayer);
+      clusterMarker.getElement()?.querySelector('.mod2-marker-motion')?.style.setProperty('--marker-delay', `${Math.min(groupIndex, 12) * 14}ms`);
     }
   }
 
