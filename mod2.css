@@ -379,3 +379,10 @@ body.mod2-body{--mod2-navy:#080b1a;--mod2-blue:#1ed6ff;--mod2-blue-soft:rgba(30,
 .overview-hex-scale{display:flex;align-items:center;gap:4px;color:#7f8bad;font-size:.49rem}.overview-hex-scale i{width:8px;height:8px;border-radius:2px;background:#222957}.overview-hex-scale i:nth-child(2){background:#2d6cff}.overview-hex-scale i:nth-child(3){background:#a23cff}.overview-hex-scale i:nth-child(4){background:#ff315d}.overview-hex-scale span{margin-left:3px}
 .map-card.is-overview-mode #mod2Map{background:#050714}.map-card.is-overview-mode .leaflet-tile-pane{filter:saturate(.65) contrast(1.12) brightness(.48)}.map-card.is-overview-mode .leaflet-control-zoom{display:none}.map-card.is-overview-mode .map-legend{display:none}.map-card.is-overview-mode:before{opacity:.92}
 @media(max-width:680px){.thailand-overview-hud{top:142px;left:12px;width:210px;padding:10px}.overview-hud-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Hexagonal site and cluster markers */
+.mod2-marker,.mod2-cluster{border:0;border-radius:0;clip-path:polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%)}
+.mod2-marker{filter:drop-shadow(0 0 2px rgba(255,255,255,.95)) drop-shadow(0 4px 6px rgba(0,0,0,.42));box-shadow:none}
+.mod2-cluster{background:linear-gradient(145deg,#28cfff 0%,#5253df 48%,#833bd0 100%);filter:drop-shadow(0 0 2px rgba(103,228,255,.9)) drop-shadow(0 6px 9px rgba(0,0,0,.48));box-shadow:none}
+.mod2-marker.is-search-match{border:0;filter:drop-shadow(0 0 3px #fff) drop-shadow(0 0 9px #22dcff) drop-shadow(0 0 14px #7d4fff);box-shadow:none}
+@keyframes search-marker-pulse{50%{filter:drop-shadow(0 0 4px #fff) drop-shadow(0 0 13px #22dcff) drop-shadow(0 0 20px #7d4fff)}}
