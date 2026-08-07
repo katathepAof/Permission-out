@@ -13,7 +13,9 @@
   <link rel="stylesheet" href="/vendor/leaflet.css">
   <link rel="stylesheet" href="/production.css?v=20260723-modules">
   <link rel="stylesheet" href="/admin-users.css?v=20260724-user-permissions">
-  <link rel="stylesheet" href="/mod2.css?v=20260726-cascade-filter">
+  <link rel="stylesheet" href="/mod2.css?v=20260807-compact-popup">
+  <link rel="stylesheet" href="/app-theme.css?v=20260807-theme-review">
+  <script src="/app-theme.js?v=20260807-theme-review"></script>
 </head>
 <body class="mod2-body">
   <header class="app-shellbar" aria-label="แถบจัดการระบบ">
@@ -51,6 +53,7 @@
         </div>
       </div>
       <nav class="shellbar-actions" aria-label="บัญชีผู้ใช้">
+        <button type="button" class="theme-toggle" id="themeToggle" aria-label="เปลี่ยนธีม" aria-pressed="false"><span class="theme-toggle-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Dark</span></button>
         <button type="button" class="user-btn" id="accountBtn" aria-label="เปิดบัญชีผู้ใช้">
           <span id="userInitial" class="user-avatar">G</span>
           <span class="user-copy">
@@ -136,6 +139,8 @@
           <div class="map-site-search" role="search">
             <span class="map-site-search-icon" aria-hidden="true">⌕</span>
             <input id="mapSiteSearch" type="search" aria-label="ค้นหา Site บนแผนที่" placeholder="ค้นหา Site Code, ชื่อ, จังหวัด หรืออุปกรณ์…" autocomplete="off">
+            <span class="map-search-shortcut" aria-hidden="true">/</span>
+            <span class="map-context-status" id="mapContextStatus" aria-live="polite" hidden></span>
             <span class="map-site-search-count" id="mapSearchCount" aria-live="polite">—</span>
             <button type="button" id="clearMapSearch" aria-label="ล้างคำค้นหาบนแผนที่">×</button>
           </div>
@@ -219,7 +224,7 @@
   <script src="/vendor/leaflet.js"></script>
   <script src="/bootstrap.js"></script>
   <script src="/vendor/supabase.js"></script>
-  <script src="/mod2.js?v=20260726-cascade-filter"></script>
+  <script src="/mod2.js?v=20260807-auto-popup"></script>
   <script src="/admin-users.js?v=20260724-user-permissions"></script>
 </body>
 </html>

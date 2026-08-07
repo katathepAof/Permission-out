@@ -21,6 +21,8 @@
     profile: null,
     sites: [],
     filtered: [],
+    mapSites: [],
+    searchActive: false,
     loaded: false,
     loading: false,
     cluster: true,
@@ -57,6 +59,7 @@
     mapSiteSearch: document.getElementById('mapSiteSearch'),
     clearMapSearch: document.getElementById('clearMapSearch'),
     mapSearchCount: document.getElementById('mapSearchCount'),
+    mapContextStatus: document.getElementById('mapContextStatus'),
     mapFilterBar: document.getElementById('mapFilterBar'),
     activeFilterChips: document.getElementById('activeFilterChips'),
     clearMapFilters: document.getElementById('clearMapFilters'),
@@ -113,15 +116,22 @@
   const FILTER_CASCADE_ORDER = Object.keys(filterElements);
 
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+  const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  const baseMapLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
+    subdomains: 'abcd',
+    maxZoom: 20,
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
   }).addTo(map);
+  window.addEventListener('permission-theme-change', event => {
+    baseMapLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
+  });
   const siteLayer = L.layerGroup().addTo(map);
   let searchTimer = 0;
   let notificationTimer = 0;
   let mapRenderFrame = 0;
   let mapAutoFocusFrame = 0;
+  let mapFocusInProgress = false;
   const markerIconCache = new Map();
   const mapCard = document.querySelector('.map-card');
   const mapRenderer = L.canvas({ padding: .35 });
@@ -476,7 +486,10 @@
     const selections = Object.fromEntries(
       Object.entries(filterElements).map(([key, select]) => [key, selectedValues(select)])
     );
-    state.filtered = state.sites.filter(site => {
+    const filterScope = state.sites.filter(site =>
+      Object.entries(selections).every(([key, values]) => !values.size || values.has(site[key]))
+    );
+    state.filtered = filterScope.filter(site => {
       if (query) {
         const haystack = [
           site.siteCode,
@@ -491,13 +504,41 @@
         ].join(' ').toLocaleLowerCase('th');
         if (!haystack.includes(query)) return false;
       }
-      return Object.entries(selections).every(([key, values]) => !values.size || values.has(site[key]));
+      return true;
     });
+    state.searchActive = Boolean(query);
+    state.mapSites = state.searchActive ? buildSearchContext(filterScope, state.filtered) : state.filtered;
     updateMetrics();
     updateActiveFilters(query, selections);
     renderMap();
     renderLegend();
     if (autoFit && state.filtered.length) scheduleFilteredMapFocus();
+  }
+
+  function distanceKm(left, right) {
+    const toRadians = value => value * Math.PI / 180;
+    const latitudeDelta = toRadians(right.latitude - left.latitude);
+    const longitudeDelta = toRadians(right.longitude - left.longitude);
+    const a = Math.sin(latitudeDelta / 2) ** 2
+      + Math.cos(toRadians(left.latitude)) * Math.cos(toRadians(right.latitude))
+      * Math.sin(longitudeDelta / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function buildSearchContext(scope, matches) {
+    if (!matches.length || matches.length >= 25) return matches;
+    const matchIds = new Set(matches.map(site => String(site.id)));
+    const nearby = scope
+      .filter(site => !matchIds.has(String(site.id)))
+      .map(site => ({
+        site,
+        distance: Math.min(...matches.map(match => distanceKm(match, site)))
+      }))
+      .filter(item => item.distance <= 40)
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, 180)
+      .map(item => item.site);
+    return [...matches, ...nearby];
   }
 
   function updateActiveFilters(query, selections) {
@@ -548,6 +589,11 @@
     elements.metricOwners.textContent = new Set(sites.map(site => site.owner).filter(Boolean)).size.toLocaleString('th-TH');
     elements.mapSearchCount.textContent = sites.length.toLocaleString('th-TH');
     elements.mapSearchCount.setAttribute('aria-label', `พบ ${sites.length.toLocaleString('th-TH')} ไซต์`);
+    const nearbyCount = state.searchActive ? Math.max(0, state.mapSites.length - sites.length) : 0;
+    if (elements.mapContextStatus) {
+      elements.mapContextStatus.hidden = !nearbyCount;
+      elements.mapContextStatus.textContent = `+${nearbyCount.toLocaleString('th-TH')} รอบข้าง`;
+    }
     elements.opexReportBtn.hidden = !isAdmin();
     elements.mapEmptyState.hidden = sites.length > 0 || !state.loaded;
   }
@@ -751,14 +797,14 @@
             </summary>
             <div class="facility-popup-info">${popupRows(locationRows)}</div>
           </details>
-          <details class="facility-popup-group" open>
+          <details class="facility-popup-group">
             <summary>
               <span class="facility-popup-group-icon" aria-hidden="true">◇</span>
               <span><strong>Network & Ownership</strong><small>${networkRows.filter(([, value]) => hasPopupValue(value)).length} items</small></span>
             </summary>
             <div class="facility-popup-info">${popupRows(networkRows)}</div>
           </details>
-          <details class="facility-popup-group is-wide" open>
+          <details class="facility-popup-group is-wide">
             <summary>
               <span class="facility-popup-group-icon" aria-hidden="true">▤</span>
               <span><strong>Operations</strong><small>${operationRows.filter(([, value]) => hasPopupValue(value)).length} items</small></span>
@@ -773,7 +819,7 @@
         <section class="facility-popup-section facility-popup-comments-section">
           <div class="facility-comment-heading">
             <span><strong>Comments</strong><small>Site coordination log</small></span>
-            <button type="button" aria-label="Refresh comments">Refresh</button>
+            <button type="button" aria-expanded="false" aria-label="Show comments">Show</button>
           </div>
           <div class="facility-comments"><span class="facility-comment-empty">Loading comments…</span></div>
           <form class="facility-comment-form">
@@ -843,15 +889,25 @@
         comments.innerHTML = `<span class="facility-comment-empty">${escapeHtml(error.message)}</span>`;
       }
     };
-    popup.querySelector('.facility-comment-heading button').addEventListener('click', loadComments);
+    const commentsSection = popup.querySelector('.facility-popup-comments-section');
+    const commentsToggle = popup.querySelector('.facility-comment-heading button');
+    commentsToggle.addEventListener('click', () => {
+      const expanded = commentsSection.classList.toggle('is-open');
+      commentsToggle.setAttribute('aria-expanded', String(expanded));
+      commentsToggle.setAttribute('aria-label', expanded ? 'Hide comments' : 'Show comments');
+      commentsToggle.textContent = expanded ? 'Hide' : 'Show';
+      if (expanded) loadComments();
+    });
     const commentRefreshTimer = window.setInterval(() => {
       if (!popup.isConnected) {
         window.clearInterval(commentRefreshTimer);
         return;
       }
-      loadComments();
+      if (commentsSection.classList.contains('is-open')) loadComments();
     }, 5000);
-    window.addEventListener('focus', loadComments, { once: true });
+    window.addEventListener('focus', () => {
+      if (commentsSection.classList.contains('is-open')) loadComments();
+    }, { once: true });
     popup.querySelector('.facility-comment-form').addEventListener('submit', async event => {
       event.preventDefault();
       const input = event.currentTarget.elements.comment;
@@ -881,7 +937,6 @@
       actions.querySelector('[data-action="delete"]').addEventListener('click', () => deleteSite(site));
       popup.appendChild(actions);
     }
-    loadComments();
     return popup;
   }
 
@@ -1001,17 +1056,19 @@
     }
   }
 
-  function markerIcon(site) {
+  function markerIcon(site, highlighted = false) {
     const color = gradeColor(site.grade);
-    if (markerIconCache.has(color)) return markerIconCache.get(color);
+    const cacheKey = `${color}:${highlighted ? 'highlighted' : 'default'}`;
+    if (markerIconCache.has(cacheKey)) return markerIconCache.get(cacheKey);
+    const size = highlighted ? 24 : 18;
     const icon = L.divIcon({
       className: '',
-      html: `<span class="mod2-marker" style="width:18px;height:18px;background:${color}"></span>`,
-      iconSize: [18, 18],
-      iconAnchor: [9, 9],
-      popupAnchor: [0, -10]
+      html: `<span class="mod2-marker${highlighted ? ' is-search-match' : ''}" style="width:${size}px;height:${size}px;background:${color}"></span>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -(size / 2 + 2)]
     });
-    markerIconCache.set(color, icon);
+    markerIconCache.set(cacheKey, icon);
     return icon;
   }
 
@@ -1033,7 +1090,15 @@
       offset: [0, -8],
       opacity: .92
     });
-    layer.bindPopup(() => popupContent(site), { minWidth: 340, maxWidth: 520 });
+    layer.bindPopup(() => popupContent(site), {
+      minWidth: 300,
+      maxWidth: 430,
+      autoPan: true,
+      autoPanPaddingTopLeft: [24, 88],
+      autoPanPaddingBottomRight: [24, 24],
+      keepInView: true,
+      closeButton: true
+    });
     return layer;
   }
 
@@ -1049,9 +1114,12 @@
   function renderMapNow() {
     map.closePopup();
     siteLayer.clearLayers();
+    const renderSites = map.getZoom() >= 10 && !state.searchActive
+      ? state.mapSites.filter(site => map.getBounds().pad(.35).contains([site.latitude, site.longitude]))
+      : state.mapSites;
     if (state.density) {
-      const maxCustomers = Math.max(1, ...state.filtered.map(site => site.customers));
-      for (const site of state.filtered) {
+      const maxCustomers = Math.max(1, ...renderSites.map(site => site.customers));
+      for (const site of renderSites) {
         const ratio = Math.max(.15, site.customers / maxCustomers);
         const layer = L.circleMarker([site.latitude, site.longitude], {
           radius: 4 + Math.sqrt(ratio) * 10,
@@ -1066,13 +1134,14 @@
     }
 
     const groups = state.cluster && map.getZoom() < 13
-      ? clusterGroups(state.filtered)
-      : state.filtered.map(site => [site]);
+      ? clusterGroups(renderSites)
+      : renderSites.map(site => [site]);
+    const matchedIds = new Set(state.filtered.map(site => String(site.id)));
     for (const group of groups) {
       if (group.length === 1) {
         const site = group[0];
         const marker = L.marker([site.latitude, site.longitude], {
-          icon: markerIcon(site),
+          icon: markerIcon(site, state.searchActive && matchedIds.has(String(site.id))),
           title: `${site.siteCode}${site.siteName ? ` · ${site.siteName}` : ''}`,
           riseOnHover: true
         });
@@ -1081,7 +1150,7 @@
       }
       const latitude = group.reduce((sum, site) => sum + site.latitude, 0) / group.length;
       const longitude = group.reduce((sum, site) => sum + site.longitude, 0) / group.length;
-      const size = Math.min(42, 23 + Math.log2(group.length) * 3.5);
+      const size = Math.min(36, 21 + Math.log2(group.length) * 2.8);
       const icon = L.divIcon({
         className: '',
         html: `<span class="mod2-cluster" style="width:${size}px;height:${size}px">${group.length > 999 ? '999+' : group.length}</span>`,
@@ -1096,7 +1165,7 @@
 
   function renderLegend() {
     const counts = new Map();
-    for (const site of state.filtered) {
+    for (const site of state.mapSites) {
       if (site.grade) counts.set(site.grade, (counts.get(site.grade) || 0) + 1);
     }
     const sortedEntries = [...counts.entries()].sort((left, right) => right[1] - left[1]);
@@ -1144,19 +1213,37 @@
       mapAutoFocusFrame = 0;
       if (state.filtered.length === 1) {
         const [site] = state.filtered;
-        map.flyTo([site.latitude, site.longitude], 15, { duration: .35 });
+        map.flyTo([site.latitude, site.longitude], 13, { duration: .35 });
       } else if (state.filtered.length > 1) {
         fitAll();
       }
     });
   }
 
-  function focusSite(site) {
-    map.flyTo([site.latitude, site.longitude], 15, { duration: .45 });
-    L.popup({ minWidth: 340, maxWidth: 520 })
-      .setLatLng([site.latitude, site.longitude])
-      .setContent(popupContent(site))
-      .openOn(map);
+  function focusSite(site, zoom = 15) {
+    let opened = false;
+    mapFocusInProgress = true;
+    const openSitePopup = () => {
+      if (opened) return;
+      opened = true;
+      mapFocusInProgress = false;
+      map.off('moveend', openSitePopup);
+      L.popup({
+        minWidth: 300,
+        maxWidth: 430,
+        autoPan: true,
+        autoPanPaddingTopLeft: [24, 88],
+        autoPanPaddingBottomRight: [24, 24],
+        keepInView: true,
+        closeButton: true
+      })
+        .setLatLng([site.latitude, site.longitude])
+        .setContent(popupContent(site))
+        .openOn(map);
+    };
+    map.once('moveend', openSitePopup);
+    map.flyTo([site.latitude, site.longitude], zoom, { duration: .45 });
+    window.setTimeout(openSitePopup, 700);
   }
 
   function siteFromNotification(notification) {
@@ -1379,7 +1466,7 @@
     window.clearTimeout(searchTimer);
     syncSiteSearch(event.currentTarget.value);
     applyFilters(false);
-    if (state.filtered.length === 1) focusSite(state.filtered[0]);
+    if (state.filtered.length === 1) focusSite(state.filtered[0], 13);
     else if (state.filtered.length > 1) fitAll();
   }
 
@@ -1462,6 +1549,14 @@
     }
   });
   document.addEventListener('keydown', event => {
+    const target = event.target;
+    const isEditing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+    if ((event.key === '/' || (event.key.toLocaleLowerCase() === 'k' && (event.ctrlKey || event.metaKey))) && !isEditing && elements.modalBackdrop.hidden) {
+      event.preventDefault();
+      elements.mapSiteSearch.focus();
+      elements.mapSiteSearch.select();
+      return;
+    }
     if (event.key === 'Escape' && elements.mapOutputToggle?.getAttribute('aria-expanded') === 'true') {
       setOutputMenuExpanded(false);
       elements.mapOutputToggle.focus();
@@ -1477,7 +1572,12 @@
     }
   });
   map.on('zoomend', () => {
+    if (mapFocusInProgress || map._popup?.isOpen?.()) return;
     if (state.cluster && !state.density) renderMap();
+  });
+  map.on('moveend', () => {
+    if (mapFocusInProgress || map._popup?.isOpen?.()) return;
+    if (map.getZoom() >= 10 && !state.searchActive) renderMap();
   });
 
   window.permissionOutAdminContext = {

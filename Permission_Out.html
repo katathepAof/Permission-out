@@ -1184,6 +1184,8 @@ table.report td.num{
 
 </style>
 <link rel="stylesheet" href="ux-refresh.css?v=20260730-multi-report-filter">
+<link rel="stylesheet" href="app-theme.css?v=20260807-theme-review">
+<script src="app-theme.js?v=20260807-theme-review"></script>
 </head>
 <body>
 
@@ -1207,6 +1209,7 @@ table.report td.num{
       <span class="dataset-health-chip is-ufm"><i aria-hidden="true"></i>UFM <strong id="ufmDatasetStatus">กำลังโหลด</strong></span>
     </div>
     <nav class="shellbar-actions" aria-label="บัญชีผู้ใช้">
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="เปลี่ยนธีม" aria-pressed="false"><span class="theme-toggle-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Dark</span></button>
       <button type="button" class="user-btn" id="accountBtn" aria-label="เปิดบัญชีผู้ใช้" title="บัญชีและการจัดการผู้ใช้">
         <span id="userInitial" class="user-avatar">G</span>
         <span class="user-copy"><strong id="accountLabel">เข้าสู่ระบบ</strong><small id="accountMeta">ยังไม่เข้าสู่ระบบ</small></span>
@@ -1464,7 +1467,7 @@ table.report td.num{
     <h3 id="kmlExportDialogTitle" style="margin:0 0 6px;color:var(--navy-700);">ตั้งค่าการ Export KML/KMZ</h3>
     <p style="margin:0 0 16px;font-size:.82rem;color:var(--ink-soft);">เลือกข้อมูลที่ต้องการแสดงใน Popup ของไฟล์ เมื่อคลิกเส้นทางใน Google Earth</p>
     <div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:.8rem;color:var(--ink-soft);">
-      <label style="width:100%;font-weight:700;color:var(--ink);"><input type="checkbox" id="kmlProvinceFolders" checked> จัดจังหวัดเป็น Folder ชั้นแรก</label>
+      <label style="width:100%;font-weight:700;color:var(--ink);"><input type="checkbox" id="kmlProvinceFolders" checked disabled> จัด Folder ตามสายสังกัด กฟฉ.2 → กฟจ./กฟอ. → กฟส. → กฟย.</label>
       <span style="width:100%;font-weight:700;color:var(--ink);margin-top:4px;">ชุดข้อมูลที่ใส่ในไฟล์ Export</span>
       <label><input type="checkbox" name="kmlExportDataset" value="rd03" checked> rd03</label>
       <label><input type="checkbox" name="kmlExportDataset" value="maxi" checked> Maxi</label>
@@ -1623,6 +1626,7 @@ table.report td.num{
 
 <script src="vendor/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
+<script src="pea-hierarchy.js?v=20260801-kml-folder-tree"></script>
 <script>
 /* ===================== Fast geometry helpers (no external geo library) ===================== */
 
@@ -1796,7 +1800,12 @@ function parallelDiffDeg(a, b) {
 
 /* ===================== KML parsing ===================== */
 
-let map, layerGroup;
+let map, layerGroup, baseTileLayer;
+const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+window.addEventListener('permission-theme-change', event => {
+  if (baseTileLayer) baseTileLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
+});
 let state = { totalA: 0, totalB: 0, nonOverlapB: 0, newLen: 0, removeLen: 0, segmentsB: [], mapSourceLines: [], removedA: 0, removedB: 0 };
 let analysisRunRevision = 0;
 let exportSelectionRevision = 0;
@@ -2494,8 +2503,8 @@ let mapResizeBound = false;
 function initMap() {
   if (map) { map.remove(); }
   map = L.map('map', { zoomControl: true, attributionControl: true, preferCanvas: true }).setView([13.7563, 100.5018], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+  baseTileLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
+    subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 20
   }).addTo(map);
   layerGroup = L.layerGroup().addTo(map);
   aggregateRenderer = L.canvas({ padding: 0.35 });
@@ -3754,6 +3763,15 @@ function kmlPeaAreaFolderName(segment) {
   return String(area?.name || area?.id || '').trim() || 'ไม่พบเขตการไฟฟ้า';
 }
 
+function kmlPeaHierarchy(segment) {
+  const area = kmlPrimaryPeaArea(segment);
+  if (typeof window.permissionOutPeaHierarchyForArea === 'function') {
+    return window.permissionOutPeaHierarchyForArea(area || { name: kmlPeaAreaFolderName(segment) });
+  }
+  const name = kmlPeaAreaFolderName(segment);
+  return { key: `other>${name}`, path: ['Other PEA areas', name], confirmed: false };
+}
+
 function activeBillingFormula() {
   return window.permissionOutBillingFormula || { code: 'permission_fee', version: 1, source: 'local-fallback' };
 }
@@ -4667,7 +4685,8 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
     ['poles', 'จำนวนเสา', `${billing.poles} ต้น`],
     ['cost', 'ค่าบริการ', `${Number(billing.cost).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`],
     ['pea', 'เขตการไฟฟ้าหลัก', kmlPeaAreaFolderName(seg)],
-    ['pea', 'เขตการไฟฟ้าที่เส้นทางผ่าน', peaAreaExportValue(seg, 'name') || '-']
+    ['pea', 'เขตการไฟฟ้าที่เส้นทางผ่าน', peaAreaExportValue(seg, 'name') || '-'],
+    ['pea', 'สายสังกัด PEA', kmlPeaHierarchy(seg).path.join(' → ')]
   ].filter(([key]) => selected.has(key));
   if (!rows.length) return '';
   const title = placemarkDisplayText(seg) || placemarkName(seg) || exportMeta.folderName;
@@ -4705,19 +4724,20 @@ function kmlProvinceMismatch(segment) {
   const geometryProvinces = getSegProvinces(segment).map(normalizeKmlProvinceName).filter(Boolean);
   return Boolean(sourceProvince && geometryProvinces.length && !geometryProvinces.includes(sourceProvince));
 }
-function renderKmlLayerPlacemarks(layer, province = null, peaArea = null) {
+function renderKmlLayerPlacemarks(layer, province = null, peaArea = null, hierarchyKey = null) {
   return layer.placemarks
     .filter(item =>
       (province === null || item.province === province) &&
-      (peaArea === null || item.peaArea === peaArea)
+      (peaArea === null || item.peaArea === peaArea) &&
+      (hierarchyKey === null || item.hierarchyKey === hierarchyKey)
     )
     .map(item => item.kml)
     .join('');
 }
-function renderKmlSourceContent(source, province = null, peaArea = null) {
+function renderKmlSourceContent(source, province = null, peaArea = null, hierarchyKey = null) {
   return Array.from(source.categories.values()).map(category => {
     const categoryContent = Array.from(category.layers.values()).map(layer => {
-      const layerContent = renderKmlLayerPlacemarks(layer, province, peaArea);
+      const layerContent = renderKmlLayerPlacemarks(layer, province, peaArea, hierarchyKey);
       if (!layerContent) return '';
       return layer.name === category.name
         ? layerContent
@@ -4729,6 +4749,36 @@ function renderKmlSourceContent(source, province = null, peaArea = null) {
       : `<Folder><name>${xmlEscape(category.name)}</name><open>1</open><visibility>1</visibility>${categoryContent}</Folder>`;
   }).join('');
 }
+function renderKmlPeaHierarchyFolders(sources) {
+  const root = { name: '', children: new Map(), hierarchyKey: null };
+  sources.forEach(source => source.categories.forEach(category => category.layers.forEach(layer =>
+    layer.placemarks.forEach(item => {
+      let node = root;
+      item.hierarchyPath.forEach(name => {
+        if (!node.children.has(name)) node.children.set(name, { name, children: new Map(), hierarchyKey: null });
+        node = node.children.get(name);
+      });
+      node.hierarchyKey = item.hierarchyKey;
+    })
+  )));
+  const renderNode = node => {
+    const childContent = Array.from(node.children.values())
+      .sort((left, right) => left.name.localeCompare(right.name, 'th'))
+      .map(renderNode)
+      .join('');
+    const sourceContent = node.hierarchyKey === null ? '' : sources
+      .map(source => {
+        const content = renderKmlSourceContent(source, null, null, node.hierarchyKey);
+        return content ? `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${content}</Folder>` : '';
+      })
+      .join('');
+    return node.name
+      ? `<Folder><name>${xmlEscape(node.name)}</name><open>1</open><visibility>1</visibility>${childContent}${sourceContent}</Folder>`
+      : `${childContent}${sourceContent}`;
+  };
+  return renderNode(root);
+}
+
 function renderKmlSourceFolder(source, province = null) {
   const peaAreas = new Set();
   source.categories.forEach(category => category.layers.forEach(layer =>
@@ -4801,6 +4851,7 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
     const billing = billingRows[index];
     const exportMeta = exportMetaRows[index];
     const kmlReference = exportMeta.reference;
+    const peaHierarchy = kmlPeaHierarchy(seg);
     const coordinates = seg.coords.map(c => `${c[0]},${c[1]},0`).join(' ');
     const popupDescription = kmlPopupDescription(seg, status, overlap, billing, exportMeta);
     const placemark = `<Placemark><name>${xmlEscape(placemarkDisplayText(seg) || `ช่วงเส้นทาง ${index + 1}`)}</name><styleUrl>#${exportMeta.styleId}</styleUrl>${popupDescription}<ExtendedData>` +
@@ -4819,6 +4870,8 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="primary_pea_area_name"><value>${xmlEscape(kmlPeaAreaFolderName(seg))}</value></Data>` +
       `<Data name="pea_office_types"><value>${xmlEscape(peaAreaExportValue(seg, 'officeType'))}</value></Data>` +
       `<Data name="pea_assignment_method"><value>${xmlEscape(peaAreaExportValue(seg, 'assignmentMethod'))}</value></Data>` +
+      `<Data name="pea_hierarchy"><value>${xmlEscape(peaHierarchy.path.join(' → '))}</value></Data>` +
+      `<Data name="pea_hierarchy_confirmed"><value>${peaHierarchy.confirmed ? 'true' : 'false'}</value></Data>` +
       `<Data name="status"><value>${xmlEscape(status.th)}</value></Data>` +
       `<Data name="relationship"><value>${xmlEscape(overlap.th)}</value></Data>` +
       `<Data name="overlap_group"><value>${xmlEscape(overlapGroups.get(seg) || '')}</value></Data>` +
@@ -4847,35 +4900,13 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
     sourceEntries.get(exportMeta.topId)?.categories.get(exportMeta.categoryId)?.layers.get(exportMeta.styleId)?.placemarks.push({
       province: kmlProvinceFolderName(seg),
       peaArea: kmlPeaAreaFolderName(seg),
+      hierarchyKey: peaHierarchy.key,
+      hierarchyPath: peaHierarchy.path,
       kml: placemark
     });
   });
   const sources = Array.from(sourceEntries.values());
-  const placemarks = document.getElementById('kmlProvinceFolders')?.checked
-    ? sources.map(source => {
-        const provinces = new Set();
-        source.categories.forEach(category => category.layers.forEach(layer =>
-          layer.placemarks.forEach(item => provinces.add(item.province))
-        ));
-        const provinceFolders = Array.from(provinces)
-          .sort((left, right) => left.localeCompare(right, 'th'))
-          .map(province => {
-            const peaAreas = new Set();
-            source.categories.forEach(category => category.layers.forEach(layer =>
-              layer.placemarks
-                .filter(item => item.province === province)
-                .forEach(item => peaAreas.add(item.peaArea))
-            ));
-            const areaFolders = Array.from(peaAreas)
-              .sort((left, right) => left.localeCompare(right, 'th'))
-              .map(peaArea => `<Folder><name>${xmlEscape(peaArea)}</name><open>1</open><visibility>1</visibility>${renderKmlSourceContent(source, province, peaArea)}</Folder>`)
-              .join('');
-            return `<Folder><name>${xmlEscape(province)}</name><open>1</open><visibility>1</visibility>${areaFolders}</Folder>`;
-          })
-          .join('');
-        return `<Folder><name>${xmlEscape(source.name)}</name><open>1</open><visibility>1</visibility>${provinceFolders}</Folder>`;
-      }).join('')
-    : sources.map(source => renderKmlSourceFolder(source)).join('');
+  const placemarks = renderKmlPeaHierarchyFolders(sources);
   const summary = `จังหวัด: ${provinceLabel} | จำนวนช่วง: ${segments.length} | ก่อนส่วนเพิ่ม: ${subtotal.toFixed(2)} บาท | ส่วนเพิ่ม ${surchargePct}%: ${surcharge.toFixed(2)} บาท | รวม: ${total.toFixed(2)} บาท`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>เส้นทางที่เลือก</name><description>${xmlEscape(summary)}</description><ExtendedData>` +
     `<Data name="segment_count"><value>${segments.length}</value></Data>` +

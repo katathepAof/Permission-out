@@ -2,10 +2,11 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260730160000_osm_reference_data.sql', 'supabase/migrations/20260730180000_managed_reference_datasets.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-osm-reference.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'pea-hierarchy.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260730160000_osm_reference_data.sql', 'supabase/migrations/20260730180000_managed_reference_datasets.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-osm-reference.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 const production = await readFile(resolve(root, 'production.js'), 'utf8');
+const peaHierarchy = await readFile(resolve(root, 'pea-hierarchy.js'), 'utf8');
 const adminUsers = await readFile(resolve(root, 'admin-users.js'), 'utf8');
 const adminData = await readFile(resolve(root, 'admin-data.js'), 'utf8');
 const uxRefresh = await readFile(resolve(root, 'ux-refresh.js'), 'utf8');
@@ -159,6 +160,9 @@ if (!html.includes('function kmlFolderReference(segment)') || !html.includes('//
 }
 if (!html.includes('function kmlExportMeta(segment)') || !html.includes('const exportMetaRows = segments.map(kmlExportMeta)') || !html.includes("compression: 'STORE'") || !html.includes('compressionOptions: { level: 3 }')) {
   throw new Error('KML/KMZ export must precompute per-line metadata and use fast KMZ compression mode');
+}
+if (!html.includes('pea-hierarchy.js?v=20260801-kml-folder-tree') || !html.includes('function kmlPeaHierarchy(segment)') || !html.includes('function renderKmlPeaHierarchyFolders(sources)') || !html.includes('const placemarks = renderKmlPeaHierarchyFolders(sources)') || !html.includes('<Data name="pea_hierarchy">') || !peaHierarchy.includes("const ROOT = 'กฟฉ.2'") || !peaHierarchy.includes("window.permissionOutPeaHierarchyForArea = resolve")) {
+  throw new Error('KML/KMZ PEA hierarchy folders are missing');
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes('name="kmlPopupField"') || !html.includes('function kmlPopupDescription(') || !html.includes('selectedKmlPopupFields()')) {
