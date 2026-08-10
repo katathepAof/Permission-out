@@ -933,6 +933,19 @@
     const chunks = await Promise.all(paths.map(fetchPeaChunk));
     return chunks.flatMap(chunk => chunk.features || []).filter(feature => ids.has(String(feature.id || feature.properties?.pea_id)));
   };
+  window.permissionOutSelectedPeaFeatures = async () => {
+    if (!peaSelected.size || !peaManifest) return [];
+    const selectedIds = new Set(Array.from(peaSelected, String));
+    const paths = [...new Set(
+      peaManifest.items
+        .filter(item => selectedIds.has(String(item.id)))
+        .map(item => item.chunk)
+    )];
+    const chunks = await Promise.all(paths.map(fetchPeaChunk));
+    return chunks
+      .flatMap(chunk => chunk.features || [])
+      .filter(feature => selectedIds.has(String(feature.id || feature.properties?.pea_id)));
+  };
 
   async function updatePeaMap() {
     const version = ++peaRenderVersion;

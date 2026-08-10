@@ -3755,10 +3755,20 @@ async function ensurePeaAreasForExportMode(segments) {
 }
 
 async function peaFeaturesForExportMode(segments) {
-  if (!exportIncludesPeaDetails()) return [];
-  return typeof window.permissionOutPeaFeaturesForSegments === 'function'
-    ? await window.permissionOutPeaFeaturesForSegments(segments)
-    : [];
+  const [selectedFeatures, routeFeatures] = await Promise.all([
+    typeof window.permissionOutSelectedPeaFeatures === 'function'
+      ? window.permissionOutSelectedPeaFeatures()
+      : [],
+    exportIncludesPeaDetails() && typeof window.permissionOutPeaFeaturesForSegments === 'function'
+      ? window.permissionOutPeaFeaturesForSegments(segments)
+      : []
+  ]);
+  const uniqueFeatures = new Map();
+  [...selectedFeatures, ...routeFeatures].forEach(feature => {
+    const id = String(feature?.id || feature?.properties?.pea_id || '').trim();
+    if (id) uniqueFeatures.set(id, feature);
+  });
+  return [...uniqueFeatures.values()];
 }
 
 function peaAreaExportValue(segment, field) {
