@@ -166,6 +166,7 @@ if (!html.includes('pea-hierarchy.js?v=20260801-kml-folder-tree') || !html.inclu
 }
 if (!html.includes('geoJsonPolygonToKml') || !html.includes('<Folder><name>PEA Areas</name>')) throw new Error('KML/KMZ PEA polygon export is missing');
 if (!html.includes('window.permissionOutSelectedPeaFeatures') || !production.includes('window.permissionOutSelectedPeaFeatures')) throw new Error('KML/KMZ export must include PEA areas selected on the map card');
+if (!production.includes("map.createPane('peaAreaPane')") || !production.includes("pane: 'peaAreaPane'")) throw new Error('PEA polygons must render below clickable MOD 1 routes');
 if (!html.includes('name="kmlPopupField"') || !html.includes('function kmlPopupDescription(') || !html.includes('selectedKmlPopupFields()')) {
   throw new Error('KML/KMZ selectable Popup fields are missing');
 }

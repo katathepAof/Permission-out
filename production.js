@@ -956,6 +956,11 @@
       return;
     }
     if (!map) initMap();
+    let peaPane = map.getPane('peaAreaPane');
+    if (!peaPane) peaPane = map.createPane('peaAreaPane');
+    // Keep PEA polygons below route vectors so selecting an area never blocks
+    // clicks and tooltips on the routes currently shown on the map.
+    peaPane.style.zIndex = '390';
     const selectedItems = peaManifest.items.filter(item => peaSelected.has(item.id));
     const chunkPaths = [...new Set(selectedItems.map(item => item.chunk))];
     updatePeaSummary(`กำลังโหลด ${peaSelected.size.toLocaleString('th-TH')} พื้นที่…`);
@@ -965,6 +970,7 @@
       const features = chunks.flatMap(chunk => chunk.features || []).filter(feature => peaSelected.has(feature.id || feature.properties?.pea_id));
       clearPeaOverlay();
       peaOverlayLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
+        pane: 'peaAreaPane',
         style: { color: '#6d4bb4', fillColor: '#8b5cf6', fillOpacity: 0.13, opacity: 0.9, weight: 1.7 },
         onEachFeature(feature, layer) {
           const name = escapeHtml(feature.properties?.name || 'พื้นที่ PEA');
