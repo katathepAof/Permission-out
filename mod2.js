@@ -432,11 +432,57 @@
 
   function datasetMatchesArea(item, type, area) {
     const name = normalizedDatasetName(item);
+    if (type === 'rd03') {
+      const regionalCounts = new Map();
+      state.sites.filter(site => site.area === area).forEach(site => {
+        const regional = String(site.regional || '').trim().toUpperCase();
+        if (regional) regionalCounts.set(regional, (regionalCounts.get(regional) || 0) + 1);
+      });
+      const regional = [...regionalCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '';
+      const regionCode = /NORTH\s*EAST|NORTHEAST/.test(regional) ? 'NE'
+        : /NORTH/.test(regional) ? 'N'
+          : /SOUTH/.test(regional) ? 'S' : 'C';
+      const isRd03 = /RD[\s_-]*0?3/.test(name) || String(item?.group || '').trim().toLowerCase() === 'rd03';
+      return isRd03 && new RegExp(`RD[\\s_-]*0?3[\\s_-]*${regionCode}[1-3](?:[^A-Z0-9]|$)`).test(name);
+    }
     const escapedArea = String(area).trim().toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (!escapedArea) return false;
     const hasAreaToken = new RegExp(`(?:^|[^A-Z0-9])${escapedArea}(?:[^A-Z0-9]|$)`).test(name);
-    const hasDatasetType = type === 'maxi' ? /MAXI(?:FIBER)?/.test(name) : /RD[\s_-]*0?3/.test(name);
+    const hasDatasetType = /MAXI(?:FIBER)?/.test(name);
     return hasAreaToken && hasDatasetType;
+  }
+
+  function routeAreaBounds(area) {
+    const sites = state.sites.filter(site => site.area === area);
+    if (!sites.length) return null;
+    const bounds = L.latLngBounds(sites.map(site => [site.latitude, site.longitude]));
+    const latitudePadding = Math.max(.06, (bounds.getNorth() - bounds.getSouth()) * .12);
+    const longitudePadding = Math.max(.06, (bounds.getEast() - bounds.getWest()) * .12);
+    return {
+      minLat: bounds.getSouth() - latitudePadding,
+      maxLat: bounds.getNorth() + latitudePadding,
+      minLng: bounds.getWest() - longitudePadding,
+      maxLng: bounds.getEast() + longitudePadding
+    };
+  }
+
+  function routeIntersectsArea(line, bounds) {
+    if (!bounds || !Array.isArray(line?.c) || !line.c.length) return false;
+    let minLng = Infinity;
+    let minLat = Infinity;
+    let maxLng = -Infinity;
+    let maxLat = -Infinity;
+    for (const point of line.c) {
+      const lng = Number(point?.[0]);
+      const lat = Number(point?.[1]);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+      minLng = Math.min(minLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLng = Math.max(maxLng, lng);
+      maxLat = Math.max(maxLat, lat);
+    }
+    return minLng <= bounds.maxLng && maxLng >= bounds.minLng
+      && minLat <= bounds.maxLat && maxLat >= bounds.minLat;
   }
 
   async function mod1Catalog(source) {
@@ -545,14 +591,20 @@
     const catalog = await mod1Catalog(source);
     if (requestId !== state.routeRequest) return { datasets: 0, lines: 0 };
     const datasets = catalog.filter(item => datasetMatchesArea(item, type, area));
+    const areaBounds = type === 'rd03' ? routeAreaBounds(area) : null;
     let lineCount = 0;
+    let matchedDatasets = 0;
     for (const dataset of datasets) {
-      const lines = await mod1DatasetLines(dataset);
+      const sourceLines = await mod1DatasetLines(dataset);
       if (requestId !== state.routeRequest) return { datasets: 0, lines: 0 };
+      const lines = type === 'rd03'
+        ? sourceLines.filter(line => routeIntersectsArea(line, areaBounds))
+        : sourceLines;
+      if (lines.length) matchedDatasets += 1;
       lines.forEach(line => renderMod1Route(type, dataset, line));
       lineCount += lines.length;
     }
-    return { datasets: datasets.length, lines: lineCount };
+    return { datasets: matchedDatasets, lines: lineCount };
   }
 
   async function syncMod1RouteLayers() {
