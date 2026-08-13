@@ -146,6 +146,8 @@
   const THAILAND_BOUNDS = L.latLngBounds([5.4, 97.2], [20.7, 105.7]);
 
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
+  map.createPane('mod1RoutePane');
+  map.getPane('mod1RoutePane').style.zIndex = '390';
   const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
   const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -186,6 +188,7 @@
   const markerIconCache = new Map();
   const mapCard = document.querySelector('.map-card');
   const mapRenderer = L.canvas({ padding: .35 });
+  const mod1RouteRenderer = L.canvas({ pane: 'mod1RoutePane', padding: .25, tolerance: 5 });
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -652,14 +655,18 @@
       color,
       weight: type === 'maxi' ? 3.2 : 2.7,
       opacity: .86,
-      interactive: true
+      interactive: true,
+      pane: 'mod1RoutePane',
+      renderer: mod1RouteRenderer
     });
-    route.bindTooltip(`${type === 'maxi' ? 'Maxi' : 'RD03'} · ${line.n || dataset.name}`, { sticky: true, direction: 'top' });
-    route.bindPopup(mod1RoutePopup(type, dataset, line, category, color), {
-      minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
+    route.on('click', event => {
+      if (!route.getPopup()) {
+        route.bindPopup(mod1RoutePopup(type, dataset, line, category, color), {
+          minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
+        });
+      }
+      route.openPopup(event.latlng);
     });
-    route.on('mouseover', () => route.setStyle({ weight: type === 'maxi' ? 5.2 : 4.7, opacity: 1 }));
-    route.on('mouseout', () => route.setStyle({ weight: type === 'maxi' ? 3.2 : 2.7, opacity: .86 }));
     route.addTo(mod1RouteLayers[type]);
   }
 
@@ -692,7 +699,10 @@
       elements.showRd03Routes?.checked ? 'rd03' : ''
     ].filter(Boolean);
     const requestId = ++state.routeRequest;
-    Object.values(mod1RouteLayers).forEach(layer => layer.clearLayers());
+    Object.values(mod1RouteLayers).forEach(layer => {
+      if (map.hasLayer(layer)) map.removeLayer(layer);
+      layer.clearLayers();
+    });
     elements.mod1RouteFilters.disabled = !areas.length;
     if (!areas.length) {
       elements.showMaxiRoutes.checked = false;
@@ -721,7 +731,10 @@
       elements.mod1RouteStatus.textContent = `โหลดเส้นทางไม่สำเร็จ: ${error.message}`;
       toast(`โหลดข้อมูล MOD 1 ไม่สำเร็จ: ${error.message}`, 'error');
     } finally {
-      if (requestId === state.routeRequest) elements.mod1RouteFilters.disabled = false;
+      if (requestId === state.routeRequest) {
+        enabledTypes.forEach(type => mod1RouteLayers[type].addTo(map));
+        elements.mod1RouteFilters.disabled = false;
+      }
     }
   }
 
@@ -1906,6 +1919,7 @@
     select.addEventListener('change', () => {
       populateFilters();
       applyFilters(true);
+      if (select === filterElements.area && selectedValues(filterElements.area).size) setViewMode('sites', false);
       syncMod1RouteLayers();
     });
   }
