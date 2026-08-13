@@ -147,7 +147,7 @@
 
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
   map.createPane('mod1RoutePane');
-  map.getPane('mod1RoutePane').style.zIndex = '390';
+  map.getPane('mod1RoutePane').style.zIndex = '450';
   const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
   const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -188,7 +188,7 @@
   const markerIconCache = new Map();
   const mapCard = document.querySelector('.map-card');
   const mapRenderer = L.canvas({ padding: .35 });
-  const mod1RouteRenderer = L.canvas({ pane: 'mod1RoutePane', padding: .25, tolerance: 5 });
+  const mod1RouteRenderer = L.canvas({ pane: 'mod1RoutePane', padding: .25, tolerance: 10 });
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -664,16 +664,18 @@
       weight: type === 'maxi' ? 3.2 : 2.7,
       opacity: .86,
       interactive: true,
+      bubblingMouseEvents: false,
       pane: 'mod1RoutePane',
       renderer: mod1RouteRenderer
     });
     route.on('click', event => {
-      if (!route.getPopup()) {
-        route.bindPopup(mod1RoutePopup(type, dataset, line, category, color), {
+      L.DomEvent.stopPropagation(event.originalEvent);
+      L.popup({
           minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
-        });
-      }
-      route.openPopup(event.latlng);
+        })
+        .setLatLng(event.latlng)
+        .setContent(mod1RoutePopup(type, dataset, line, category, color))
+        .openOn(map);
     });
     route.addTo(mod1RouteLayers[type]);
   }
