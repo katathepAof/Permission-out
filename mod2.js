@@ -609,7 +609,7 @@
       ['เจ้าของ', routeProperty(properties, ['owner'])],
       ['การไฟฟ้า', routeProperty(properties, ['pea'])],
       ['จังหวัด', routeProperty(properties, ['province'])],
-      ['UIH Area', filterElements.area.value],
+      ['UIH Area', [...selectedValues(filterElements.area)].join(', ')],
       ['ไฟล์ต้นทาง', sourceFile],
       ['Dataset', dataset.name]
     ];
@@ -681,36 +681,37 @@
   }
 
   async function syncMod1RouteLayers() {
-    const area = filterElements.area.value.trim();
+    const areas = [...selectedValues(filterElements.area)];
+    const areaLabel = areas.join(', ');
     const enabledTypes = [
       elements.showMaxiRoutes?.checked ? 'maxi' : '',
       elements.showRd03Routes?.checked ? 'rd03' : ''
     ].filter(Boolean);
     const requestId = ++state.routeRequest;
     Object.values(mod1RouteLayers).forEach(layer => layer.clearLayers());
-    elements.mod1RouteFilters.disabled = !area;
-    if (!area) {
+    elements.mod1RouteFilters.disabled = !areas.length;
+    if (!areas.length) {
       elements.showMaxiRoutes.checked = false;
       elements.showRd03Routes.checked = false;
       elements.mod1RouteStatus.textContent = 'เลือก UIH Area ก่อนเพื่อแสดงเส้นทาง';
       state.routeArea = '';
       return;
     }
-    state.routeArea = area;
+    state.routeArea = areaLabel;
     if (!enabledTypes.length) {
-      elements.mod1RouteStatus.textContent = `เลือก Maxi หรือ RD03 สำหรับพื้นที่ ${area}`;
+      elements.mod1RouteStatus.textContent = `เลือก Maxi หรือ RD03 สำหรับพื้นที่ ${areaLabel}`;
       return;
     }
     elements.mod1RouteFilters.disabled = true;
-    elements.mod1RouteStatus.textContent = `กำลังโหลดเส้นทาง ${enabledTypes.map(type => type === 'maxi' ? 'Maxi' : 'RD03').join(' + ')} · ${area}…`;
+    elements.mod1RouteStatus.textContent = `กำลังโหลดเส้นทาง ${enabledTypes.map(type => type === 'maxi' ? 'Maxi' : 'RD03').join(' + ')} · ${areas.length} Area…`;
     try {
-      const results = await Promise.all(enabledTypes.map(type => loadMod1RouteType(type, area, requestId)));
+      const results = await Promise.all(areas.flatMap(area => enabledTypes.map(type => loadMod1RouteType(type, area, requestId))));
       if (requestId !== state.routeRequest) return;
       const datasetCount = results.reduce((sum, result) => sum + result.datasets, 0);
       const lineCount = results.reduce((sum, result) => sum + result.lines, 0);
       elements.mod1RouteStatus.textContent = datasetCount
-        ? `แสดง ${lineCount.toLocaleString('th-TH')} เส้น จาก ${datasetCount.toLocaleString('th-TH')} ชุดข้อมูล · ${area}`
-        : `ไม่พบชุดข้อมูล Maxi/RD03 ที่ตรงกับ ${area}`;
+        ? `แสดง ${lineCount.toLocaleString('th-TH')} เส้น จาก ${datasetCount.toLocaleString('th-TH')} ชุดข้อมูล · ${areas.length} Area`
+        : `ไม่พบชุดข้อมูล Maxi/RD03 ที่ตรงกับ ${areaLabel}`;
     } catch (error) {
       if (requestId !== state.routeRequest) return;
       elements.mod1RouteStatus.textContent = `โหลดเส้นทางไม่สำเร็จ: ${error.message}`;
@@ -802,36 +803,37 @@
   }
 
   function selectedValues(select) {
-    return new Set(select.value ? [select.value] : []);
+    return new Set([...select.selectedOptions].map(option => option.value).filter(Boolean));
   }
 
   function populateFilters() {
     const upstreamSelections = {};
     for (const key of FILTER_CASCADE_ORDER) {
       const select = filterElements[key];
-      const selectedValue = select.value || '';
+      const selected = selectedValues(select);
       const candidateSites = state.sites.filter(site =>
-        Object.entries(upstreamSelections).every(([upstreamKey, value]) =>
-          !value || site[upstreamKey] === value
+        Object.entries(upstreamSelections).every(([upstreamKey, values]) =>
+          !values.size || values.has(site[upstreamKey])
         )
       );
       const availableValues = uniqueValues(key, candidateSites);
-      const nextValue = availableValues.includes(selectedValue) ? selectedValue : '';
+      const nextValues = new Set([...selected].filter(value => availableValues.includes(value)));
       const fragment = document.createDocumentFragment();
-      const allOption = document.createElement('option');
-      allOption.value = '';
-      allOption.textContent = 'ทั้งหมด';
-      fragment.appendChild(allOption);
+      if (!select.multiple) {
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = 'ทั้งหมด';
+        fragment.appendChild(allOption);
+      }
       for (const value of availableValues) {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
-        option.selected = value === nextValue;
+        option.selected = nextValues.has(value);
         fragment.appendChild(option);
       }
       select.replaceChildren(fragment);
-      select.value = nextValue;
-      upstreamSelections[key] = nextValue;
+      upstreamSelections[key] = nextValues;
     }
   }
 
@@ -925,7 +927,10 @@
   function resetAllFilters({ focusSearch = false, autoFit = true } = {}) {
     window.clearTimeout(searchTimer);
     syncSiteSearch('');
-    for (const select of Object.values(filterElements)) select.value = '';
+    for (const select of Object.values(filterElements)) {
+      [...select.options].forEach(option => { option.selected = false; });
+      if (!select.multiple) select.value = '';
+    }
     populateFilters();
     applyFilters(autoFit);
     syncMod1RouteLayers();
@@ -954,7 +959,8 @@
     elements.overviewSiteCount.textContent = sites.length.toLocaleString('th-TH');
     elements.overviewProvinceCount.textContent = new Set(sites.map(site => site.province).filter(Boolean)).size.toLocaleString('th-TH');
     elements.overviewCustomerCount.textContent = sites.reduce((sum, site) => sum + site.customers, 0).toLocaleString('th-TH');
-    const activeArea = filterElements.province.value || filterElements.area.value || filterElements.regional.value;
+    const selectedAreas = [...selectedValues(filterElements.area)];
+    const activeArea = filterElements.province.value || (selectedAreas.length ? selectedAreas.join(', ') : '') || filterElements.regional.value;
     elements.overviewScopeLabel.textContent = activeArea ? `ขอบเขต: ${activeArea}` : 'ภาพรวม Site ทั่วประเทศไทย';
   }
 
@@ -1871,6 +1877,14 @@
       syncMod1RouteLayers();
     });
   }
+
+  filterElements.area.addEventListener('mousedown', event => {
+    const option = event.target.closest('option');
+    if (!option || option.disabled) return;
+    event.preventDefault();
+    option.selected = !option.selected;
+    filterElements.area.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 
   elements.showMaxiRoutes?.addEventListener('change', syncMod1RouteLayers);
   elements.showRd03Routes?.addEventListener('change', syncMod1RouteLayers);
