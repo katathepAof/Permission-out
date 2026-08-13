@@ -129,6 +129,10 @@
   elements.showMaxiRoutes = document.getElementById('showMaxiRoutes');
   elements.showRd03Routes = document.getElementById('showRd03Routes');
   elements.mod1RouteStatus = document.getElementById('mod1RouteStatus');
+  elements.filterAreaToggle = document.getElementById('filterAreaToggle');
+  elements.filterAreaPanel = document.getElementById('filterAreaPanel');
+  elements.filterAreaOptions = document.getElementById('filterAreaOptions');
+  elements.clearAreaFilter = document.getElementById('clearAreaFilter');
 
   const filterElements = {
     regional: document.getElementById('filterRegional'),
@@ -806,6 +810,33 @@
     return new Set([...select.selectedOptions].map(option => option.value).filter(Boolean));
   }
 
+  function renderAreaDropdown() {
+    const selected = selectedValues(filterElements.area);
+    const options = [...filterElements.area.options];
+    elements.filterAreaToggle.textContent = selected.size === 0
+      ? 'ทั้งหมด'
+      : selected.size === 1 ? [...selected][0] : `เลือก ${selected.size.toLocaleString('th-TH')} Area`;
+    elements.filterAreaToggle.title = selected.size ? [...selected].join(', ') : 'ทั้งหมด';
+    const fragment = document.createDocumentFragment();
+    for (const option of options) {
+      const label = document.createElement('label');
+      label.className = 'filter-area-option';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = option.value;
+      checkbox.checked = option.selected;
+      checkbox.addEventListener('change', () => {
+        option.selected = checkbox.checked;
+        filterElements.area.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const text = document.createElement('span');
+      text.textContent = option.textContent;
+      label.append(checkbox, text);
+      fragment.appendChild(label);
+    }
+    elements.filterAreaOptions.replaceChildren(fragment);
+  }
+
   function populateFilters() {
     const upstreamSelections = {};
     for (const key of FILTER_CASCADE_ORDER) {
@@ -835,6 +866,7 @@
       select.replaceChildren(fragment);
       upstreamSelections[key] = nextValues;
     }
+    renderAreaDropdown();
   }
 
   function applyFilters(autoFit = false) {
@@ -1878,12 +1910,26 @@
     });
   }
 
-  filterElements.area.addEventListener('mousedown', event => {
-    const option = event.target.closest('option');
-    if (!option || option.disabled) return;
-    event.preventDefault();
-    option.selected = !option.selected;
+  function setAreaDropdownExpanded(expanded) {
+    elements.filterAreaPanel.hidden = !expanded;
+    elements.filterAreaToggle.setAttribute('aria-expanded', String(expanded));
+  }
+
+  elements.filterAreaToggle.addEventListener('click', () => {
+    setAreaDropdownExpanded(elements.filterAreaPanel.hidden);
+  });
+  elements.clearAreaFilter.addEventListener('click', () => {
+    [...filterElements.area.options].forEach(option => { option.selected = false; });
     filterElements.area.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.filter-area-dropdown')) setAreaDropdownExpanded(false);
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !elements.filterAreaPanel.hidden) {
+      setAreaDropdownExpanded(false);
+      elements.filterAreaToggle.focus();
+    }
   });
 
   elements.showMaxiRoutes?.addEventListener('change', syncMod1RouteLayers);
