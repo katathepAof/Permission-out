@@ -578,6 +578,19 @@
       const value = normalized.get(String(alias).replace(/[\s_-]+/g, '').toLowerCase());
       if (hasPopupValue(value)) return value;
     }
+    const description = String(properties?.description || properties?.Description || '');
+    if (description) {
+      const descriptionValues = new Map();
+      description.split(/\r?\n|<br\s*\/?\s*>/i).forEach(row => {
+        const match = row.match(/^\s*([^:：]+)\s*[:：]\s*(.*?)\s*$/);
+        if (!match || !match[2]) return;
+        descriptionValues.set(match[1].replace(/[\s_-]+/g, '').toLowerCase(), match[2].trim());
+      });
+      for (const alias of aliases) {
+        const value = descriptionValues.get(String(alias).replace(/[\s_-]+/g, '').toLowerCase());
+        if (hasPopupValue(value)) return value;
+      }
+    }
     return '';
   }
 
