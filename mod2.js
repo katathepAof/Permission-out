@@ -603,17 +603,15 @@
     const core = routeProperty(properties, ['core', 'core_count']);
     const cableType = routeProperty(properties, ['cable_type', 'type']);
     const cableDetail = routeProperty(properties, ['cable_detail', 'detail']);
-    const cableTypeLabel = [cableType, cableDetail].filter(Boolean).join(' · ');
-    const cableSizeLabel = [core ? `${core} Core` : '', diameter ? `${diameter} mm` : ''].filter(Boolean).join(' · ');
     const distanceLabel = routeLengthLabel(measured || calculated);
     const sourceFile = routeProperty(properties, ['source_file']) || dataset.name;
     const cableRows = [
       ['รหัสสาย', code],
-      ['ชนิดสาย', cableType],
+      ['Type', cableType],
       ['รายละเอียดสาย', cableDetail],
-      ['จำนวน Core', core],
+      ['Core', core],
       ['Diameter', diameter ? `${diameter} mm` : ''],
-      ['ระยะตามข้อมูล', routeLengthLabel(measured)],
+      ['Distance', routeLengthLabel(measured)],
       ['ระยะคำนวณ', routeLengthLabel(calculated)],
       ['Category', mod1RouteCategoryLabel(category)],
       ['Status', status],
@@ -637,10 +635,11 @@
           <p>${escapeHtml(sourceFile)}</p>
         </div>
       </header>
-      <div class="facility-popup-metrics" aria-label="ข้อมูลสายสำคัญ">
-        <div title="${escapeHtml(cableSizeLabel || 'ไม่มีข้อมูล')}"><span>ขนาดสาย</span><strong>${escapeHtml(cableSizeLabel || '—')}</strong></div>
-        <div title="${escapeHtml(cableTypeLabel || 'ไม่มีข้อมูล')}"><span>ชนิดสาย</span><strong>${escapeHtml(cableTypeLabel || '—')}</strong></div>
-        <div title="${escapeHtml(distanceLabel || 'ไม่มีข้อมูล')}"><span>ระยะทาง</span><strong>${escapeHtml(distanceLabel || '—')}</strong></div>
+      <div class="facility-popup-metrics mod1-route-metrics" aria-label="ข้อมูล Type Core Diameter และ Distance จาก KML/KMZ">
+        <div title="${escapeHtml(cableType || 'ไม่มีข้อมูลใน KML/KMZ')}"><span>Type</span><strong>${escapeHtml(cableType || '—')}</strong></div>
+        <div title="${escapeHtml(core || 'ไม่มีข้อมูลใน KML/KMZ')}"><span>Core</span><strong>${escapeHtml(core || '—')}</strong></div>
+        <div title="${escapeHtml(diameter ? `${diameter} mm` : 'ไม่มีข้อมูลใน KML/KMZ')}"><span>Diameter</span><strong>${escapeHtml(diameter ? `${diameter} mm` : '—')}</strong></div>
+        <div title="${escapeHtml(distanceLabel || 'ไม่มีข้อมูลใน KML/KMZ')}"><span>Distance</span><strong>${escapeHtml(distanceLabel || '—')}</strong></div>
       </div>
       <div class="facility-popup-content"><div class="facility-popup-grid">
         <details class="facility-popup-group is-wide" open>
