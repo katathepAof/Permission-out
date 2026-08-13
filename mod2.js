@@ -29,6 +29,8 @@
     cluster: true,
     density: false,
     notifications: [],
+    routeArea: '',
+    routeRequest: 0,
     commentLastSeenAt: localStorage.getItem(COMMENT_NOTIFICATIONS_KEY) || ''
   };
 
@@ -45,6 +47,18 @@
     'Trunk IP RAN': '#0e7490',
     'Trunk IP RAN+Access': '#0f766e',
     'Interconnect(Access)': '#9a5b13'
+  };
+  const MOD1_ROUTE_COLORS = {
+    maxi: {
+      network: '#20d6c7',
+      'ready-access': '#4f8cff',
+      customer: '#d95cff'
+    },
+    rd03: {
+      network: '#ff9f43',
+      'ready-access': '#f5d547',
+      customer: '#ff5576'
+    }
   };
   const MODULES = [
     { key: 'mod1', label: 'MOD 1', detail: 'PEA / UFM route intelligence' },
@@ -111,6 +125,10 @@
   elements.commentNotificationPanel = document.getElementById('commentNotificationPanel');
   elements.commentNotificationList = document.getElementById('commentNotificationList');
   elements.commentNotificationRefresh = document.getElementById('commentNotificationRefresh');
+  elements.mod1RouteFilters = document.getElementById('mod1RouteFilters');
+  elements.showMaxiRoutes = document.getElementById('showMaxiRoutes');
+  elements.showRd03Routes = document.getElementById('showRd03Routes');
+  elements.mod1RouteStatus = document.getElementById('mod1RouteStatus');
 
   const filterElements = {
     regional: document.getElementById('filterRegional'),
@@ -150,6 +168,12 @@
   });
   const siteLayer = L.layerGroup().addTo(map);
   const overviewHexLayer = L.layerGroup().addTo(map);
+  const mod1RouteLayers = {
+    maxi: L.layerGroup().addTo(map),
+    rd03: L.layerGroup().addTo(map)
+  };
+  const mod1CatalogCache = new Map();
+  const mod1DatasetCache = new Map();
   let searchTimer = 0;
   let notificationTimer = 0;
   let mapRenderFrame = 0;
@@ -370,17 +394,21 @@
     openModal('บัญชีผู้ใช้', state.user.email || '', content, true);
   }
 
-  async function authenticatedJson(path, options = {}) {
+  async function authenticatedFetch(path, options = {}) {
     const { data } = await client.auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error('กรุณาเข้าสู่ระบบใหม่');
     const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
     if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-    const response = await fetch(path, {
+    return fetch(path, {
       cache: 'no-store',
       ...options,
       headers
     });
+  }
+
+  async function authenticatedJson(path, options = {}) {
+    const response = await authenticatedFetch(path, options);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(payload.error?.message || `HTTP ${response.status}`);
@@ -388,6 +416,183 @@
       throw error;
     }
     return payload;
+  }
+
+  function mod1AssetUrl(prefix, path) {
+    const encodedPath = String(path || '').split('/').map(encodeURIComponent).join('/');
+    return `/api/data/assets/${prefix}/v1/${encodedPath}`;
+  }
+
+  function normalizedDatasetName(item) {
+    return String(item?.canonicalName || item?.name || '')
+      .replace(/\.(?:kml|kmz)$/i, '')
+      .normalize('NFKC')
+      .toUpperCase();
+  }
+
+  function datasetMatchesArea(item, type, area) {
+    const name = normalizedDatasetName(item);
+    const escapedArea = String(area).trim().toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!escapedArea) return false;
+    const hasAreaToken = new RegExp(`(?:^|[^A-Z0-9])${escapedArea}(?:[^A-Z0-9]|$)`).test(name);
+    const hasDatasetType = type === 'maxi' ? /MAXI(?:FIBER)?/.test(name) : /RD[\s_-]*0?3/.test(name);
+    return hasAreaToken && hasDatasetType;
+  }
+
+  async function mod1Catalog(source) {
+    if (!mod1CatalogCache.has(source)) {
+      const assetPrefix = source === 'ufm' ? 'ufm' : 'uih-20072026';
+      mod1CatalogCache.set(source, Promise.all([
+        authenticatedJson(`/api/data/catalog?source=${encodeURIComponent(source)}`).catch(() => ({ items: [] })),
+        authenticatedJson(mod1AssetUrl(assetPrefix, 'manifest.json')).catch(() => ({ items: [] }))
+      ])
+        .then(([managed, legacy]) => {
+          const managedItems = Array.isArray(managed.items) ? managed.items : [];
+          const managedNames = new Set(managedItems.map(normalizedDatasetName));
+          const legacyItems = (Array.isArray(legacy.items) ? legacy.items : [])
+            .filter(item => !managedNames.has(normalizedDatasetName(item)))
+            .map(item => ({ ...item, assetPrefix }));
+          return [...managedItems, ...legacyItems];
+        })
+        .catch(error => {
+          mod1CatalogCache.delete(source);
+          throw error;
+        }));
+    }
+    return mod1CatalogCache.get(source);
+  }
+
+  async function mod1DatasetLines(dataset) {
+    const cacheKey = dataset.managed
+      ? `${dataset.id}:v${dataset.versionNo || 0}`
+      : `${dataset.assetPrefix}:${dataset.analysisPath}`;
+    if (!mod1DatasetCache.has(cacheKey)) {
+      mod1DatasetCache.set(cacheKey, (async () => {
+        if (!dataset.managed) {
+          if (!dataset.analysisPath) return [];
+          const response = await authenticatedFetch(mod1AssetUrl(dataset.assetPrefix, dataset.analysisPath));
+          if (!response.ok) throw new Error(`${dataset.name}: HTTP ${response.status}`);
+          if (!response.body || typeof DecompressionStream === 'undefined') {
+            throw new Error('Browser does not support optimized KML/KMZ data');
+          }
+          const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+          const payload = await new Response(stream).json();
+          return Array.isArray(payload.lines) ? payload.lines : [];
+        }
+        const lines = [];
+        let offset = 0;
+        do {
+          const payload = await authenticatedJson(`/api/data/datasets/${encodeURIComponent(dataset.id)}/features?offset=${offset}&limit=500`);
+          lines.push(...(payload.lines || []));
+          offset = payload.nextOffset;
+        } while (offset !== null && offset !== undefined);
+        return lines;
+      })().catch(error => {
+        mod1DatasetCache.delete(cacheKey);
+        throw error;
+      }));
+    }
+    return mod1DatasetCache.get(cacheKey);
+  }
+
+  function mod1RouteCategory(line, dataset) {
+    const properties = line?.p && typeof line.p === 'object' ? line.p : {};
+    const categoryText = [
+      properties.import_category,
+      properties.importCategory,
+      properties.category,
+      properties.Category,
+      properties.status,
+      properties.Status,
+      ...Object.keys(properties),
+      ...Object.values(properties),
+      line?.n,
+      dataset?.name,
+      dataset?.canonicalName
+    ].filter(value => value !== null && value !== undefined).join(' ').normalize('NFKC');
+    if (/ready[\s_-]*access|พร้อม\s*(?:เชื่อมต่อ|ให้บริการ|ใช้งาน)/i.test(categoryText)) return 'ready-access';
+    if (/customer|subscriber|ลูกค้า|ผู้ใช้บริการ/i.test(categoryText)) return 'customer';
+    return 'network';
+  }
+
+  function mod1RouteCategoryLabel(category) {
+    return ({ network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' })[category] || 'Network';
+  }
+
+  function renderMod1Route(type, dataset, line) {
+    if (!Array.isArray(line.c) || line.c.length < 2) return;
+    const category = mod1RouteCategory(line, dataset);
+    const color = MOD1_ROUTE_COLORS[type]?.[category] || '#94a3b8';
+    const properties = line.p && typeof line.p === 'object' ? line.p : {};
+    const route = L.polyline(line.c.map(point => [Number(point[1]), Number(point[0])]), {
+      color,
+      weight: type === 'maxi' ? 3.2 : 2.7,
+      opacity: .86,
+      interactive: true
+    });
+    route.bindPopup(`
+      <div class="mod1-route-popup">
+        <strong>${escapeHtml(type === 'maxi' ? 'Maxi' : 'RD03')} · ${escapeHtml(line.n || dataset.name)}</strong>
+        <p>${escapeHtml(dataset.name)}</p>
+        <small>Category: ${escapeHtml(mod1RouteCategoryLabel(category))}</small>
+        ${properties.status || properties.Status ? `<small>Status: ${escapeHtml(properties.status || properties.Status)}</small>` : ''}
+      </div>`);
+    route.addTo(mod1RouteLayers[type]);
+  }
+
+  async function loadMod1RouteType(type, area, requestId) {
+    const source = type === 'maxi' ? 'ufm' : 'pea';
+    const catalog = await mod1Catalog(source);
+    if (requestId !== state.routeRequest) return { datasets: 0, lines: 0 };
+    const datasets = catalog.filter(item => datasetMatchesArea(item, type, area));
+    let lineCount = 0;
+    for (const dataset of datasets) {
+      const lines = await mod1DatasetLines(dataset);
+      if (requestId !== state.routeRequest) return { datasets: 0, lines: 0 };
+      lines.forEach(line => renderMod1Route(type, dataset, line));
+      lineCount += lines.length;
+    }
+    return { datasets: datasets.length, lines: lineCount };
+  }
+
+  async function syncMod1RouteLayers() {
+    const area = filterElements.area.value.trim();
+    const enabledTypes = [
+      elements.showMaxiRoutes?.checked ? 'maxi' : '',
+      elements.showRd03Routes?.checked ? 'rd03' : ''
+    ].filter(Boolean);
+    const requestId = ++state.routeRequest;
+    Object.values(mod1RouteLayers).forEach(layer => layer.clearLayers());
+    elements.mod1RouteFilters.disabled = !area;
+    if (!area) {
+      elements.showMaxiRoutes.checked = false;
+      elements.showRd03Routes.checked = false;
+      elements.mod1RouteStatus.textContent = 'เลือก UIH Area ก่อนเพื่อแสดงเส้นทาง';
+      state.routeArea = '';
+      return;
+    }
+    state.routeArea = area;
+    if (!enabledTypes.length) {
+      elements.mod1RouteStatus.textContent = `เลือก Maxi หรือ RD03 สำหรับพื้นที่ ${area}`;
+      return;
+    }
+    elements.mod1RouteFilters.disabled = true;
+    elements.mod1RouteStatus.textContent = `กำลังโหลดเส้นทาง ${enabledTypes.map(type => type === 'maxi' ? 'Maxi' : 'RD03').join(' + ')} · ${area}…`;
+    try {
+      const results = await Promise.all(enabledTypes.map(type => loadMod1RouteType(type, area, requestId)));
+      if (requestId !== state.routeRequest) return;
+      const datasetCount = results.reduce((sum, result) => sum + result.datasets, 0);
+      const lineCount = results.reduce((sum, result) => sum + result.lines, 0);
+      elements.mod1RouteStatus.textContent = datasetCount
+        ? `แสดง ${lineCount.toLocaleString('th-TH')} เส้น จาก ${datasetCount.toLocaleString('th-TH')} ชุดข้อมูล · ${area}`
+        : `ไม่พบชุดข้อมูล Maxi/RD03 ที่ตรงกับ ${area}`;
+    } catch (error) {
+      if (requestId !== state.routeRequest) return;
+      elements.mod1RouteStatus.textContent = `โหลดเส้นทางไม่สำเร็จ: ${error.message}`;
+      toast(`โหลดข้อมูล MOD 1 ไม่สำเร็จ: ${error.message}`, 'error');
+    } finally {
+      if (requestId === state.routeRequest) elements.mod1RouteFilters.disabled = false;
+    }
   }
 
   function featureToSite(feature) {
@@ -598,6 +803,7 @@
     for (const select of Object.values(filterElements)) select.value = '';
     populateFilters();
     applyFilters(autoFit);
+    syncMod1RouteLayers();
     if (focusSearch) elements.mapSiteSearch.focus();
   }
 
@@ -1519,6 +1725,7 @@
       state.notifications = [];
       window.clearInterval(notificationTimer);
       siteLayer.clearLayers();
+      Object.values(mod1RouteLayers).forEach(layer => layer.clearLayers());
       renderCommentNotifications();
       updateMetrics();
       setHealth('รอเข้าสู่ระบบ');
@@ -1536,8 +1743,12 @@
     select.addEventListener('change', () => {
       populateFilters();
       applyFilters(true);
+      syncMod1RouteLayers();
     });
   }
+
+  elements.showMaxiRoutes?.addEventListener('change', syncMod1RouteLayers);
+  elements.showRd03Routes?.addEventListener('change', syncMod1RouteLayers);
 
   function setOutputMenuExpanded(expanded) {
     const isExpanded = Boolean(expanded);
