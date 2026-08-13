@@ -600,15 +600,23 @@
     const measured = routeProperty(properties, ['measured', 'length']);
     const calculated = routeProperty(properties, ['calculated']);
     const diameter = routeProperty(properties, ['diameter_mm', 'diameter']);
+    const core = routeProperty(properties, ['core', 'core_count']);
+    const cableType = routeProperty(properties, ['cable_type', 'type']);
+    const cableDetail = routeProperty(properties, ['cable_detail', 'detail']);
+    const cableTypeLabel = [cableType, cableDetail].filter(Boolean).join(' · ');
+    const cableSizeLabel = [core ? `${core} Core` : '', diameter ? `${diameter} mm` : ''].filter(Boolean).join(' · ');
+    const distanceLabel = routeLengthLabel(measured || calculated);
     const sourceFile = routeProperty(properties, ['source_file']) || dataset.name;
     const cableRows = [
       ['รหัสสาย', code],
-      ['ประเภทสาย', routeProperty(properties, ['cable_type', 'type'])],
-      ['รายละเอียดสาย', routeProperty(properties, ['cable_detail', 'detail'])],
-      ['จำนวน Core', routeProperty(properties, ['core', 'core_count'])],
+      ['ชนิดสาย', cableType],
+      ['รายละเอียดสาย', cableDetail],
+      ['จำนวน Core', core],
       ['Diameter', diameter ? `${diameter} mm` : ''],
       ['ระยะตามข้อมูล', routeLengthLabel(measured)],
       ['ระยะคำนวณ', routeLengthLabel(calculated)],
+      ['Category', mod1RouteCategoryLabel(category)],
+      ['Status', status],
       ['จำนวนเสา', routeProperty(properties, ['pole_count'])],
       ['วันที่ติดตั้ง', routeProperty(properties, ['date_install', 'install_date'])]
     ];
@@ -630,9 +638,9 @@
         </div>
       </header>
       <div class="facility-popup-metrics" aria-label="ข้อมูลสายสำคัญ">
-        <div><span>Category</span><strong>${escapeHtml(mod1RouteCategoryLabel(category))}</strong></div>
-        <div><span>Status</span><strong>${escapeHtml(status || '—')}</strong></div>
-        <div><span>Length</span><strong>${escapeHtml(routeLengthLabel(measured || calculated) || '—')}</strong></div>
+        <div title="${escapeHtml(cableSizeLabel || 'ไม่มีข้อมูล')}"><span>ขนาดสาย</span><strong>${escapeHtml(cableSizeLabel || '—')}</strong></div>
+        <div title="${escapeHtml(cableTypeLabel || 'ไม่มีข้อมูล')}"><span>ชนิดสาย</span><strong>${escapeHtml(cableTypeLabel || '—')}</strong></div>
+        <div title="${escapeHtml(distanceLabel || 'ไม่มีข้อมูล')}"><span>ระยะทาง</span><strong>${escapeHtml(distanceLabel || '—')}</strong></div>
       </div>
       <div class="facility-popup-content"><div class="facility-popup-grid">
         <details class="facility-popup-group is-wide" open>
