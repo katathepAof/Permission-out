@@ -565,24 +565,97 @@
     return ({ network: 'Network', 'ready-access': 'Ready Access', customer: 'Customer' })[category] || 'Network';
   }
 
+  function routeProperty(properties, aliases) {
+    const normalized = new Map(Object.entries(properties || {}).map(([key, value]) => [String(key).replace(/[\s_-]+/g, '').toLowerCase(), value]));
+    for (const alias of aliases) {
+      const value = normalized.get(String(alias).replace(/[\s_-]+/g, '').toLowerCase());
+      if (hasPopupValue(value)) return value;
+    }
+    return '';
+  }
+
+  function routeLengthLabel(value) {
+    if (!hasPopupValue(value)) return '';
+    const match = String(value).replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+    if (!match) return String(value);
+    const meters = Number(match[0]);
+    if (!Number.isFinite(meters)) return String(value);
+    return meters >= 1000
+      ? `${(meters / 1000).toLocaleString('th-TH', { maximumFractionDigits: 2 })} km`
+      : `${meters.toLocaleString('th-TH', { maximumFractionDigits: 1 })} m`;
+  }
+
+  function mod1RoutePopup(type, dataset, line, category, color) {
+    const properties = line.p && typeof line.p === 'object' ? line.p : {};
+    const routeName = line.n || routeProperty(properties, ['name', 'original_name']) || dataset.name;
+    const code = routeProperty(properties, ['code', 'tag', 'route_code', 'id']);
+    const status = routeProperty(properties, ['status', 'cable_status', 'line_status']);
+    const measured = routeProperty(properties, ['measured', 'length']);
+    const calculated = routeProperty(properties, ['calculated']);
+    const diameter = routeProperty(properties, ['diameter_mm', 'diameter']);
+    const sourceFile = routeProperty(properties, ['source_file']) || dataset.name;
+    const cableRows = [
+      ['รหัสสาย', code],
+      ['ประเภทสาย', routeProperty(properties, ['cable_type', 'type'])],
+      ['รายละเอียดสาย', routeProperty(properties, ['cable_detail', 'detail'])],
+      ['จำนวน Core', routeProperty(properties, ['core', 'core_count'])],
+      ['Diameter', diameter ? `${diameter} mm` : ''],
+      ['ระยะตามข้อมูล', routeLengthLabel(measured)],
+      ['ระยะคำนวณ', routeLengthLabel(calculated)],
+      ['จำนวนเสา', routeProperty(properties, ['pole_count'])],
+      ['วันที่ติดตั้ง', routeProperty(properties, ['date_install', 'install_date'])]
+    ];
+    const referenceRows = [
+      ['เจ้าของ', routeProperty(properties, ['owner'])],
+      ['การไฟฟ้า', routeProperty(properties, ['pea'])],
+      ['จังหวัด', routeProperty(properties, ['province'])],
+      ['UIH Area', filterElements.area.value],
+      ['ไฟล์ต้นทาง', sourceFile],
+      ['Dataset', dataset.name]
+    ];
+    return `<article class="facility-popup mod1-route-detail" style="--route-color:${escapeHtml(color)}">
+      <header class="facility-popup-header mod1-route-header">
+        <div class="facility-popup-identity">
+          <div class="facility-popup-kicker"><span>MOD 1 Fiber Route</span><b>${escapeHtml(type === 'maxi' ? 'Maxi' : 'RD03')}</b></div>
+          <div class="facility-popup-code">${escapeHtml(code || mod1RouteCategoryLabel(category))}</div>
+          <h3 title="${escapeHtml(routeName)}">${escapeHtml(routeName)}</h3>
+          <p>${escapeHtml(sourceFile)}</p>
+        </div>
+      </header>
+      <div class="facility-popup-metrics" aria-label="ข้อมูลสายสำคัญ">
+        <div><span>Category</span><strong>${escapeHtml(mod1RouteCategoryLabel(category))}</strong></div>
+        <div><span>Status</span><strong>${escapeHtml(status || '—')}</strong></div>
+        <div><span>Length</span><strong>${escapeHtml(routeLengthLabel(measured || calculated) || '—')}</strong></div>
+      </div>
+      <div class="facility-popup-content"><div class="facility-popup-grid">
+        <details class="facility-popup-group is-wide" open>
+          <summary><span class="facility-popup-group-icon" aria-hidden="true">⌁</span><span><strong>ข้อมูลสาย</strong><small>ชนิด ขนาด และระยะทาง</small></span></summary>
+          <div class="facility-popup-info">${popupRows(cableRows)}</div>
+        </details>
+        <details class="facility-popup-group is-wide">
+          <summary><span class="facility-popup-group-icon" aria-hidden="true">▤</span><span><strong>ข้อมูลอ้างอิง</strong><small>พื้นที่ เจ้าของ และไฟล์ต้นทาง</small></span></summary>
+          <div class="facility-popup-info">${popupRows(referenceRows)}</div>
+        </details>
+      </div></div>
+    </article>`;
+  }
+
   function renderMod1Route(type, dataset, line) {
     if (!Array.isArray(line.c) || line.c.length < 2) return;
     const category = mod1RouteCategory(line, dataset);
     const color = MOD1_ROUTE_COLORS[type]?.[category] || '#94a3b8';
-    const properties = line.p && typeof line.p === 'object' ? line.p : {};
     const route = L.polyline(line.c.map(point => [Number(point[1]), Number(point[0])]), {
       color,
       weight: type === 'maxi' ? 3.2 : 2.7,
       opacity: .86,
       interactive: true
     });
-    route.bindPopup(`
-      <div class="mod1-route-popup">
-        <strong>${escapeHtml(type === 'maxi' ? 'Maxi' : 'RD03')} · ${escapeHtml(line.n || dataset.name)}</strong>
-        <p>${escapeHtml(dataset.name)}</p>
-        <small>Category: ${escapeHtml(mod1RouteCategoryLabel(category))}</small>
-        ${properties.status || properties.Status ? `<small>Status: ${escapeHtml(properties.status || properties.Status)}</small>` : ''}
-      </div>`);
+    route.bindTooltip(`${type === 'maxi' ? 'Maxi' : 'RD03'} · ${line.n || dataset.name}`, { sticky: true, direction: 'top' });
+    route.bindPopup(mod1RoutePopup(type, dataset, line, category, color), {
+      minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
+    });
+    route.on('mouseover', () => route.setStyle({ weight: type === 'maxi' ? 5.2 : 4.7, opacity: 1 }));
+    route.on('mouseout', () => route.setStyle({ weight: type === 'maxi' ? 3.2 : 2.7, opacity: .86 }));
     route.addTo(mod1RouteLayers[type]);
   }
 
