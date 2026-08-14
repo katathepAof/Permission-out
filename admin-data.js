@@ -163,7 +163,10 @@
       ? `ต้องการย้อนกลับ ${dataset.displayName} ไปเวอร์ชัน ${version.versionNo} หรือไม่?`
       : `ต้องการเผยแพร่ ${dataset.displayName} เวอร์ชัน ${version.versionNo} หรือไม่?\n\nเพิ่ม ${formatNumber(version.newCount)} · เปลี่ยน ${formatNumber(version.updatedCount)} · ลบ ${formatNumber(version.removedCount)}`;
     if (!confirm(message)) return;
-    await api(`/api/admin/data/versions/${encodeURIComponent(version.id)}/publish`, { method: 'POST' });
+    const publishPath = dataset.source === 'mod2'
+      ? `/api/admin/mod2/versions/${encodeURIComponent(version.id)}/publish`
+      : `/api/admin/data/versions/${encodeURIComponent(version.id)}/publish`;
+    await api(publishPath, { method: 'POST' });
     context().toast(rollback ? 'ย้อนกลับเวอร์ชันเรียบร้อยแล้ว' : 'เผยแพร่ข้อมูลเรียบร้อยแล้ว', 'success');
     await loadDatasets();
   }
@@ -223,8 +226,11 @@
   async function loadDatasets() {
     const root = document.getElementById('adminDataList');
     if (root) root.innerHTML = '<div class="admin-data-loading">กำลังโหลดประวัติข้อมูล…</div>';
-    const payload = await api('/api/admin/data/datasets');
-    state.datasets = payload.datasets || [];
+    const [managed, mod2] = await Promise.all([
+      api('/api/admin/data/datasets'),
+      api('/api/admin/mod2/datasets').catch(() => ({ datasets: [] }))
+    ]);
+    state.datasets = [...(managed.datasets || []), ...(mod2.datasets || [])];
     renderDatasets();
   }
 
@@ -255,7 +261,126 @@
     }).catch(() => {});
   }
 
+  function excelColumnIndex(reference) {
+    const letters = String(reference || '').match(/^[A-Z]+/i)?.[0]?.toUpperCase() || '';
+    return [...letters].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+  }
+
+  function excelDate(value) {
+    const serial = Number(value);
+    if (!Number.isFinite(serial)) {
+      const text = String(value || '').trim();
+      const parsed = new Date(text);
+      return /^\d{4}-\d{2}-\d{2}/.test(text) && !Number.isNaN(parsed.valueOf()) ? text.slice(0, 10) : null;
+    }
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.round(serial * 86400000));
+    return date.toISOString().slice(0, 10);
+  }
+
+  async function parseTotalSiteWorkbook(file) {
+    if (!window.JSZip) throw new Error('ไม่พบตัวอ่านไฟล์ Excel ของระบบ');
+    const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+    const xml = async path => {
+      const entry = zip.file(path);
+      if (!entry) throw new Error(`โครงสร้าง Excel ไม่ครบ: ${path}`);
+      return new DOMParser().parseFromString(await entry.async('string'), 'application/xml');
+    };
+    const workbook = await xml('xl/workbook.xml');
+    const sheetNode = [...workbook.getElementsByTagName('sheet')].find(node => node.getAttribute('name') === 'Total Site');
+    if (!sheetNode) throw new Error('ไม่พบ Sheet ชื่อ Total Site');
+    const relationId = sheetNode.getAttribute('r:id') || sheetNode.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    const relations = await xml('xl/_rels/workbook.xml.rels');
+    const relation = [...relations.getElementsByTagName('Relationship')].find(node => node.getAttribute('Id') === relationId);
+    if (!relation) throw new Error('ไม่พบตำแหน่ง Sheet Total Site');
+    const target = relation.getAttribute('Target').replace(/^\//, '').replace(/^xl\//, '');
+    const sheet = await xml(`xl/${target}`);
+    const sharedEntry = zip.file('xl/sharedStrings.xml');
+    const shared = sharedEntry ? [...(await xml('xl/sharedStrings.xml')).getElementsByTagName('si')]
+      .map(item => [...item.getElementsByTagName('t')].map(node => node.textContent || '').join('')) : [];
+    const rows = [...sheet.getElementsByTagName('row')].map(row => {
+      const values = [];
+      for (const cell of row.getElementsByTagName('c')) {
+        const index = excelColumnIndex(cell.getAttribute('r'));
+        const type = cell.getAttribute('t');
+        const raw = cell.getElementsByTagName('v')[0]?.textContent ?? '';
+        values[index] = type === 's' ? shared[Number(raw)] ?? ''
+          : type === 'inlineStr' ? [...cell.getElementsByTagName('t')].map(node => node.textContent || '').join('')
+          : type === 'b' ? raw === '1' : raw;
+      }
+      return values;
+    });
+    if (rows.length < 2) throw new Error('Sheet Total Site ไม่มีข้อมูล');
+    const headers = rows[0].slice(0, 70).map(value => String(value || '').trim());
+    if (headers[0] !== 'Site Code' || headers.length !== 70 || headers.some(header => !header)) {
+      throw new Error('หัวคอลัมน์ Total Site ไม่ตรงกับ Template 70 คอลัมน์');
+    }
+    const seen = new Set();
+    let withoutCoordinates = 0;
+    const sites = rows.slice(1).filter(row => row.some(value => String(value ?? '').trim())).map((row, index) => {
+      const rawData = Object.fromEntries(headers.map((header, column) => [header, row[column] ?? null]));
+      const siteCode = String(row[0] || '').trim();
+      if (!siteCode) throw new Error(`แถว ${index + 2}: Site Code ว่าง`);
+      if (seen.has(siteCode)) throw new Error(`แถว ${index + 2}: Site Code ${siteCode} ซ้ำ`);
+      seen.add(siteCode);
+      const latitude = Number(row[11]);
+      const longitude = Number(row[12]);
+      const validCoordinates = Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+        && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+      if (!validCoordinates) withoutCoordinates += 1;
+      return {
+        source_index: index, site_code: siteCode, site_name: String(row[5] || '').trim(),
+        type_of_digit: String(row[3] || '').trim(), site_grade: String(row[4] || '').trim(),
+        regional: String(row[6] || '').trim(), uih_area: String(row[7] || '').trim(),
+        district: String(row[8] || '').trim(), province: String(row[9] || '').trim(),
+        latitude: validCoordinates ? latitude : null, longitude: validCoordinates ? longitude : null,
+        customers: Math.max(0, Number.parseInt(row[13] || 0, 10) || 0),
+        node_equipment: String(row[33] || '').trim(), owner: String(row[27] || '').trim(),
+        opex: Math.max(0, Number(row[21]) || 0),
+        contract_expired: row[10] ? excelDate(row[10]) : null,
+        sdh_topology: String(row[22] || '').trim(), lsw_topology: String(row[23] || '').trim(),
+        dslam_topology: String(row[24] || '').trim(), site_type: String(row[28] || '').trim(),
+        raw_data: rawData
+      };
+    });
+    return { sites, withoutCoordinates };
+  }
+
+  async function uploadMod2Workbook(file, progress) {
+    if (!/\.xlsx$/i.test(file.name)) throw new Error('Site Facility รองรับเฉพาะไฟล์ .xlsx');
+    progress.update('กำลังอ่าน Sheet Total Site…', 8);
+    const parsed = await parseTotalSiteWorkbook(file);
+    const hash = await sha256(file);
+    progress.update(`ตรวจผ่าน ${formatNumber(parsed.sites.length)} sites · ไม่มีพิกัด ${formatNumber(parsed.withoutCoordinates)}`, 20);
+    const created = await api('/api/admin/mod2/uploads', { method: 'POST', body: JSON.stringify({
+      fileName: file.name, size: file.size, sha256: hash
+    }) });
+    const versionId = created.version.id;
+    try {
+      const uploaded = await context().client.storage.from(created.upload.bucket)
+        .uploadToSignedUrl(created.upload.path, created.upload.token, file, {
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+      if (uploaded.error) throw uploaded.error;
+      for (let offset = 0; offset < parsed.sites.length; offset += FEATURE_BATCH_SIZE) {
+        const batch = parsed.sites.slice(offset, offset + FEATURE_BATCH_SIZE);
+        await api(`/api/admin/mod2/versions/${encodeURIComponent(versionId)}/sites`, {
+          method: 'POST', body: JSON.stringify({ sites: batch })
+        });
+        progress.update(`กำลังนำเข้า ${formatNumber(offset + batch.length)}/${formatNumber(parsed.sites.length)}`,
+          30 + ((offset + batch.length) / parsed.sites.length) * 55);
+      }
+      const completed = await api(`/api/admin/mod2/versions/${encodeURIComponent(versionId)}/complete`, { method: 'POST' });
+      const version = completed.version;
+      progress.update(`พร้อมตรวจสอบ — เพิ่ม ${formatNumber(version.newCount)} · เปลี่ยน ${formatNumber(version.updatedCount)} · ลบ ${formatNumber(version.removedCount)} · ไม่มีพิกัด ${formatNumber(parsed.withoutCoordinates)}`, 100, 'success');
+      return version;
+    } catch (error) {
+      progress.update(error.message, 100, 'error');
+      throw error;
+    }
+  }
+
   async function uploadFile(file, source, progress) {
+    if (source === 'mod2') return uploadMod2Workbook(file, progress);
     if (!/\.(kml|kmz)$/i.test(file.name)) throw new Error('รองรับเฉพาะไฟล์ .kml และ .kmz');
     if (!file.size || file.size > MAX_FILE_BYTES) throw new Error('ไฟล์ต้องมีขนาดไม่เกิน 100 MB');
     let versionId = null;
@@ -319,6 +444,10 @@
       context().toast('กรุณาเลือกไฟล์ KML/KMZ อย่างน้อย 1 ไฟล์', 'error');
       return;
     }
+    if (source === 'mod2' && files.length !== 1) {
+      context().toast('Site Facility อัปโหลดได้ครั้งละ 1 ไฟล์ เพื่อสร้าง 1 เวอร์ชัน', 'error');
+      return;
+    }
     const button = document.getElementById('adminDataUpload');
     const progressRoot = document.getElementById('adminDataProgress');
     state.busy = true;
@@ -357,14 +486,14 @@
     sourceField.append(el('span', '', 'ชุดข้อมูล'));
     const source = document.createElement('select');
     source.id = 'adminDataSource';
-    source.innerHTML = '<option value="pea">PEA</option><option value="ufm">UFM</option><option value="road">Road centerline</option><option value="building">Building polygon</option>';
+    source.innerHTML = '<option value="mod2">Site Facility — Excel / Total Site</option><option value="pea">PEA</option><option value="ufm">UFM</option><option value="road">Road centerline</option><option value="building">Building polygon</option>';
     sourceField.appendChild(source);
     const fileField = el('label', 'admin-data-file');
-    fileField.append(el('span', '', 'ไฟล์ KML/KMZ — เลือกได้หลายไฟล์'));
+    fileField.append(el('span', '', 'ไฟล์ .xlsx สำหรับ Site Facility หรือ KML/KMZ สำหรับข้อมูลแผนที่'));
     const input = document.createElement('input');
     input.id = 'adminDataFiles';
     input.type = 'file';
-    input.accept = '.kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz';
+    input.accept = '.xlsx,.kml,.kmz,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz';
     input.multiple = true;
     input.addEventListener('change', () => {
       const files = Array.from(input.files || []);

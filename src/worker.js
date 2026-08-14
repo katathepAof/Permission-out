@@ -876,7 +876,8 @@ async function activeMod2Sites(request, env) {
       }
       if (properties.extra_properties && typeof properties.extra_properties === 'object') {
         for (const key of Object.keys(properties.extra_properties)) {
-          if (key.toLocaleLowerCase('en-US') === 'opex') delete properties.extra_properties[key];
+          const normalized = key.toLocaleLowerCase('en-US').replace(/\s+/g, ' ').trim();
+          if (normalized === 'opex' || normalized.includes('total opex')) delete properties.extra_properties[key];
         }
       }
     }
@@ -1181,11 +1182,117 @@ async function deleteMod2Site(request, env, siteId) {
   return jsonResponse({ deleted: true, id });
 }
 
+function publicMod2Version(version) {
+  return { id: version.id, datasetId: version.dataset_id, versionNo: version.version_no,
+    status: version.status, rawSha256: version.raw_sha256, rawSize: Number(version.raw_size || 0),
+    featureCount: version.row_count || 0, newCount: version.new_count || 0,
+    updatedCount: version.updated_count || 0, removedCount: version.removed_count || 0,
+    unchangedCount: version.unchanged_count || 0, errorMessage: version.error_message || '',
+    createdAt: version.created_at, validatedAt: version.validated_at, publishedAt: version.published_at };
+}
+
+async function listMod2Datasets(request, env) {
+  const { supabase } = await requireModuleAccess(request, env, 'mod2', 'update');
+  const datasets = await supabase.from('mod2_site_datasets').select('*').order('created_at');
+  if (datasets.error) throw datasets.error;
+  const ids = (datasets.data || []).map(row => row.id);
+  const versions = ids.length ? await supabase.from('mod2_site_versions').select('*')
+    .in('dataset_id', ids).order('version_no', { ascending: false }) : { data: [], error: null };
+  if (versions.error) throw versions.error;
+  const grouped = new Map();
+  for (const version of versions.data || []) {
+    if (!grouped.has(version.dataset_id)) grouped.set(version.dataset_id, []);
+    grouped.get(version.dataset_id).push(publicMod2Version(version));
+  }
+  return jsonResponse({ datasets: (datasets.data || []).map(dataset => ({
+    id: dataset.id, source: 'mod2', canonicalName: dataset.code,
+    displayName: dataset.display_name, activeVersionId: dataset.active_version_id,
+    createdAt: dataset.created_at, updatedAt: dataset.updated_at,
+    versions: grouped.get(dataset.id) || []
+  })) });
+}
+
+async function createMod2Upload(request, env) {
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
+  const payload = await requestJson(request, 30_000);
+  const fileName = cleanText(payload.fileName, 'ชื่อไฟล์', 240, true).normalize('NFKC');
+  if (/[\/\\\u0000-\u001f]/.test(fileName) || !/\.xlsx$/i.test(fileName)) {
+    throw new HttpError(400, 'รองรับเฉพาะไฟล์ .xlsx ที่ไม่มี path', 'validation_error');
+  }
+  const rawSha256 = cleanSha256(payload.sha256);
+  const rawSize = cleanFileSize(payload.size);
+  let datasetResult = await supabase.from('mod2_site_datasets').select('*').eq('code', 'site-facility-2026').maybeSingle();
+  if (datasetResult.error) throw datasetResult.error;
+  if (!datasetResult.data) {
+    datasetResult = await supabase.from('mod2_site_datasets')
+      .insert({ code: 'site-facility-2026', display_name: 'Site Facility — Total Site' }).select('*').single();
+    if (datasetResult.error) throw datasetResult.error;
+  }
+  const dataset = datasetResult.data;
+  const duplicate = await supabase.from('mod2_site_versions').select('id,version_no,status')
+    .eq('dataset_id', dataset.id).eq('raw_sha256', rawSha256).maybeSingle();
+  if (duplicate.error) throw duplicate.error;
+  if (duplicate.data) throw new HttpError(409, `ไฟล์นี้ตรงกับเวอร์ชัน ${duplicate.data.version_no}`, 'duplicate_file');
+  const latest = await supabase.from('mod2_site_versions').select('version_no')
+    .eq('dataset_id', dataset.id).order('version_no', { ascending: false }).limit(1).maybeSingle();
+  if (latest.error) throw latest.error;
+  const versionNo = Number(latest.data?.version_no || 0) + 1;
+  const rawPath = `site-facility-2026/v${versionNo}/${fileName}`;
+  const created = await supabase.from('mod2_site_versions').insert({ dataset_id: dataset.id,
+    version_no: versionNo, raw_path: rawPath, raw_sha256: rawSha256,
+    raw_size: rawSize, uploaded_by: user.id }).select('*').single();
+  if (created.error) throw created.error;
+  const signed = await supabase.storage.from('permission-out-mod2-data').createSignedUploadUrl(rawPath);
+  if (signed.error || !signed.data?.token) throw signed.error || new Error('สร้าง URL อัปโหลดไม่สำเร็จ');
+  await supabase.from('mod2_site_audit').insert({ dataset_id: dataset.id,
+    version_id: created.data.id, action: 'upload', actor_id: user.id,
+    detail: { file_name: fileName, raw_size: rawSize, raw_sha256: rawSha256 } });
+  return jsonResponse({ version: publicMod2Version(created.data), upload: {
+    bucket: 'permission-out-mod2-data', path: signed.data.path || rawPath, token: signed.data.token
+  } }, 201);
+}
+
+async function importMod2TotalSiteBatch(request, env, versionId) {
+  const { supabase } = await requireModuleAccess(request, env, 'mod2', 'update');
+  const payload = await requestJson(request, 8_000_000);
+  if (!Array.isArray(payload.sites) || !payload.sites.length || payload.sites.length > 500) {
+    throw new HttpError(400, 'หนึ่งชุดต้องมีข้อมูล 1-500 sites', 'validation_error');
+  }
+  const { data, error } = await supabase.rpc('import_mod2_total_sites', {
+    p_version_id: cleanUserId(versionId), p_sites: payload.sites });
+  if (error) throw error;
+  return jsonResponse({ imported: Number(data || 0) });
+}
+
+async function completeMod2Version(request, env, versionId) {
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
+  const { data, error } = await supabase.rpc('finalize_mod2_site_version', {
+    p_version_id: cleanUserId(versionId), p_actor_id: user.id });
+  if (error) throw error;
+  return jsonResponse({ version: publicMod2Version(data) });
+}
+
+async function publishMod2Version(request, env, versionId) {
+  const { supabase, user } = await requireModuleAccess(request, env, 'mod2', 'update');
+  const { data, error } = await supabase.rpc('publish_mod2_site_version', {
+    p_version_id: cleanUserId(versionId), p_actor_id: user.id });
+  if (error) throw error;
+  return jsonResponse({ version: publicMod2Version(data) });
+}
+
 async function handleAdminApi(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/admin/users') return listAdminUsers(request, env);
   if (request.method === 'POST' && url.pathname === '/api/admin/users') return createAdminUser(request, env);
   if (request.method === 'GET' && url.pathname === '/api/admin/data/datasets') return listManagedDatasets(request, env);
   if (request.method === 'POST' && url.pathname === '/api/admin/data/uploads') return createDatasetUpload(request, env);
+  if (request.method === 'GET' && url.pathname === '/api/admin/mod2/datasets') return listMod2Datasets(request, env);
+  if (request.method === 'POST' && url.pathname === '/api/admin/mod2/uploads') return createMod2Upload(request, env);
+  const mod2VersionMatch = url.pathname.match(/^\/api\/admin\/mod2\/versions\/([^/]+)\/(sites|complete|publish)$/);
+  if (mod2VersionMatch && request.method === 'POST') {
+    if (mod2VersionMatch[2] === 'sites') return importMod2TotalSiteBatch(request, env, mod2VersionMatch[1]);
+    if (mod2VersionMatch[2] === 'complete') return completeMod2Version(request, env, mod2VersionMatch[1]);
+    if (mod2VersionMatch[2] === 'publish') return publishMod2Version(request, env, mod2VersionMatch[1]);
+  }
   const dataVersionMatch = url.pathname.match(/^\/api\/admin\/data\/versions\/([^/]+)\/(features|complete|publish|fail)$/);
   if (dataVersionMatch && request.method === 'POST') {
     if (dataVersionMatch[2] === 'features') return importDatasetFeatureBatch(request, env, dataVersionMatch[1]);

@@ -784,6 +784,11 @@
       nodeEquipment: String(properties.node_equipment || ''),
       owner: String(properties.owner || ''),
       opex: Number(properties.opex || 0),
+      contractExpired: String(properties.contract_expired || ''),
+      sdhTopology: String(properties.sdh_topology || ''),
+      lswTopology: String(properties.lsw_topology || ''),
+      dslamTopology: String(properties.dslam_topology || ''),
+      siteType: String(properties.site_type || ''),
       remark: String(properties.remark || ''),
       sourceProperties
     };
@@ -1180,27 +1185,18 @@
 
   function popupContent(site) {
     const locationRows = [
-      ['Province', site.province],
-      ['District', site.district],
-      ['Region', site.regional],
-      ['UIH Area', site.area],
-      ['Coordinates', `${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`]
+      ['Site grade (E)', site.grade],
+      ['Contract Expired (K)', site.contractExpired],
+      ['SDH : Topology (W)', site.sdhTopology],
+      ['LSW : Topology (X)', site.lswTopology],
+      ['DSLAM : Topology (Y)', site.dslamTopology],
+      ['Site Type (AC)', site.siteType]
     ];
-    const networkRows = [
-      ['Site Type', site.type],
-      ['Site Grade', site.grade],
-      ['Node Equipment', site.nodeEquipment],
-      ['Owner', site.owner]
-    ];
-    const operationRows = [
-      ['Customer Count', site.customers, { number: true }],
-      ...(isAdmin() ? [
-        ['Monthly OPEX', site.opex, { currency: true }],
-        ['Annual OPEX', (Number(site.opex) || 0) * 12, { currency: true }]
-      ] : []),
-      ['Remark', site.remark]
-    ];
-    const extras = extraPopupProperties(site);
+    const networkRows = [];
+    const operationRows = isAdmin()
+      ? [['Total OPEX / Year (V)', site.opex, { currency: true }]]
+      : [];
+    const extras = [];
     const popup = document.createElement('div');
     popup.className = 'facility-popup';
     popup.innerHTML = `
