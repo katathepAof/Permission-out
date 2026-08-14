@@ -233,7 +233,6 @@ body.mod2-map-focus .map-card{
 .facility-popup-row:last-child{border-bottom:0}
 .facility-popup dt{color:#788697}.facility-popup dd{margin:0;color:#263e58;font-weight:600;overflow-wrap:anywhere;white-space:pre-wrap}
 .facility-popup-empty{margin:0;padding:7px 0;color:#8795a5;font-size:.61rem}
-.facility-popup-group:has(.facility-popup-empty){display:none}
 .facility-popup-extra{margin-top:9px;overflow:hidden;border:1px solid #dbe4ed;border-radius:11px;background:#fff}
 .facility-popup-extra summary{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;color:#315373;cursor:pointer;list-style:none}
 .facility-popup-extra summary::-webkit-details-marker{display:none}

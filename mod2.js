@@ -783,7 +783,8 @@
       customers: Number(properties.customers || 0),
       nodeEquipment: String(properties.node_equipment || ''),
       owner: String(properties.owner || ''),
-      opex: Number(properties.opex || 0),
+      opexYearly: Number(properties.opex || 0),
+      opex: Number(properties.opex || 0) / 12,
       contractExpired: String(properties.contract_expired || ''),
       sdhTopology: String(properties.sdh_topology || ''),
       lswTopology: String(properties.lsw_topology || ''),
@@ -1185,18 +1186,32 @@
 
   function popupContent(site) {
     const locationRows = [
-      ['Site grade (E)', site.grade],
+      ['Province', site.province],
+      ['District', site.district],
+      ['Region', site.regional],
+      ['UIH Area', site.area],
+      ['Coordinates', `${site.latitude.toFixed(6)}, ${site.longitude.toFixed(6)}`],
       ['Contract Expired (K)', site.contractExpired],
+    ];
+    const networkRows = [
+      ['Site Type', site.type],
+      ['Site Grade', site.grade],
+      ['Node Equipment', site.nodeEquipment],
+      ['Owner', site.owner],
       ['SDH : Topology (W)', site.sdhTopology],
       ['LSW : Topology (X)', site.lswTopology],
       ['DSLAM : Topology (Y)', site.dslamTopology],
       ['Site Type (AC)', site.siteType]
     ];
-    const networkRows = [];
-    const operationRows = isAdmin()
-      ? [['Total OPEX / Year (V)', site.opex, { currency: true }]]
-      : [];
-    const extras = [];
+    const operationRows = [
+      ['Customer Count', site.customers, { number: true }],
+      ...(isAdmin() ? [
+        ['Monthly OPEX', site.opex, { currency: true }],
+        ['Annual OPEX / Total OPEX (V)', site.opexYearly, { currency: true }]
+      ] : []),
+      ['Remark', site.remark]
+    ];
+    const extras = extraPopupProperties(site);
     const popup = document.createElement('div');
     popup.className = 'facility-popup';
     popup.innerHTML = `
@@ -1402,8 +1417,8 @@
           { name: 'customers', label: 'จำนวนลูกค้า', value: site.customers, type: 'number', step: '1', min: '0', required: true },
           ...(isAdmin() ? [{
             name: 'opex',
-            label: 'OPEX รายเดือน (บาท)',
-            value: site.opex,
+            label: 'Total OPEX รายปี / Column V (บาท)',
+            value: site.opexYearly,
             type: 'number',
             step: '0.01',
             min: '0',
