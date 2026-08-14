@@ -1155,7 +1155,11 @@
     'latitude (n)',
     'longitude (e)',
     'site type',
-    'type of digit'
+    'type of digit',
+    'cell sites y2',
+    'contract expired',
+    'objective',
+    'node name (osp)'
   ]);
 
   function normalizedAdditionalInformationKey(key) {
