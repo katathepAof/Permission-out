@@ -1133,6 +1133,39 @@
     'owner', 'opex', 'remark'
   ]);
 
+  const HIDDEN_ADDITIONAL_INFORMATION = new Set([
+    'total opex (yearly)',
+    'sdh topology',
+    'sdh : topology',
+    'sdh : id',
+    'ref. site name eng (osp)',
+    'ref. site name_eng (osp)',
+    'msan : type',
+    'msan : id',
+    'lsw : use for',
+    'lsw : type',
+    'lsw topology',
+    'lsw : topology',
+    'lsw : id',
+    'cost cell sites (monthly)',
+    'cost cell sites (yearly)',
+    'ค่าไฟ (yearly)',
+    'bbtec area',
+    'count of customer',
+    'latitude (n)',
+    'longitude (e)',
+    'site type',
+    'type of digit'
+  ]);
+
+  function normalizedAdditionalInformationKey(key) {
+    return String(key || '')
+      .replace(/[_\n\r]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase('en-US');
+  }
+
   function hasPopupValue(value) {
     return value !== '' && value !== null && value !== undefined &&
       (!Array.isArray(value) || value.length > 0) &&
@@ -1180,7 +1213,9 @@
 
   function extraPopupProperties(site) {
     return Object.entries(site.sourceProperties || {})
-      .filter(([key, value]) => !STANDARD_SITE_PROPERTIES.has(key) && hasPopupValue(value))
+      .filter(([key, value]) => !STANDARD_SITE_PROPERTIES.has(key)
+        && !HIDDEN_ADDITIONAL_INFORMATION.has(normalizedAdditionalInformationKey(key))
+        && hasPopupValue(value))
       .sort(([left], [right]) => left.localeCompare(right, 'th'));
   }
 
