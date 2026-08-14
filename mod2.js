@@ -1159,7 +1159,8 @@
     'cell sites y2',
     'contract expired',
     'objective',
-    'node name (osp)'
+    'node name (osp)',
+    'ref. lsw อื่นๆ'
   ]);
 
   function normalizedAdditionalInformationKey(key) {
