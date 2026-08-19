@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260724170000_mod2_site_comments.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260819100000_super_user_approval.sql', 'wrangler.toml', 'scripts/check-secrets.mjs', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 const production = await readFile(resolve(root, 'production.js'), 'utf8');
@@ -15,6 +15,7 @@ const loginHtml = await readFile(resolve(root, 'login.html'), 'utf8');
 const loginJs = await readFile(resolve(root, 'login.js'), 'utf8');
 const workerSource = await readFile(resolve(root, 'src/worker.js'), 'utf8');
 const privateAccessMigration = await readFile(resolve(root, 'supabase/migrations/20260726120000_private_mod1_access.sql'), 'utf8');
+const superUserMigration = await readFile(resolve(root, 'supabase/migrations/20260819100000_super_user_approval.sql'), 'utf8');
 const uploadScripts = await Promise.all([
   'scripts/upload-pea-data.mjs',
   'scripts/upload-uih-data.mjs',
@@ -124,11 +125,20 @@ for (const marker of ['id="opexReportBtn"', 'function openOpexReport()', 'functi
 for (const marker of ["name: 'customers'", "name: 'opex'", 'site-edit-section', 'payload.customers = Number(payload.customers)']) {
   if (!mod2Js.includes(marker)) throw new Error(`Complete MOD 2 site editor marker is missing: ${marker}`);
 }
-if (!workerSource.includes("if (access.role !== 'admin')") || !workerSource.includes("if (key.toLocaleLowerCase('en-US') === 'opex')")) {
-  throw new Error('MOD 2 API must redact OPEX for non-admin users');
+if (!workerSource.includes('if (!isManagementRole(access.role))') || !workerSource.includes("if (key.toLocaleLowerCase('en-US') === 'opex')")) {
+  throw new Error('MOD 2 API must redact OPEX for ordinary users');
 }
-if (!workerSource.includes('customers,') || !workerSource.includes("...(access.role === 'admin' ? { opex } : {})")) {
-  throw new Error('MOD 2 site editor API must persist customers and admin-only OPEX');
+if (!workerSource.includes('customers,') || !workerSource.includes('...(isManagementRole(access.role) ? { opex } : {})')) {
+  throw new Error('MOD 2 site editor API must persist customers and management-only OPEX');
+}
+for (const marker of ["role === 'admin' || role === 'super_user'", '/api/admin/user-requests', 'approvalRequired: true', 'inviteUserByEmail', 'role_escalation_denied']) {
+  if (!workerSource.includes(marker) && !adminUsers.includes(marker)) throw new Error(`Super User approval workflow marker is missing: ${marker}`);
+}
+for (const marker of ['user_creation_requests', "'super_user'", "status in ('pending', 'processing', 'approved', 'rejected', 'cancelled')", 'enable row level security']) {
+  if (!superUserMigration.includes(marker)) throw new Error(`Super User migration marker is missing: ${marker}`);
+}
+for (const marker of ['admin-console-tabs', 'renderOverview()', 'renderRequests()', 'renderSystem()', 'ส่งคำขอให้ Admin']) {
+  if (!adminUsers.includes(marker)) throw new Error(`Unified administration center marker is missing: ${marker}`);
 }
 if (!mod2Js.includes('function syncSiteSearch(') || !mod2Js.includes('handleSiteSearchKeydown')) {
   throw new Error('MOD 2 map/sidebar search synchronization is missing');

@@ -56,6 +56,15 @@ if (protectedAdmin.status !== 401 || protectedAdminBody.error?.code !== 'unautho
   throw new Error('Admin authentication guard failed');
 }
 
+const protectedApprovalQueue = await worker.fetch(new Request('https://example.com/api/admin/user-requests'), {
+  ...env,
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'
+});
+const protectedApprovalQueueBody = await protectedApprovalQueue.json();
+if (protectedApprovalQueue.status !== 401 || protectedApprovalQueueBody.error?.code !== 'unauthorized') {
+  throw new Error('User approval queue authentication guard failed');
+}
+
 const protectedData = await worker.fetch(new Request('https://example.com/api/data/catalog?source=pea'), {
   ...env,
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-test'

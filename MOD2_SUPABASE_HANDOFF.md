@@ -5,7 +5,7 @@
 
 ## สิ่งที่ต้องมี
 
-- Node.js 20 หรือใหม่กว่า
+- Node.js 22 หรือใหม่กว่า
 - Supabase project ที่เปิดใช้ Authentication และ PostGIS
 - ตาราง `profiles` ที่มีคอลัมน์ `role` และ `is_active`
 - ผู้ใช้อย่างน้อยหนึ่งรายที่ `role = 'admin'` และ `is_active = true`
@@ -14,6 +14,8 @@
 ## ไฟล์ที่ใช้
 
 - `supabase/migrations/20260724120000_mod2_site_facility.sql`
+- `supabase/migrations/20260724170000_mod2_site_comments.sql`
+- `supabase/migrations/20260819100000_super_user_approval.sql`
 - `scripts/import-mod2-sites.mjs`
 - `UIH sites 2026 sync 5 - Copy.html`
 - `package.json` และ `package-lock.json`
@@ -22,12 +24,15 @@
 
 1. เปิด Supabase Dashboard ของหน่วยงาน
 2. ไปที่ SQL Editor และสร้าง Query ใหม่
-3. วางเนื้อหาทั้งหมดจาก `supabase/migrations/20260724120000_mod2_site_facility.sql`
+3. รันไฟล์ตามลำดับ:
+   - `supabase/migrations/20260724120000_mod2_site_facility.sql`
+   - `supabase/migrations/20260724170000_mod2_site_comments.sql`
+   - `supabase/migrations/20260819100000_super_user_approval.sql`
 4. ตรวจว่าเลือก Project และ Database role ถูกต้อง
-5. กด Run
+5. กด Run สำหรับแต่ละไฟล์และตรวจว่าไม่มี error ก่อนรันไฟล์ถัดไป
 
-Migration จะสร้าง Private Storage bucket `permission-out-mod2-data`, ตาราง `mod2_*`, RLS,
-spatial indexes และ RPC สำหรับ Import, Publish และ Query ข้อมูล
+Migration จะสร้าง Private Storage bucket `permission-out-mod2-data`, ตาราง `mod2_*`, ความคิดเห็น,
+บทบาท Super User, คิวอนุมัติผู้ใช้, RLS, spatial indexes และ RPC สำหรับ Import, Publish และ Query ข้อมูล
 
 ## 2. ตั้งค่า Credentials เฉพาะบนเครื่องหน่วยงาน
 
@@ -130,3 +135,4 @@ invalid_geometry    0
 - User ฝั่งเว็บควรอ่านข้อมูลผ่าน authenticated session เท่านั้น
 - เก็บ Migration และ SHA-256 ของไฟล์ Import ไว้ในเอกสารเปลี่ยนแปลงของหน่วยงาน
 - ก่อน Import รุ่นถัดไปควรสำรองฐานข้อมูลตามนโยบายของหน่วยงาน
+- ทดสอบ workflow Super User ส่งคำขอสร้างผู้ใช้ และยืนยันว่าบัญชียังไม่ถูกสร้างจนกว่า Admin จะอนุมัติ

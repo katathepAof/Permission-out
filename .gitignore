@@ -1,10 +1,16 @@
 dist/
 .wrangler/
 .dev.vars
+.env
+.env.*
 node_modules/
 *.log
 *.zip
-API_Key.txt
+*.tmp
+.DS_Store
+Thumbs.db
+API_Key*.txt
+kml_compare_report_*.csv
 PEA Area.kmz
 data-out/
 uih-20072026/

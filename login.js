@@ -94,7 +94,7 @@
       role,
       permissions,
       canView(key) {
-        return role === 'admin' || permissions[key]?.view !== false;
+        return role === 'admin' || role === 'super_user' || permissions[key]?.view !== false;
       }
     };
   }

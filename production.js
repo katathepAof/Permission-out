@@ -1170,7 +1170,7 @@
     const data = result.data || {};
     const metadata = authUser.app_metadata || {};
     const role = metadata.permission_out_role || data.role || 'user';
-    const normalizedRole = role === 'admin' ? 'admin' : 'user';
+    const normalizedRole = ['admin', 'super_user'].includes(role) ? role : 'user';
     const isActive = metadata.permission_out_active === undefined
       ? data.is_active !== false
       : metadata.permission_out_active !== false;
@@ -1188,18 +1188,18 @@
   }
 
   function modulePermissions(value, role = 'user') {
-    const isAdmin = role === 'admin';
+    const hasFullAccess = isManagementRole(role);
     return Object.fromEntries(MODULE_KEYS.map(key => {
       const permission = value && typeof value === 'object' ? value[key] || {} : {};
       return [key, {
-        view: isAdmin || permission.view !== false,
-        update: isAdmin || permission.update === true
+        view: hasFullAccess || permission.view !== false,
+        update: hasFullAccess || permission.update === true
       }];
     }));
   }
 
   function canAccessModule(moduleKey, action = 'view') {
-    if (currentProfile?.role === 'admin') return true;
+    if (isManagementRole(currentProfile?.role)) return true;
     const permission = currentProfile?.permissions?.[moduleKey];
     return action === 'update' ? permission?.view && permission?.update : permission?.view;
   }
@@ -1234,6 +1234,16 @@
     location.replace(target);
   }
 
+  function isManagementRole(role) {
+    return role === 'admin' || role === 'super_user';
+  }
+
+  function roleLabel(role) {
+    if (role === 'admin') return 'Admin · ผู้ดูแลระบบ';
+    if (role === 'super_user') return 'Super User · ผู้ดูแลขั้นสูง';
+    return 'User · ผู้ใช้งาน';
+  }
+
   function updateAccountUI() {
     const label = document.getElementById('accountLabel');
     const meta = document.getElementById('accountMeta');
@@ -1241,7 +1251,7 @@
     const accountButton = document.getElementById('accountBtn');
     if (currentUser) {
       label.textContent = currentProfile?.display_name || currentUser.email?.split('@')[0] || 'Account';
-      if (meta) meta.textContent = currentProfile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
+      if (meta) meta.textContent = roleLabel(currentProfile?.role);
       initial.textContent = (currentUser.email?.[0] || 'U').toUpperCase();
       accountButton?.setAttribute('aria-label', `เปิดบัญชีผู้ใช้ ${label.textContent}`);
     } else {
@@ -1265,8 +1275,8 @@
     const avatar = document.createElement('div'); avatar.className = 'account-avatar'; avatar.textContent = (currentUser.email?.[0] || 'U').toUpperCase();
     const name = document.createElement('h3'); name.textContent = currentUser.email;
     const info = document.createElement('p');
-    const roleLabel = currentProfile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
-    info.innerHTML = `<span class="connection-pill">เชื่อมต่อ Supabase แล้ว</span><br><span class="account-role">${roleLabel}${currentProfile?.organization ? ` · ${escapeHtml(currentProfile.organization)}` : ''}</span>`;
+    const currentRoleLabel = roleLabel(currentProfile?.role);
+    info.innerHTML = `<span class="connection-pill">เชื่อมต่อ Supabase แล้ว</span><br><span class="account-role">${currentRoleLabel}${currentProfile?.organization ? ` · ${escapeHtml(currentProfile.organization)}` : ''}</span>`;
     const actions = document.createElement('div'); actions.className = 'account-actions';
     if (canAccessModule('mod1', 'update')) {
       const manageData = document.createElement('button');
@@ -1276,11 +1286,11 @@
       manageData.addEventListener('click', () => window.permissionOutOpenAdminData?.());
       actions.appendChild(manageData);
     }
-    if (currentProfile?.role === 'admin') {
+    if (isManagementRole(currentProfile?.role)) {
       const manageUsers = document.createElement('button');
       manageUsers.className = 'modal-primary';
       manageUsers.type = 'button';
-      manageUsers.textContent = 'จัดการผู้ใช้และสิทธิ์';
+      manageUsers.textContent = 'ศูนย์จัดการระบบ';
       manageUsers.addEventListener('click', () => window.permissionOutOpenAdminUsers?.());
       actions.appendChild(manageUsers);
     }

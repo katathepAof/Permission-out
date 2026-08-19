@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import worker from '../src/worker.js';
 
 const root = join(import.meta.dirname, '..', 'dist');
@@ -21,7 +22,17 @@ function parseSecrets(source) {
 
 let localEnv = {};
 try {
-  const secrets = parseSecrets(await readFile(join(projectRoot, 'API_Key.txt'), 'utf8'));
+  let source = '';
+  for (const fileName of ['API_Key_Local.txt', 'API_Key.txt']) {
+    try {
+      source = await readFile(join(projectRoot, fileName), 'utf8');
+      break;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+  if (!source) throw new Error('Local API key file is missing');
+  const secrets = parseSecrets(source);
   localEnv = {
     SUPABASE_URL: secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL || '',
     SUPABASE_PUBLISHABLE_KEY: secrets.SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '',
@@ -48,8 +59,20 @@ async function serveWorkerApi(nodeRequest, nodeResponse) {
   });
   const workerResponse = await worker.fetch(request, localEnv);
   const headers = Object.fromEntries(workerResponse.headers.entries());
+  let payload = Buffer.from(await workerResponse.arrayBuffer());
+  const isGzipPayload = payload.length > 2 && payload[0] === 0x1f && payload[1] === 0x8b;
+  const expectsGzipFile = new URL(nodeRequest.url, origin).pathname.toLowerCase().endsWith('.gz');
+
+  // Node fetch transparently decodes Content-Encoding but preserves the upstream
+  // header. Normalize it for the browser, while keeping .gz application assets
+  // compressed because production.js intentionally expands those streams itself.
+  delete headers['content-encoding'];
+  delete headers['content-length'];
+  if (expectsGzipFile && !isGzipPayload) payload = gzipSync(payload);
+  if (!expectsGzipFile && isGzipPayload) payload = gunzipSync(payload);
+
   nodeResponse.writeHead(workerResponse.status, headers);
-  nodeResponse.end(Buffer.from(await workerResponse.arrayBuffer()));
+  nodeResponse.end(payload);
 }
 
 createServer(async (request, response) => {

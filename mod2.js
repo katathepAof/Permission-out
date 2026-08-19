@@ -146,12 +146,13 @@
 
   function modulePermissions(profile = state.profile) {
     const role = profile?.role || 'user';
+    const hasFullAccess = role === 'admin' || role === 'super_user';
     const source = profile?.permissions || {};
     return Object.fromEntries(MODULES.map(module => {
       const permission = source[module.key] || {};
       return [module.key, {
-        view: role === 'admin' || permission.view !== false,
-        update: role === 'admin' || permission.update === true
+        view: hasFullAccess || permission.view !== false,
+        update: hasFullAccess || permission.update === true
       }];
     }));
   }
@@ -161,7 +162,13 @@
   }
 
   function isAdmin() {
-    return state.profile?.role === 'admin';
+    return state.profile?.role === 'admin' || state.profile?.role === 'super_user';
+  }
+
+  function roleLabel(role) {
+    if (role === 'admin') return 'Admin · ผู้ดูแลระบบ';
+    if (role === 'super_user') return 'Super User · ผู้ดูแลขั้นสูง';
+    return 'User · ผู้ใช้งาน';
   }
 
   function canManageMod2Comments() {
@@ -264,7 +271,9 @@
     return {
       displayName: profile.display_name || authUser.user_metadata?.display_name || authUser.email?.split('@')[0] || 'Account',
       organization: profile.organization || '',
-      role: (metadata.permission_out_role || profile.role) === 'admin' ? 'admin' : 'user',
+      role: ['admin', 'super_user'].includes(metadata.permission_out_role || profile.role)
+        ? (metadata.permission_out_role || profile.role)
+        : 'user',
       permissions: profile.permissions || metadata.permission_out_permissions || null
     };
   }
@@ -272,7 +281,7 @@
   function updateAccountUi() {
     if (state.user) {
       elements.accountLabel.textContent = state.profile?.displayName || state.user.email?.split('@')[0] || 'Account';
-      elements.accountMeta.textContent = state.profile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
+      elements.accountMeta.textContent = roleLabel(state.profile?.role);
       elements.userInitial.textContent = (state.user.email?.[0] || 'U').toUpperCase();
     } else {
       elements.accountLabel.textContent = cloudEnabled ? 'เข้าสู่ระบบ' : 'ไม่พร้อมใช้งาน';
@@ -303,7 +312,7 @@
     const name = document.createElement('strong');
     name.textContent = state.profile?.displayName || state.user.email;
     const meta = document.createElement('span');
-    meta.textContent = `${state.profile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน'}${state.profile?.organization ? ` · ${state.profile.organization}` : ''}`;
+    meta.textContent = `${roleLabel(state.profile?.role)}${state.profile?.organization ? ` · ${state.profile.organization}` : ''}`;
     copy.append(name, meta);
     summary.append(avatar, copy);
     const mod1 = document.createElement('a');
@@ -315,11 +324,11 @@
     mod1.style.textDecoration = 'none';
     const actions = document.createElement('div');
     actions.className = 'account-actions';
-    if (state.profile?.role === 'admin') {
+    if (isAdmin()) {
       const permissions = document.createElement('button');
       permissions.className = 'modal-primary';
       permissions.type = 'button';
-      permissions.textContent = 'จัดการผู้ใช้และสิทธิ์';
+      permissions.textContent = 'ศูนย์จัดการระบบ';
       permissions.addEventListener('click', () => window.permissionOutOpenAdminUsers?.());
       actions.appendChild(permissions);
     }
