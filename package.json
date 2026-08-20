@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Production fiber route analysis and annual fee assessment workspace",
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
     "build:local": "node scripts/build-local.mjs",
     "data:prepare-pea": "node scripts/prepare-pea-data.mjs",
@@ -17,7 +18,8 @@
     "data:import-osm-reference": "node scripts/import-osm-reference.mjs",
     "data:prepare-mod2-sites": "node scripts/import-mod2-sites.mjs --prepare-only",
     "data:import-mod2-sites": "node scripts/import-mod2-sites.mjs",
-    "check": "node --check production.js && node --check mod2.js && node --check login.js && node --check admin-users.js && node --check admin-data.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check": "npm run check:secrets && node --check production.js && node --check mod2.js && node --check login.js && node --check admin-users.js && node --check admin-data.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs",
     "preview": "node scripts/serve.mjs"
   },
   "engines": {

@@ -10,7 +10,7 @@
 - ตัวกรองจังหวัด สถานะสาย และระดับการทับซ้อน
 - คำนวณเสา, diameter, อัตราค่าพาดสาย, surcharge และยอดรวมแบบ real-time
 - Export CSV, KML และ KMZ ตามตัวกรอง พร้อมรหัส/ชื่อ/ประเภทพื้นที่ PEA ของแต่ละเส้นทาง และแนบ Polygon พื้นที่ PEA ใน KML/KMZ
-- ระบบบัญชี Supabase Auth และสิทธิ์ Admin สำหรับจัดการผู้ใช้งาน
+- ระบบบัญชี Supabase Auth พร้อมบทบาท Admin, Super User และขั้นตอนอนุมัติผู้ใช้ใหม่
 - หน้าเข้าสู่ระบบกลางที่ `/login/` รองรับการส่งกลับด้วย `returnTo`, ตรวจสิทธิ์ตามโมดูล และจัดการลืม/ตั้งรหัสผ่านใหม่จากจุดเดียว
 - โครงสร้างแบบหลายโมดูล โดย MOD 1 ใช้วิเคราะห์ PEA/UFM และสามารถเพิ่ม MOD 2 โดยใช้ Supabase project เดียวกันได้
 - Supabase-required ใน Production: Cloudflare Worker สร้าง runtime config จาก Variables and Secrets และหน้าแอปจะแจ้งเตือนหากตั้งค่าไม่ครบ
@@ -28,7 +28,7 @@
 
 ### ระบบ Login และ Admin User Management
 
-1. รัน migration [`supabase/migrations/20260723130000_user_administration.sql`](supabase/migrations/20260723130000_user_administration.sql) ใน Supabase SQL Editor เพื่อให้ `profiles` มีคอลัมน์สิทธิ์สำหรับรายงานและการเชื่อมต่อกับระบบอื่น
+1. รัน migration [`supabase/migrations/20260723130000_user_administration.sql`](supabase/migrations/20260723130000_user_administration.sql) แล้วรัน [`supabase/migrations/20260819100000_super_user_approval.sql`](supabase/migrations/20260819100000_super_user_approval.sql) ใน Supabase SQL Editor เพื่อเพิ่มบทบาท Super User และคิวอนุมัติการสร้างผู้ใช้
 2. สร้างผู้ใช้คนแรกใน **Authentication → Users** แล้วกำหนดให้เป็น Admin ด้วย SQL:
 
 ```sql
@@ -41,11 +41,11 @@ where id = (select id from auth.users where email = 'admin@your-company.com');
 
 - `SUPABASE_SERVICE_ROLE_KEY` เป็นชนิด **Secret** เท่านั้น
 
-Service-role key ใช้เฉพาะภายใน Cloudflare Worker สำหรับ `/api/admin/users` และไม่ถูกส่งไปยัง Browser หรือ `bootstrap.js` ระบบจะตรวจ Supabase access token, สถานะบัญชี และสิทธิ์ `admin` ทุกคำขอ รวมถึงป้องกัน Admin ลบบัญชีตนเองหรือลดจำนวน Admin ที่ใช้งานได้เหลือศูนย์
+Service-role key ใช้เฉพาะภายใน Cloudflare Worker สำหรับ `/api/admin/users` และ `/api/admin/user-requests` และไม่ถูกส่งไปยัง Browser หรือ `bootstrap.js` ระบบจะตรวจ Supabase access token และสถานะบัญชีทุกคำขอ รวมถึงป้องกันการเลื่อนสิทธิ์โดย Super User และป้องกัน Admin ลบบัญชีตนเองหรือลดจำนวน Admin ที่ใช้งานได้เหลือศูนย์
 
 Worker บันทึกสิทธิ์หลักไว้ใน Supabase Auth `app_metadata` และซิงก์ `role`, `is_active` และ `permissions` ลง `profiles` เพื่อให้ Worker และ RLS ตรวจสถานะล่าสุดทุกคำขอโดยไม่รอ access token รอบใหม่
 
-บัญชีใหม่ต้องสร้างจากเมนู **บัญชีผู้ใช้ → จัดการผู้ใช้** โดย Admin การสมัครบัญชีด้วยตนเองจากหน้าเว็บถูกปิดไว้ ผู้ใช้ยังสามารถขอลิงก์ตั้งรหัสผ่านใหม่ผ่านหน้า Login ได้
+Admin สร้าง Admin, Super User หรือ User ได้จาก **ศูนย์จัดการระบบ** ส่วน Super User ส่งคำขอสร้างได้เฉพาะ Super User หรือ User และระบบจะยังไม่สร้างบัญชีจนกว่า Admin จะอนุมัติ เมื่ออนุมัติแล้ว Supabase จะส่งอีเมลเชิญให้ผู้ใช้ตั้งรหัสผ่านเอง การสมัครบัญชีสาธารณะยังคงปิดไว้
 
 ### ระบบอัปเดตข้อมูล PEA/UFM สำหรับ Admin
 
@@ -76,13 +76,12 @@ npm run build
 ทดสอบ UX/UI แบบ Local พร้อมข้อมูล Supabase:
 
 ```bash
-npm run build:local
-npm run preview
+npm run dev
 ```
 
-`build:local` อ่านเฉพาะ `SUPABASE_URL` และ `SUPABASE_PUBLISHABLE_KEY` จาก `API_Key.txt`
+`npm run dev` จะ build และเปิด preview ที่ `http://127.0.0.1:4173` โดยอ่าน public client configuration จาก `API_Key_Local.txt` (fallback เป็น `API_Key.txt`)
 เพื่อสร้าง `dist/bootstrap.js` ชั่วคราว โดยไม่อ่านหรือส่ง `service_role`/secret key ไปยังหน้าเว็บ
-ทั้ง `API_Key.txt` และ `dist/` ถูกละเว้นโดย Git และห้ามนำขึ้น repository
+ทั้ง `API_Key_Local.txt`, `API_Key.txt` และ `dist/` ถูกละเว้นโดย Git และห้ามนำขึ้น repository
 
 ผลลัพธ์อยู่ใน `dist/` ส่วน `src/worker.js` จะอ่าน Supabase configuration ตอน runtime จึงไม่ต้องเปิดเผยค่าให้ build process
 
@@ -119,7 +118,7 @@ npx wrangler deploy
 - `production.js` / `production.css` — MOD 1, Supabase datasets, auth และ UI production
 - `mod2.html` / `mod2.js` / `mod2.css` — MOD 2 Site Facility map, filters, dashboard และ CSV export
 - `login.html` / `login.js` / `login.css` — Central Login สำหรับทุกโมดูลและ password recovery
-- `admin-users.js` / `admin-users.css` — หน้าจัดการผู้ใช้สำหรับ Admin
+- `admin-users.js` / `admin-users.css` — ศูนย์จัดการผู้ใช้ สิทธิ์ และคิวอนุมัติสำหรับ Admin/Super User
 - `admin-data.js` / `admin-data.css` — อัปโหลด Staging, ตรวจ Diff, Publish และ Rollback ข้อมูล PEA/UFM
 - `supabase/schema.sql` — ตาราง, indexes, triggers, grants และ RLS policies
 - `supabase/migrations/20260724120000_mod2_site_facility.sql` — MOD 2 Site Facility แบบ versioned, PostGIS, RLS และ audit
@@ -161,7 +160,7 @@ npx wrangler deploy
 
 - เปิด Email confirmation และกำหนด SMTP ขององค์กรใน Supabase
 - ตรวจ URL redirect ของ Production/Preview
-- ทดสอบ RLS ด้วยบัญชี User/Admin ให้แน่ใจว่า User อ่านชุดข้อมูลที่อนุญาตได้ แต่แก้ไขข้อมูลกลางหรือสิทธิ์ผู้ใช้งานไม่ได้
+- ทดสอบ RLS ด้วยบัญชี User/Super User/Admin ให้แน่ใจว่า Super User ส่งคำขอเพิ่มผู้ใช้ได้แต่อนุมัติเองไม่ได้ และ User อ่านได้เฉพาะชุดข้อมูลที่อนุญาต
 - เปิด Cloudflare Web Analytics/Logpush ตามนโยบายองค์กร
 - กำหนด retention และ backup/PITR ของ Supabase ตาม SLA
 - แยกตาราง, Storage prefix และ RLS ของแต่ละ MOD ให้ชัดเจน แม้จะใช้ Supabase project และระบบ Login เดียวกัน

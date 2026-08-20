@@ -89,6 +89,14 @@ async function requireAdmin(request, env) {
   return { supabase, user: authData.user, profile };
 }
 
+async function requireManager(request, env) {
+  const session = await requireUser(request, env);
+  if (!isManagementRole(session.access.role)) {
+    throw new HttpError(403, 'เฉพาะ Admin หรือ Super User เท่านั้น', 'manager_required');
+  }
+  return session;
+}
+
 async function requireUser(request, env) {
   const supabase = adminClient(env);
   const token = bearerToken(request);
@@ -143,8 +151,12 @@ function cleanEmail(value) {
 
 function cleanRole(value) {
   const role = String(value || 'user');
-  if (!['admin', 'user'].includes(role)) throw new HttpError(400, 'สิทธิ์ผู้ใช้ไม่ถูกต้อง', 'validation_error');
+  if (!['admin', 'super_user', 'user'].includes(role)) throw new HttpError(400, 'สิทธิ์ผู้ใช้ไม่ถูกต้อง', 'validation_error');
   return role;
+}
+
+function isManagementRole(role) {
+  return role === 'admin' || role === 'super_user';
 }
 
 function cleanUserId(value) {
@@ -158,7 +170,7 @@ function userAccess(user, profile = {}) {
   const role = metadata.permission_out_role || profile.role || 'user';
   const metadataActive = metadata.permission_out_active;
   const isActive = metadataActive === undefined ? profile.is_active !== false : metadataActive !== false;
-  const normalizedRole = role === 'admin' ? 'admin' : 'user';
+  const normalizedRole = ['admin', 'super_user'].includes(role) ? role : 'user';
   return {
     role: normalizedRole,
     isActive,
@@ -190,13 +202,13 @@ function encodeStoragePath(path) {
 
 function normalizePermissions(value, role = 'user') {
   const permissions = {};
-  const isAdmin = role === 'admin';
+  const hasFullAccess = isManagementRole(role);
   for (const [key, defaults] of Object.entries(MODULE_PERMISSIONS)) {
     const source = value && typeof value === 'object' ? value[key] || {} : {};
     permissions[key] = {
       label: defaults.label,
-      view: isAdmin || source.view !== false,
-      update: isAdmin || source.update === true
+      view: hasFullAccess || source.view !== false,
+      update: hasFullAccess || source.update === true
     };
   }
   return permissions;
@@ -204,7 +216,7 @@ function normalizePermissions(value, role = 'user') {
 
 function cleanPermissions(value, role = 'user') {
   const permissions = normalizePermissions(value, role);
-  if (role === 'admin') return permissions;
+  if (isManagementRole(role)) return permissions;
   for (const key of Object.keys(permissions)) {
     permissions[key].view = Boolean(permissions[key].view);
     permissions[key].update = Boolean(permissions[key].update && permissions[key].view);
@@ -213,7 +225,7 @@ function cleanPermissions(value, role = 'user') {
 }
 
 function hasModulePermission(access, moduleKey, action = 'view') {
-  if (access.role === 'admin') return true;
+  if (isManagementRole(access.role)) return true;
   const permission = access.permissions?.[moduleKey];
   return action === 'update' ? permission?.view && permission?.update : permission?.view;
 }
@@ -297,7 +309,7 @@ function publicUser(user, profile = {}) {
 }
 
 async function listAdminUsers(request, env) {
-  const { supabase } = await requireAdmin(request, env);
+  const { supabase } = await requireManager(request, env);
   const url = new URL(request.url);
   const page = Math.max(1, Math.min(100_000, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1));
   const perPage = Math.max(1, Math.min(ADMIN_PAGE_SIZE, Number.parseInt(url.searchParams.get('perPage') || '50', 10) || 50));
@@ -324,16 +336,46 @@ async function listAdminUsers(request, env) {
 }
 
 async function createAdminUser(request, env) {
-  const { supabase } = await requireAdmin(request, env);
+  const { supabase, user: requester, access } = await requireManager(request, env);
   const payload = await requestJson(request);
   const email = cleanEmail(payload.email);
+  const displayName = cleanText(payload.displayName, 'ชื่อผู้ใช้', 120, true);
+  const organization = cleanText(payload.organization, 'หน่วยงาน', 160);
+  const role = cleanRole(payload.role);
+  if (access.role === 'super_user') {
+    if (role === 'admin') {
+      throw new HttpError(403, 'Super User ไม่สามารถขอสร้างบัญชี Admin ได้', 'role_escalation_denied');
+    }
+    const permissions = cleanPermissions(payload.permissions, role);
+    const existing = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (existing.error) throw existing.error;
+    if ((existing.data?.users || []).some(user => user.email?.toLowerCase() === email)) {
+      throw new HttpError(409, 'อีเมลนี้มีบัญชีอยู่แล้ว', 'email_exists');
+    }
+    const result = await supabase
+      .from('user_creation_requests')
+      .insert({
+        email,
+        display_name: displayName,
+        organization: organization || null,
+        requested_role: role,
+        requested_permissions: permissions,
+        requested_by: requester.id
+      })
+      .select('*')
+      .single();
+    if (result.error?.code === '23505') {
+      throw new HttpError(409, 'อีเมลนี้มีคำขอที่รออนุมัติอยู่แล้ว', 'request_exists');
+    }
+    if (result.error) throw result.error;
+    return jsonResponse({ request: publicUserRequest(result.data), approvalRequired: true }, 202);
+  }
+
   const password = String(payload.password || '');
   if (password.length < 12 || password.length > 128) {
     throw new HttpError(400, 'รหัสผ่านต้องมี 12–128 ตัวอักษร', 'validation_error');
   }
-  const displayName = cleanText(payload.displayName, 'ชื่อผู้ใช้', 120, true);
-  const organization = cleanText(payload.organization, 'หน่วยงาน', 160);
-  const role = cleanRole(payload.role);
+  const isActive = payload.isActive === undefined ? true : Boolean(payload.isActive);
   const permissions = cleanPermissions(payload.permissions, role);
   const { data, error } = await supabase.auth.admin.createUser({
     email,
@@ -342,9 +384,10 @@ async function createAdminUser(request, env) {
     user_metadata: { display_name: displayName, organization },
     app_metadata: {
       permission_out_role: role,
-      permission_out_active: true,
+      permission_out_active: isActive,
       permission_out_permissions: permissions
-    }
+    },
+    ban_duration: isActive ? 'none' : '876000h'
   });
   if (error || !data.user) throw error || new Error('สร้างผู้ใช้ไม่สำเร็จ');
   const profile = {
@@ -353,7 +396,7 @@ async function createAdminUser(request, env) {
     organization: organization || null,
     role,
     permissions,
-    is_active: true
+    is_active: isActive
   };
   try {
     await saveProfile(supabase, profile);
@@ -365,7 +408,7 @@ async function createAdminUser(request, env) {
 }
 
 async function updateAdminUser(request, env, targetId) {
-  const { supabase, user: requester } = await requireAdmin(request, env);
+  const { supabase, user: requester, access: requesterAccess } = await requireManager(request, env);
   const id = cleanUserId(targetId);
   const payload = await requestJson(request);
   const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(id);
@@ -375,6 +418,9 @@ async function updateAdminUser(request, env, targetId) {
 
   const role = cleanRole(payload.role ?? existingAccess.role);
   const isActive = payload.isActive === undefined ? existingAccess.isActive : Boolean(payload.isActive);
+  if (requesterAccess.role === 'super_user' && (existingAccess.role !== 'user' || role !== 'user')) {
+    throw new HttpError(403, 'Super User แก้ไขได้เฉพาะบัญชี User ทั่วไปและไม่สามารถเลื่อนสิทธิ์ได้', 'role_escalation_denied');
+  }
   if (id === requester.id && (role !== 'admin' || !isActive)) {
     throw new HttpError(409, 'ไม่สามารถลดสิทธิ์หรือระงับบัญชีของตนเองได้', 'self_protection');
   }
@@ -414,17 +460,144 @@ async function updateAdminUser(request, env, targetId) {
 }
 
 async function deleteAdminUser(request, env, targetId) {
-  const { supabase, user: requester } = await requireAdmin(request, env);
+  const { supabase, user: requester, access: requesterAccess } = await requireManager(request, env);
   const id = cleanUserId(targetId);
   if (id === requester.id) throw new HttpError(409, 'ไม่สามารถลบบัญชีของตนเองได้', 'self_protection');
   const { data, error: userError } = await supabase.auth.admin.getUserById(id);
   if (userError || !data.user) throw new HttpError(404, 'ไม่พบผู้ใช้', 'user_not_found');
   const profile = await getProfile(supabase, id);
   const access = userAccess(data.user, profile);
+  if (requesterAccess.role === 'super_user' && access.role !== 'user') {
+    throw new HttpError(403, 'Super User ลบได้เฉพาะบัญชี User ทั่วไป', 'role_escalation_denied');
+  }
   if (access.role === 'admin' && access.isActive) await ensureAnotherAdmin(supabase, id);
   const { error } = await supabase.auth.admin.deleteUser(id);
   if (error) throw error;
   return jsonResponse({ ok: true });
+}
+
+function publicUserRequest(request) {
+  return {
+    id: request.id,
+    email: request.email,
+    displayName: request.display_name,
+    organization: request.organization || '',
+    requestedRole: request.requested_role,
+    permissions: request.requested_permissions || {},
+    status: request.status,
+    requestedBy: request.requested_by,
+    reviewedBy: request.reviewed_by,
+    approvedUserId: request.approved_user_id,
+    reviewNote: request.review_note || '',
+    createdAt: request.created_at,
+    reviewedAt: request.reviewed_at,
+    updatedAt: request.updated_at
+  };
+}
+
+async function listUserCreationRequests(request, env) {
+  const { supabase, user, access } = await requireManager(request, env);
+  let query = supabase
+    .from('user_creation_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (access.role === 'super_user') query = query.eq('requested_by', user.id);
+  const { data, error } = await query;
+  if (error) throw error;
+  return jsonResponse({ requests: (data || []).map(publicUserRequest) });
+}
+
+async function reviewUserCreationRequest(request, env, requestId) {
+  const { supabase, user: reviewer } = await requireAdmin(request, env);
+  const id = cleanUserId(requestId);
+  const payload = await requestJson(request);
+  const action = String(payload.action || '');
+  if (!['approve', 'reject'].includes(action)) {
+    throw new HttpError(400, 'การดำเนินการต้องเป็น approve หรือ reject', 'validation_error');
+  }
+  const reviewNote = cleanText(payload.reviewNote, 'หมายเหตุ', 500);
+  const current = await supabase.from('user_creation_requests').select('*').eq('id', id).maybeSingle();
+  if (current.error) throw current.error;
+  if (!current.data) throw new HttpError(404, 'ไม่พบคำขอ', 'request_not_found');
+  if (current.data.status !== 'pending') {
+    throw new HttpError(409, 'คำขอนี้ถูกดำเนินการแล้ว', 'request_already_reviewed');
+  }
+  if (action === 'reject') {
+    const rejected = await supabase
+      .from('user_creation_requests')
+      .update({ status: 'rejected', reviewed_by: reviewer.id, reviewed_at: new Date().toISOString(), review_note: reviewNote || null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('status', 'pending')
+      .select('*')
+      .single();
+    if (rejected.error) throw rejected.error;
+    return jsonResponse({ request: publicUserRequest(rejected.data) });
+  }
+
+  const claimed = await supabase
+    .from('user_creation_requests')
+    .update({ status: 'processing', reviewed_by: reviewer.id, review_note: reviewNote || null, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select('*')
+    .maybeSingle();
+  if (claimed.error) throw claimed.error;
+  if (!claimed.data) throw new HttpError(409, 'คำขอนี้กำลังถูกดำเนินการโดย Admin คนอื่น', 'request_in_progress');
+
+  const requestedRole = cleanRole(claimed.data.requested_role);
+  if (requestedRole === 'admin') throw new HttpError(403, 'คำขอไม่สามารถสร้างบัญชี Admin ได้', 'role_escalation_denied');
+  const permissions = cleanPermissions(claimed.data.requested_permissions, requestedRole);
+  let invitedUserId = null;
+  try {
+    const invited = await supabase.auth.admin.inviteUserByEmail(claimed.data.email, {
+      data: {
+        display_name: claimed.data.display_name,
+        organization: claimed.data.organization || ''
+      }
+    });
+    if (invited.error || !invited.data.user) throw invited.error || new Error('ส่งคำเชิญไม่สำเร็จ');
+    invitedUserId = invited.data.user.id;
+    const authUser = await supabase.auth.admin.updateUserById(invited.data.user.id, {
+      app_metadata: {
+        ...(invited.data.user.app_metadata || {}),
+        permission_out_role: requestedRole,
+        permission_out_active: true,
+        permission_out_permissions: permissions
+      }
+    });
+    if (authUser.error || !authUser.data.user) throw authUser.error || new Error('กำหนดสิทธิ์ผู้ใช้ไม่สำเร็จ');
+    const profile = {
+      id: authUser.data.user.id,
+      display_name: claimed.data.display_name,
+      organization: claimed.data.organization || null,
+      role: requestedRole,
+      permissions,
+      is_active: true
+    };
+    await saveProfile(supabase, profile);
+    const approved = await supabase
+      .from('user_creation_requests')
+      .update({
+        status: 'approved',
+        approved_user_id: authUser.data.user.id,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (approved.error) throw approved.error;
+    return jsonResponse({ request: publicUserRequest(approved.data), user: publicUser(authUser.data.user, profile) });
+  } catch (error) {
+    if (invitedUserId) await supabase.auth.admin.deleteUser(invitedUserId).catch(() => {});
+    await supabase
+      .from('user_creation_requests')
+      .update({ status: 'pending', reviewed_by: null, review_note: null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('status', 'processing');
+    throw error;
+  }
 }
 
 function cleanDataSource(value) {
@@ -867,7 +1040,7 @@ async function activeMod2Sites(request, env) {
     nextAfter: null,
     count: 0
   };
-  if (access.role !== 'admin') {
+  if (!isManagementRole(access.role)) {
     for (const feature of payload.features || []) {
       const properties = feature?.properties;
       if (!properties || typeof properties !== 'object') continue;
@@ -1058,7 +1231,7 @@ async function activeBillingFormula(request, env, url) {
 }
 
 async function listMod2CommentNotifications(request, env) {
-  const { supabase } = await requireAdmin(request, env);
+  const { supabase } = await requireManager(request, env);
   const url = new URL(request.url);
   const limit = Math.max(1, Math.min(50, Number.parseInt(url.searchParams.get('limit') || '20', 10) || 20));
   const comments = await supabase
@@ -1128,7 +1301,7 @@ async function updateMod2Site(request, env, siteId) {
     throw new HttpError(400, 'จำนวนลูกค้าต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป', 'validation_error');
   }
   const opex = payload.opex === undefined ? Number(site.opex || 0) : Number(payload.opex);
-  if (access.role === 'admin' && (!Number.isFinite(opex) || opex < 0 || opex > 999999999999.99)) {
+  if (isManagementRole(access.role) && (!Number.isFinite(opex) || opex < 0 || opex > 999999999999.99)) {
     throw new HttpError(400, 'OPEX ไม่ถูกต้อง', 'validation_error');
   }
   const changes = {
@@ -1143,7 +1316,7 @@ async function updateMod2Site(request, env, siteId) {
     owner: cleanText(payload.owner, ' Owner', 200) || null,
     node_equipment: cleanText(payload.nodeEquipment, ' Node Equipment', 500) || null,
     customers,
-    ...(access.role === 'admin' ? { opex } : {}),
+    ...(isManagementRole(access.role) ? { opex } : {}),
     remark: cleanText(payload.remark, ' Remark', 2000) || null,
     latitude,
     longitude,
@@ -1161,7 +1334,7 @@ async function updateMod2Site(request, env, siteId) {
     actor_id: user.id
   });
   if (audit.error) throw audit.error;
-  return jsonResponse({ site: mod2SiteFeature(result.data, access.role === 'admin') });
+  return jsonResponse({ site: mod2SiteFeature(result.data, isManagementRole(access.role)) });
 }
 
 async function deleteMod2Site(request, env, siteId) {
@@ -1283,6 +1456,7 @@ async function publishMod2Version(request, env, versionId) {
 async function handleAdminApi(request, env, url) {
   if (request.method === 'GET' && url.pathname === '/api/admin/users') return listAdminUsers(request, env);
   if (request.method === 'POST' && url.pathname === '/api/admin/users') return createAdminUser(request, env);
+  if (request.method === 'GET' && url.pathname === '/api/admin/user-requests') return listUserCreationRequests(request, env);
   if (request.method === 'GET' && url.pathname === '/api/admin/data/datasets') return listManagedDatasets(request, env);
   if (request.method === 'POST' && url.pathname === '/api/admin/data/uploads') return createDatasetUpload(request, env);
   if (request.method === 'GET' && url.pathname === '/api/admin/mod2/datasets') return listMod2Datasets(request, env);
@@ -1303,6 +1477,8 @@ async function handleAdminApi(request, env, url) {
   const match = url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
   if (match && request.method === 'PATCH') return updateAdminUser(request, env, match[1]);
   if (match && request.method === 'DELETE') return deleteAdminUser(request, env, match[1]);
+  const requestMatch = url.pathname.match(/^\/api\/admin\/user-requests\/([^/]+)$/);
+  if (requestMatch && request.method === 'PATCH') return reviewUserCreationRequest(request, env, requestMatch[1]);
   throw new HttpError(405, 'ไม่รองรับคำขอนี้', 'method_not_allowed');
 }
 
@@ -1399,9 +1575,9 @@ export default {
       } catch (error) {
         const migrationMissing = ['42P01', 'PGRST205', 'PGRST202'].includes(error?.code);
         const status = migrationMissing ? 503 : error instanceof HttpError ? error.status : 500;
-        const code = migrationMissing ? 'dataset_migration_required' : error instanceof HttpError ? error.code : 'server_error';
+        const code = migrationMissing ? 'admin_migration_required' : error instanceof HttpError ? error.code : 'server_error';
         const message = migrationMissing
-          ? 'ยังไม่ได้ติดตั้ง Dataset Versioning migration ใน Supabase'
+          ? 'ยังไม่ได้ติดตั้ง migration สำหรับศูนย์จัดการระบบใน Supabase'
           : status === 500 ? 'ระบบจัดการข้อมูลขัดข้อง กรุณาลองใหม่' : error.message;
         return jsonResponse({ error: { code, message } }, status);
       }

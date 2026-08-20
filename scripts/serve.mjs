@@ -21,7 +21,17 @@ function parseSecrets(source) {
 
 let localEnv = {};
 try {
-  const secrets = parseSecrets(await readFile(join(projectRoot, 'API_Key.txt'), 'utf8'));
+  let source = '';
+  for (const fileName of ['API_Key_Local.txt', 'API_Key.txt']) {
+    try {
+      source = await readFile(join(projectRoot, fileName), 'utf8');
+      break;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+  if (!source) throw new Error('Local API key file is missing');
+  const secrets = parseSecrets(source);
   localEnv = {
     SUPABASE_URL: secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL || '',
     SUPABASE_PUBLISHABLE_KEY: secrets.SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '',

@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const required = ['Permission_Out.html', 'production.css', 'production.js', 'pea-hierarchy.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260730160000_osm_reference_data.sql', 'supabase/migrations/20260730180000_managed_reference_datasets.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-osm-reference.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
+const required = ['Permission_Out.html', 'production.css', 'production.js', 'pea-hierarchy.js', 'admin-users.css', 'admin-users.js', 'admin-data.css', 'admin-data.js', 'ux-refresh.css', 'ux-refresh.js', 'mod2.html', 'mod2.css', 'mod2.js', 'login.html', 'login.css', 'login.js', 'src/worker.js', 'supabase/schema.sql', 'supabase/migrations/20260722190000_uih_postgis.sql', 'supabase/migrations/20260723100000_billing_engine.sql', 'supabase/migrations/20260723110000_billing_existing_poles.sql', 'supabase/migrations/20260723130000_user_administration.sql', 'supabase/migrations/20260723150000_dataset_versioning.sql', 'supabase/migrations/20260724120000_mod2_site_facility.sql', 'supabase/migrations/20260726120000_private_mod1_access.sql', 'supabase/migrations/20260730160000_osm_reference_data.sql', 'supabase/migrations/20260730180000_managed_reference_datasets.sql', 'supabase/migrations/20260819100000_super_user_approval.sql', 'wrangler.toml', 'scripts/prepare-uih-data.mjs', 'scripts/prepare-uih-optimized.mjs', 'scripts/upload-uih-data.mjs', 'scripts/import-uih-postgis.mjs', 'scripts/import-osm-reference.mjs', 'scripts/import-mod2-sites.mjs', 'scripts/prepare-ufm-data.mjs', 'scripts/upload-ufm-data.mjs'];
 await Promise.all(required.map(file => access(resolve(root, file))));
 const html = await readFile(resolve(root, 'Permission_Out.html'), 'utf8');
 const production = await readFile(resolve(root, 'production.js'), 'utf8');
@@ -19,6 +19,7 @@ const workerSource = await readFile(resolve(root, 'src/worker.js'), 'utf8');
 const privateAccessMigration = await readFile(resolve(root, 'supabase/migrations/20260726120000_private_mod1_access.sql'), 'utf8');
 const osmReferenceMigration = await readFile(resolve(root, 'supabase/migrations/20260730160000_osm_reference_data.sql'), 'utf8');
 const managedReferenceMigration = await readFile(resolve(root, 'supabase/migrations/20260730180000_managed_reference_datasets.sql'), 'utf8');
+const superUserMigration = await readFile(resolve(root, 'supabase/migrations/20260819100000_super_user_approval.sql'), 'utf8');
 const uploadScripts = await Promise.all([
   'scripts/upload-pea-data.mjs',
   'scripts/upload-uih-data.mjs',
@@ -194,7 +195,9 @@ if (!html.includes('seg._primaryProvince = Array.from(counts.entries())') || !ht
 if (!html.includes('id="kmlExportDialog"') || !html.includes('function requestKmlExportOptions(') || !html.includes('dialog.showModal()')) {
   throw new Error('KML/KMZ pre-export options dialog is missing');
 }
-if (!html.includes("const button = event.currentTarget;\n  if (await requestKmlExportOptions('KML'))") || !html.includes("const button = event.currentTarget;\n  if (await requestKmlExportOptions('KMZ'))")) {
+const keepsKmlButton = /const button = event\.currentTarget;\r?\n\s*if \(await requestKmlExportOptions\('KML'\)\)/.test(html);
+const keepsKmzButton = /const button = event\.currentTarget;\r?\n\s*if \(await requestKmlExportOptions\('KMZ'\)\)/.test(html);
+if (!keepsKmlButton || !keepsKmzButton) {
   throw new Error('KML/KMZ export must preserve the clicked button across the options await');
 }
 if (!html.includes('if (button) button.textContent = `กำลังสร้าง ${format}…`;')) {
@@ -280,11 +283,11 @@ for (const marker of ['id="opexReportBtn"', 'function openOpexReport()', 'functi
 for (const marker of ["name: 'customers'", "name: 'opex'", 'site-edit-section', 'payload.customers = Number(payload.customers)']) {
   if (!mod2Js.includes(marker)) throw new Error(`Complete MOD 2 site editor marker is missing: ${marker}`);
 }
-if (!workerSource.includes("if (access.role !== 'admin')") || !workerSource.includes("if (key.toLocaleLowerCase('en-US') === 'opex')")) {
-  throw new Error('MOD 2 API must redact OPEX for non-admin users');
+if (!workerSource.includes('if (!isManagementRole(access.role))') || !workerSource.includes("normalized === 'opex' || normalized.includes('total opex')")) {
+  throw new Error('MOD 2 API must redact OPEX for non-management users');
 }
-if (!workerSource.includes('customers,') || !workerSource.includes("...(access.role === 'admin' ? { opex } : {})")) {
-  throw new Error('MOD 2 site editor API must persist customers and admin-only OPEX');
+if (!workerSource.includes('customers,') || !workerSource.includes('...(isManagementRole(access.role) ? { opex } : {})')) {
+  throw new Error('MOD 2 site editor API must persist customers and management-only OPEX');
 }
 if (!mod2Js.includes('function syncSiteSearch(') || !mod2Js.includes('handleSiteSearchKeydown')) {
   throw new Error('MOD 2 map/sidebar search synchronization is missing');
@@ -324,6 +327,12 @@ if (loginJs.includes('client.auth.signUp(') || !production.includes('loadCurrent
 }
 for (const marker of ['permissionOutOpenAdminUsers', '/api/admin/users', 'admin-user-form', 'isActive']) {
   if (!adminUsers.includes(marker)) throw new Error(`Admin user marker is missing: ${marker}`);
+}
+for (const marker of ["role === 'super_user'", '/api/admin/user-requests', 'approvalRequired', 'inviteUserByEmail', 'requireManager(request, env)']) {
+  if (!`${adminUsers}\n${workerSource}`.includes(marker)) throw new Error(`Super User approval marker is missing: ${marker}`);
+}
+for (const marker of ["role in ('admin', 'super_user', 'user')", 'create table if not exists public.user_creation_requests', 'revoke all on public.user_creation_requests from anon, authenticated']) {
+  if (!superUserMigration.includes(marker)) throw new Error(`Super User migration security marker is missing: ${marker}`);
 }
 for (const marker of ['permissionOutOpenAdminData', '/api/admin/data/uploads', 'uploadToSignedUrl', 'logical_id']) {
   if (!adminData.includes(marker)) throw new Error(`Admin data marker is missing: ${marker}`);
