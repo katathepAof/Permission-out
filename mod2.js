@@ -60,6 +60,24 @@
       customer: '#ff5576'
     }
   };
+  const MOD1_SELECTED_ROUTE_STYLE = Object.freeze({ color: '#facc15', weight: 8, opacity: 1 });
+  let selectedMod1Route = null;
+
+  function selectMod1Route(route) {
+    if (selectedMod1Route?.route !== route) {
+      if (selectedMod1Route?.route?._map) selectedMod1Route.route.setStyle(selectedMod1Route.style);
+      selectedMod1Route = { route, style: {
+        color: route.options.color, weight: route.options.weight, opacity: route.options.opacity
+      } };
+    }
+    route.setStyle(MOD1_SELECTED_ROUTE_STYLE);
+    route.bringToFront?.();
+  }
+
+  function clearSelectedMod1Route() {
+    if (selectedMod1Route?.route?._map) selectedMod1Route.route.setStyle(selectedMod1Route.style);
+    selectedMod1Route = null;
+  }
   const MODULES = [
     { key: 'mod1', label: 'MOD 1', detail: 'PEA / UFM route intelligence' },
     { key: 'mod2', label: 'MOD 2', detail: 'Site Facility & Design' }
@@ -682,6 +700,7 @@
     });
     route.on('click', event => {
       L.DomEvent.stopPropagation(event.originalEvent);
+      selectMod1Route(route);
       L.popup({
           minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
         })
@@ -690,6 +709,9 @@
         .openOn(map);
     });
     route.addTo(mod1RouteLayers[type]);
+    route.on('popupclose', () => {
+      if (selectedMod1Route?.route === route) clearSelectedMod1Route();
+    });
   }
 
   async function loadMod1RouteType(type, area, requestId) {
@@ -714,6 +736,7 @@
   }
 
   async function syncMod1RouteLayers() {
+    clearSelectedMod1Route();
     const areas = [...selectedValues(filterElements.area)];
     const areaLabel = areas.join(', ');
     const enabledTypes = [

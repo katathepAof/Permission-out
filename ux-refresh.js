@@ -229,6 +229,10 @@
     </section>`;
   body.appendChild(drawerBackdrop);
   q('#datasetDrawerBody', drawerBackdrop).appendChild(dataGrid);
+  const pickerGuide = document.createElement('div');
+  pickerGuide.className = 'dataset-picker-guide';
+  pickerGuide.innerHTML = '<span><i class="is-base"></i>ฐานสำหรับวิเคราะห์</span><span><i class="is-compare"></i>ชุดที่นำมาเปรียบเทียบ</span><small>เลือกบทบาทได้จากปุ่มด้านขวาของแต่ละรายการ</small>';
+  q('#datasetDrawerBody', drawerBackdrop).prepend(pickerGuide);
 
   q('#baseCatalogSearch')?.setAttribute('placeholder', 'ค้นหาชุดข้อมูล PEA…');
   q('#compareCatalogSearch')?.setAttribute('placeholder', 'ค้นหาชุดข้อมูล UFM…');

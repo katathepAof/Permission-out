@@ -1183,7 +1183,7 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260730-multi-report-filter">
+<link rel="stylesheet" href="ux-refresh.css?v=20260825-route-selection-layout">
 <link rel="stylesheet" href="app-theme.css?v=20260807-thailand-overview">
 <script src="app-theme.js?v=20260807-theme-review"></script>
 </head>
@@ -1815,6 +1815,34 @@ const LARGE_RESULT_THRESHOLD = 1500;
 const REPORT_ROW_LIMIT = 300;
 let aggregateResultMode = false;
 let aggregateSelectionLayer = null;
+let selectedRouteLayer = null;
+const SELECTED_ROUTE_STYLE = Object.freeze({ color: '#facc15', weight: 8, opacity: 1 });
+
+function clearSelectedRouteLayer() {
+  if (!selectedRouteLayer) return;
+  const { layer, style } = selectedRouteLayer;
+  if (layer?._map && typeof layer.setStyle === 'function') layer.setStyle(style);
+  selectedRouteLayer = null;
+}
+
+function selectRouteLayer(layer) {
+  if (!layer || selectedRouteLayer?.layer === layer) return;
+  clearSelectedRouteLayer();
+  selectedRouteLayer = { layer, style: {
+    color: layer.options.color, weight: layer.options.weight,
+    opacity: layer.options.opacity, dashArray: layer.options.dashArray || null
+  } };
+  layer.setStyle(SELECTED_ROUTE_STYLE);
+  layer.bringToFront?.();
+}
+
+function makeRouteSelectable(layer) {
+  layer.on('click', () => selectRouteLayer(layer));
+  layer.on('popupclose', () => {
+    if (selectedRouteLayer?.layer === layer) clearSelectedRouteLayer();
+  });
+  return layer;
+}
 let sourceOverlayLayerGroup = null;
 let aggregateRenderer = null;
 let provinceBuildToken = 0;
@@ -2638,7 +2666,7 @@ async function previewGroup(groupKey) {
     lines.forEach(l => {
       const ll = toLatLngs(l.coords);
       const len = lineLengthMeters(l.coords);
-      const polyline = L.polyline(ll, { color: l.sourceColor || GROUP_COLORS[groupKey], weight: 4, opacity: 0.9 })
+      const polyline = makeRouteSelectable(L.polyline(ll, { color: l.sourceColor || GROUP_COLORS[groupKey], weight: 4, opacity: 0.9 }))
         .bindPopup(lineInfoPopup(label, l, len))
         .bindTooltip(placemarkDisplayText(l), { sticky: true })
         .addTo(group);
@@ -2707,12 +2735,12 @@ function drawResults(resB) {
     const m = STATUS_META[seg.status] || STATUS_META.new;
     const isRemove = seg.status === 'remove';
     const ll = toLatLngs(seg.coords);
-    const polyline = L.polyline(ll, {
+    const polyline = makeRouteSelectable(L.polyline(ll, {
       color: seg.sourceColor || m.color,
       weight: isRemove ? 4 : 5,
       opacity: isRemove ? 0.85 : (seg.status === 'same' ? 0.9 : 1),
       dashArray: isRemove ? '2,7' : (seg.status === 'same' ? '10,6' : null)
-    })
+    }))
       .bindPopup(() => segmentStatusPopup(seg, idx))
       .bindTooltip(placemarkDisplayText(seg), { sticky: true })
       .addTo(layerGroup);
@@ -2746,12 +2774,12 @@ function renderSourceColorOverlay(lines = []) {
       const path = toLatLngs(line.coords);
       if (!path.length) return;
       const lengthMeters = Number(line.length) || lineLengthMeters(line.coords);
-      L.polyline(path, {
+      makeRouteSelectable(L.polyline(path, {
         color: line.sourceColor,
         weight: 4,
         opacity: 0.95,
         interactive: true
-      })
+      }))
         .bindPopup(() => lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters))
         .bindTooltip(placemarkDisplayText(line), { sticky: true })
         .addTo(sourceOverlayLayerGroup);
@@ -2875,11 +2903,10 @@ function showAggregateSegment(seg, index, popupLatLng = null) {
   if (aggregateSelectionLayer && layerGroup.hasLayer(aggregateSelectionLayer)) {
     layerGroup.removeLayer(aggregateSelectionLayer);
   }
-  const meta = STATUS_META[seg.status] || STATUS_META.new;
   const latlngs = toLatLngs(seg.coords);
   aggregateSelectionLayer = L.polyline(latlngs, {
-    color: meta.color,
-    weight: 9,
+    color: SELECTED_ROUTE_STYLE.color,
+    weight: SELECTED_ROUTE_STYLE.weight,
     opacity: 1,
     interactive: false
   }).addTo(layerGroup).bindPopup(() => segmentStatusPopup(seg, index));
@@ -5381,6 +5408,6 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTabl
 <script src="production.js?v=20260730-trim-engine"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
-<script src="ux-refresh.js?v=20260730-export-feedback"></script>
+<script src="ux-refresh.js?v=20260825-route-selection-layout"></script>
 </body>
 </html>
