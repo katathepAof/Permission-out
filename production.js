@@ -1171,6 +1171,10 @@
   }
 
   async function saveProject(silent = false) {
+    if (window.permissionOutTransientAnalysis) {
+      if (!silent) toast('ผลคำนวณจากไฟล์ภายนอกเป็นข้อมูลชั่วคราวและไม่สามารถบันทึกเข้าระบบได้', 'error');
+      return;
+    }
     if (!state?.segmentsB?.length) {
       if (!silent) toast('กรุณาวิเคราะห์เส้นทางก่อนบันทึก', 'error');
       return;
@@ -1520,7 +1524,14 @@
   });
   osmRoadToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
   osmBuildingToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
-  window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมตรวจสอบและส่งออกข้อมูล', 'success'); });
+  window.addEventListener('permissionout:analysis-complete', event => {
+    if (event.detail?.transient) {
+      toast('คำนวณไฟล์ภายนอกเสร็จแล้ว · ผลลัพธ์จะไม่ถูกบันทึก', 'success');
+      return;
+    }
+    markDirty();
+    toast('วิเคราะห์เสร็จแล้ว พร้อมตรวจสอบและส่งออกข้อมูล', 'success');
+  });
   window.addEventListener('online', () => toast('กลับมาออนไลน์แล้ว', 'success'));
   window.addEventListener('offline', () => toast('ออฟไลน์ — ต้องเชื่อมต่ออีกครั้งเพื่ออ่านชุดข้อมูลจาก Supabase'));
 
