@@ -1801,9 +1801,9 @@ function parallelDiffDeg(a, b) {
 /* ===================== KML parsing ===================== */
 
 let map, layerGroup, baseTileLayer;
-const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const lightMapUrl = fallbackMapUrl;
+const darkMapUrl = fallbackMapUrl;
 let usingFallbackMap = false;
 window.addEventListener('permission-theme-change', event => {
   if (baseTileLayer && !usingFallbackMap) baseTileLayer.setUrl(event.detail.theme === 'dark' ? darkMapUrl : lightMapUrl);
@@ -2542,7 +2542,7 @@ function initMap() {
     baseTileLayer.setUrl(fallbackMapUrl);
   };
   baseTileLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
-    subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 20,
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19,
     crossOrigin: true
   })
     .on('tileload', () => { tileLoaded = true; tileErrors = 0; })

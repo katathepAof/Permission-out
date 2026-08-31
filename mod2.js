@@ -166,9 +166,9 @@
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
   map.createPane('mod1RoutePane');
   map.getPane('mod1RoutePane').style.zIndex = '450';
-  const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const lightMapUrl = fallbackMapUrl;
+  const darkMapUrl = fallbackMapUrl;
   let usingFallbackMap = false;
   let tileErrors = 0;
   let tileLoaded = false;
@@ -178,9 +178,8 @@
     baseMapLayer.setUrl(fallbackMapUrl);
   };
   const baseMapLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
-    subdomains: 'abcd',
-    maxZoom: 20,
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
     crossOrigin: true
   })
     .on('tileload', () => { tileLoaded = true; tileErrors = 0; })
