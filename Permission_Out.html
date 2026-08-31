@@ -3614,12 +3614,38 @@ async function runAnalysis(options = {}) {
   try {
     const t0 = performance.now();
     const singleFileMode = hasBase !== hasCompare; // มีไฟล์แค่ฝั่งฐานหรือฝั่งเปรียบเทียบเพียงฝั่งเดียว
+    let transientFileErrors = [];
+    let transientParsedLines = [];
+
+    if (isTransientAnalysis) {
+      const parsedFiles = await Promise.all(transientFiles.map(async (file, index) => {
+        try {
+          const text = await readKmlOrKmzText(file);
+          const lines = parseKML(text, file?.name || '').map(line => {
+            line.sourceFile = file?.name || '';
+            line.sourceDatasetId = `external:${index}:${line.sourceFile}`;
+            return line;
+          });
+          return { lines, error: null };
+        } catch (error) {
+          return { lines: [], error: { fileName: file?.name || `ไฟล์ที่ ${index + 1}`, message: error?.message || 'ไม่สามารถอ่านไฟล์ได้' } };
+        }
+      }));
+      transientParsedLines = parsedFiles.flatMap(result => result.lines);
+      transientFileErrors = parsedFiles.map(result => result.error).filter(Boolean);
+      if (!transientParsedLines.length) {
+        const firstError = transientFileErrors[0];
+        throw new Error(firstError
+          ? `ไม่สามารถอ่านไฟล์ภายนอกได้ (${firstError.fileName}: ${firstError.message})`
+          : 'ไม่พบเส้นทางในไฟล์ภายนอกที่เลือก');
+      }
+    }
 
     // ฐานและเปรียบเทียบเป็นชุดตรรกะอิสระ แต่ละชุดรวมได้ทั้ง PEA, UFM และไฟล์ที่นำเข้าเอง
     const baseFiles = isTransientAnalysis ? transientFiles : filesForGroup('BASE');
     const compareFiles = isTransientAnalysis ? [] : filesForGroup('COMPARE');
     const [baseTexts, compareTexts, optimizedBaseLines, optimizedCompareLines] = await Promise.all([
-      Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
+      isTransientAnalysis ? Promise.resolve([]) : Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
       Promise.all(compareFiles.map(f => readKmlOrKmzText(f))),
       !isTransientAnalysis && selectedBaseDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
         ? window.permissionOutLoadGroupLines('BASE')
@@ -3630,13 +3656,15 @@ async function runAnalysis(options = {}) {
     ]);
 
     if (runRevision !== analysisRunRevision) return;
-    let linesA = optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
-      parseKML(text, baseFiles[index]?.name || '').map(line => {
-        line.sourceFile = baseFiles[index]?.name || '';
-        line.sourceDatasetId = `${isTransientAnalysis ? 'external' : 'local'}:${index}:${line.sourceFile}`;
-        return line;
-      })
-    ));
+    let linesA = isTransientAnalysis
+      ? transientParsedLines
+      : optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
+        parseKML(text, baseFiles[index]?.name || '').map(line => {
+          line.sourceFile = baseFiles[index]?.name || '';
+          line.sourceDatasetId = `local:${index}:${line.sourceFile}`;
+          return line;
+        })
+      ));
     let linesB = optimizedCompareLines.concat(compareTexts.flatMap((text, index) =>
       parseKML(text, compareFiles[index]?.name || '').map(line => {
         line.sourceFile = compareFiles[index]?.name || '';
@@ -3723,7 +3751,7 @@ async function runAnalysis(options = {}) {
     const cSame = state.segmentsB.filter(s => s.status === 'same').length;
     const breakdown = singleFileMode ? '' : ` (New ${cNew} / Same ${cSame} / Remove ${cRem})`;
     const noteParts = [];
-    if (hasBase) noteParts.push(`${isTransientAnalysis ? 'ไฟล์ภายนอกชั่วคราว' : 'นำเข้าฐาน'} ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
+    if (hasBase) noteParts.push(`${isTransientAnalysis ? `ไฟล์ภายนอกชั่วคราว ${transientFiles.length - transientFileErrors.length}/${transientFiles.length} ไฟล์ ·` : 'นำเข้าฐาน'} ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
     if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
     noteParts.push(`รายงาน: ${reportOverlapModeLabel()}`);
     const importNote = noteParts.join(' · ');
@@ -3747,6 +3775,7 @@ async function runAnalysis(options = {}) {
       : 'วิเคราะห์เสร็จแล้ว — ไม่พบช่วงเส้นทาง จึงไม่มีค่าบริการให้คำนวณ';
     window.permissionOutTransientAnalysis = isTransientAnalysis;
     window.dispatchEvent(new CustomEvent('permissionout:analysis-complete', { detail: { elapsedMs, segmentCount: state.segmentsB.length, transient: isTransientAnalysis } }));
+    return { transient: isTransientAnalysis, fileErrors: transientFileErrors, segmentCount: state.segmentsB.length };
   } catch (e) {
     if (runRevision !== analysisRunRevision) return;
     errBox.textContent = 'เกิดข้อผิดพลาด: ' + e.message;
@@ -5214,9 +5243,15 @@ document.getElementById('externalCalcBtn')?.addEventListener('click', async () =
   button.disabled = true;
   if (status) status.textContent = 'กำลังอ่านและคำนวณไฟล์ภายนอก…';
   try {
-    await runAnalysis({ transientFiles: files });
-    if (status && window.permissionOutTransientAnalysis) {
-      status.textContent = `คำนวณเสร็จแล้ว ${files.length.toLocaleString('th-TH')} ไฟล์ · ผลนี้ไม่ถูกบันทึกเข้าระบบ`;
+    const result = await runAnalysis({ transientFiles: files });
+    if (status && result?.transient) {
+      const skipped = result?.fileErrors || [];
+      const skippedNames = skipped.slice(0, 3).map(item => item.fileName).join(', ');
+      status.textContent = skipped.length
+        ? `คำนวณสำเร็จ ${(files.length - skipped.length).toLocaleString('th-TH')}/${files.length.toLocaleString('th-TH')} ไฟล์ · ข้ามไฟล์ที่อ่านไม่ได้ ${skipped.length.toLocaleString('th-TH')} ไฟล์: ${skippedNames}${skipped.length > 3 ? '…' : ''} · ผลนี้ไม่ถูกบันทึกเข้าระบบ`
+        : `คำนวณเสร็จแล้ว ${files.length.toLocaleString('th-TH')} ไฟล์ · ผลนี้ไม่ถูกบันทึกเข้าระบบ`;
+    } else if (status) {
+      status.textContent = 'คำนวณไม่สำเร็จ · ตรวจสอบรายละเอียดข้อผิดพลาดด้านล่างแล้วลองใหม่';
     }
   } finally {
     button.disabled = false;
