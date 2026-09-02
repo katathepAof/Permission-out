@@ -905,6 +905,7 @@ body.ux-enhanced .legend{
 }
 
 body.ux-enhanced #results{margin:0;}
+body.ux-enhanced #results{display:none!important;}
 body:not(.has-analysis).ux-enhanced #results,
 body:not(.has-analysis).ux-enhanced #billingCard{display:none!important;}
 
@@ -1028,6 +1029,138 @@ body.ux-enhanced .pea-layer-option{min-height:44px;font-size:.78rem;}
 body.ux-enhanced .pea-layer-option input,
 body.ux-enhanced .pea-type-filter input{width:18px;height:18px;}
 
+/* MOD 1 streamlined workflow */
+[data-source-panel][hidden]{display:none!important;}
+.analysis-actions[hidden],.analysis-readiness[hidden]{display:none!important;}
+.source-mode-tabs{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:4px;
+  margin:2px 0 14px;
+  padding:4px;
+  border:1px solid var(--ux-border);
+  border-radius:12px;
+  background:#eef3f8;
+}
+.source-mode-tabs button{
+  min-height:42px;
+  padding:7px 10px;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:var(--ux-text-soft);
+  font:700 .74rem 'IBM Plex Sans Thai','Segoe UI',sans-serif;
+  cursor:pointer;
+}
+.source-mode-tabs button[aria-selected="true"]{
+  background:#fff;
+  color:var(--ux-primary-strong);
+  box-shadow:0 2px 9px rgba(10,39,72,.09);
+}
+.advanced-settings-grid .report-overlap-field{grid-column:1/-1;}
+.billing-calculation-details{
+  margin-top:12px;
+  border:1px solid var(--ux-border);
+  border-radius:12px;
+  background:#fff;
+}
+.billing-calculation-details>summary,
+.billing-export-menu>summary{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 13px;
+  color:var(--ux-primary-strong);
+  font-size:.78rem;
+  font-weight:750;
+  cursor:pointer;
+  list-style:none;
+}
+.billing-calculation-details>summary::-webkit-details-marker,
+.billing-export-menu>summary::-webkit-details-marker{display:none;}
+.billing-calculation-details>summary::after,
+.billing-export-menu>summary::after{content:'⌄';margin-left:auto;color:var(--ux-text-muted);}
+.billing-calculation-details[open]>summary::after,
+.billing-export-menu[open]>summary::after{transform:rotate(180deg);}
+.billing-calculation-details>summary small{color:var(--ux-text-muted);font-size:.66rem;font-weight:500;}
+.billing-calculation-body{padding:0 12px 12px;}
+.billing-export-menu{position:relative;margin-top:10px!important;padding:0!important;border:1px solid var(--ux-border)!important;border-radius:12px;background:#fff;}
+.billing-export-menu>summary span{margin-left:auto;color:var(--ux-text-muted);font-size:.68rem;font-weight:500;}
+.billing-export-menu-body{padding:0 12px 12px;border-top:1px solid #edf1f5;}
+.compact-result-summary{
+  position:sticky;
+  z-index:30;
+  top:calc(var(--shell-h,72px) + 60px);
+  display:none;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:1px;
+  overflow:hidden;
+  margin-bottom:12px;
+  border:1px solid #cfdae7;
+  border-radius:13px;
+  background:#dbe4ed;
+  box-shadow:0 8px 22px rgba(13,41,72,.1);
+}
+body.has-analysis .compact-result-summary{display:grid;}
+.compact-result-summary>div{min-width:0;padding:10px 12px;background:rgba(255,255,255,.98);}
+.compact-result-summary small{display:block;color:var(--ux-text-muted);font-size:.61rem;}
+.compact-result-summary strong{display:block;overflow:hidden;margin-top:2px;color:var(--ux-primary-strong);font-size:.8rem;text-overflow:ellipsis;white-space:nowrap;}
+.compact-result-summary .is-total{background:#fff9e8;}
+.compact-result-summary .is-total strong{color:#785b00;}
+.map-title-tools .map-layer-menu{position:relative;min-width:0;}
+body.ux-enhanced .rightCol .map-title-tools{grid-template-columns:minmax(180px,.55fr) minmax(320px,1.45fr);}
+body.ux-enhanced .rightCol .map-search-wrap{grid-column:auto;}
+.map-layer-menu>summary{
+  min-height:48px;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-content:center;
+  gap:1px 8px;
+  padding:6px 12px;
+  border:1px solid #d7e0eb;
+  border-radius:10px;
+  background:#f8fafc;
+  color:var(--ux-primary-strong);
+  cursor:pointer;
+  list-style:none;
+}
+.map-layer-menu>summary::-webkit-details-marker{display:none;}
+.map-layer-menu>summary>span{grid-row:1/3;font-size:1rem;}
+.map-layer-menu>summary strong{font-size:.72rem;}
+.map-layer-menu>summary small{color:var(--ux-text-muted);font-size:.61rem;}
+.map-layer-menu-panel{
+  position:absolute;
+  z-index:80;
+  top:54px;
+  left:0;
+  width:min(390px,calc(100vw - 54px));
+  padding:10px;
+  border:1px solid var(--ux-border);
+  border-radius:12px;
+  background:#fff;
+  box-shadow:var(--ux-shadow);
+}
+.map-layer-menu-panel .pea-layer-control{width:100%;}
+.map-layer-menu-panel .pea-layer-panel{position:static;width:100%;margin-top:8px;box-shadow:none;}
+.map-layer-menu-panel .osm-reference-control{margin-top:8px;justify-content:flex-start;}
+.report-reset-filters{
+  min-height:40px;
+  padding:0 12px;
+  border:0;
+  background:transparent;
+  color:var(--ux-text-soft);
+  font:700 .74rem 'IBM Plex Sans Thai','Segoe UI',sans-serif;
+  cursor:pointer;
+}
+table.report.hide-col-5 th:nth-child(5),table.report.hide-col-5 td:nth-child(5),
+table.report.hide-col-6 th:nth-child(6),table.report.hide-col-6 td:nth-child(6),
+table.report.hide-col-7 th:nth-child(7),table.report.hide-col-7 td:nth-child(7),
+table.report.hide-col-9 th:nth-child(9),table.report.hide-col-9 td:nth-child(9),
+table.report.hide-col-10 th:nth-child(10),table.report.hide-col-10 td:nth-child(10),
+table.report.hide-col-11 th:nth-child(11),table.report.hide-col-11 td:nth-child(11){display:none;}
+
 .ux-help{
   color:var(--ux-text-muted);
   font-size:.74rem;
@@ -1060,6 +1193,12 @@ body.ux-enhanced .pea-type-filter input{width:18px;height:18px;}
     font-size:.74rem;
   }
   .workflow-step-index{width:22px;height:22px;}
+  .source-mode-tabs{grid-template-columns:1fr;}
+  .source-mode-tabs button{font-size:.875rem;text-align:left;}
+  .compact-result-summary{top:122px;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .compact-result-summary>div{padding:8px 10px;}
+  .compact-result-summary small,.compact-result-summary strong{font-size:.78rem;}
+  .billing-calculation-details>summary{align-items:flex-start;flex-direction:column;gap:2px;font-size:.875rem;}
   body.ux-enhanced .leftCol .card{padding:16px;}
   body.ux-enhanced .leftCol .card-title{font-size:1rem;}
   .setup-intro,

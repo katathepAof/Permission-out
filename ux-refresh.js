@@ -57,10 +57,10 @@
   const mapHeading = q('.card-title', mapCard);
   const reportHeading = q('.card-title', reportCard);
   q('.step', setupHeading).textContent = '1';
-  q('.step', mapHeading).textContent = '3';
-  q('.step', reportHeading).textContent = '3';
-  q('.step', billingHeading).textContent = '4';
-  replaceHeadingCopy(setupHeading, 'เลือกชุดข้อมูลและตั้งค่าการเปรียบเทียบ');
+  q('.step', mapHeading).textContent = '2';
+  q('.step', reportHeading).textContent = '2';
+  q('.step', billingHeading).textContent = '3';
+  replaceHeadingCopy(setupHeading, 'เลือกข้อมูลสำหรับวิเคราะห์');
   replaceHeadingCopy(mapHeading, 'ตรวจสอบเส้นทางบนแผนที่');
   replaceHeadingCopy(reportHeading, 'ตรวจสอบผลการเปรียบเทียบ');
   replaceHeadingCopy(billingHeading, 'ค่าบริการและส่งออกข้อมูล');
@@ -76,15 +76,11 @@
   const billingTotalBanner = q('.totalBanner', billingCard);
   if (billingHeader && billingCostList && billingTotalBanner && billingExportButtons.length) {
     billingHeader.classList.add('billing-card-header');
-    const billingIntro = document.createElement('p');
-    billingIntro.className = 'billing-card-intro';
-    billingIntro.textContent = 'ตรวจสอบอัตราและรายการคำนวณ ก่อนดาวน์โหลดผลลัพธ์ตามตัวกรองปัจจุบัน';
-    billingHeading.after(billingIntro);
-
-    const calculationLabel = document.createElement('div');
-    calculationLabel.className = 'billing-section-label';
-    calculationLabel.innerHTML = '<strong>รายละเอียดการคำนวณ</strong><span>ยอดเงินปรับอัตโนมัติเมื่อแก้ไขอัตรา</span>';
-    billingCostList.before(calculationLabel);
+    const calculationDetails = document.createElement('details');
+    calculationDetails.className = 'billing-calculation-details';
+    calculationDetails.innerHTML = '<summary><span>รายละเอียดสูตรและอัตราค่าบริการ</span><small>ยอดเงินปรับอัตโนมัติเมื่อแก้ไขอัตรา</small></summary><div class="billing-calculation-body"></div>';
+    q('.billing-calculation-body', calculationDetails).appendChild(billingCostList);
+    billingTotalBanner.before(calculationDetails);
 
     const costRows = qa('.costRow', billingCostList);
     costRows[0]?.classList.add('billing-rate-row');
@@ -100,16 +96,12 @@
     costRows[5]?.classList.add('billing-surcharge-row');
     costRows[6]?.classList.add('billing-legacy-total');
 
-    const exportPanel = document.createElement('section');
-    exportPanel.className = 'billing-export-panel';
+    const exportPanel = document.createElement('details');
+    exportPanel.className = 'billing-export-panel billing-export-menu';
     exportPanel.setAttribute('aria-labelledby', 'billingExportTitle');
     exportPanel.innerHTML = `
-      <div class="billing-export-copy">
-        <strong id="billingExportTitle">ส่งออกข้อมูล</strong>
-        <span>ส่งออกเฉพาะรายการที่ผ่านตัวกรองในหน้ารายงาน</span>
-      </div>
-      <div class="billing-export-settings"></div>
-      <div class="billing-export-actions"></div>`;
+      <summary><strong id="billingExportTitle">ส่งออกข้อมูล</strong><span>CSV, KML หรือ KMZ</span></summary>
+      <div class="billing-export-menu-body"><div class="billing-export-copy"><span>ส่งออกเฉพาะรายการที่ผ่านตัวกรองในหน้ารายงาน</span></div><div class="billing-export-settings"></div><div class="billing-export-actions"></div></div>`;
     const exportSettings = q('.billing-export-settings', exportPanel);
     const exportActions = q('.billing-export-actions', exportPanel);
     if (exportModeControl) exportSettings.appendChild(exportModeControl);
@@ -159,9 +151,8 @@
   workflow.setAttribute('aria-label', 'ขั้นตอนการทำงาน');
   workflow.innerHTML = [
     ['datasets', '1', 'เลือกข้อมูล'],
-    ['analyze', '2', 'วิเคราะห์'],
-    ['results', '3', 'ตรวจสอบผล'],
-    ['billing', '4', 'ค่าบริการ']
+    ['results', '2', 'แผนที่และรายงาน'],
+    ['billing', '3', 'ค่าบริการและส่งออก']
   ].map(([key, index, label]) =>
     `<button type="button" class="workflow-step${key === 'datasets' ? ' is-current' : ''}" data-workflow="${key}"${key === 'results' || key === 'billing' ? ' disabled' : ''}><span class="workflow-step-index">${index}</span><span class="workflow-step-label">${label}</span></button>`
   ).join('');
@@ -169,6 +160,8 @@
 
   const sourceSwitch = q('.source-role-switch', setupCard);
   const dataGrid = q('.grid2', setupCard);
+  const quickLoader = q('.quick-area-loader', setupCard);
+  const externalCalculator = q('.external-calc', setupCard);
   const selectionSummary = document.createElement('details');
   selectionSummary.className = 'dataset-selection-summary';
   selectionSummary.open = true;
@@ -190,6 +183,30 @@
       </button>
     </div>`;
   sourceSwitch.before(selectionSummary);
+
+  const sourceModeTabs = document.createElement('div');
+  sourceModeTabs.className = 'source-mode-tabs';
+  sourceModeTabs.setAttribute('role', 'tablist');
+  sourceModeTabs.setAttribute('aria-label', 'วิธีเลือกข้อมูล');
+  sourceModeTabs.innerHTML = `
+    <button type="button" role="tab" data-source-mode="database" aria-selected="true">จากฐานข้อมูล</button>
+    <button type="button" role="tab" data-source-mode="catalog" aria-selected="false">เลือกจากคลัง / เปรียบเทียบ</button>
+    <button type="button" role="tab" data-source-mode="file" aria-selected="false">จากไฟล์</button>`;
+  setupHeading.after(sourceModeTabs);
+  if (quickLoader) quickLoader.dataset.sourcePanel = 'database';
+  selectionSummary.dataset.sourcePanel = 'catalog';
+  if (sourceSwitch) sourceSwitch.dataset.sourcePanel = 'catalog';
+  if (externalCalculator) externalCalculator.dataset.sourcePanel = 'file';
+  function setSourceMode(mode) {
+    qa('[data-source-mode]', sourceModeTabs).forEach(button => button.setAttribute('aria-selected', String(button.dataset.sourceMode === mode)));
+    qa('[data-source-panel]', setupCard).forEach(panel => { panel.hidden = panel.dataset.sourcePanel !== mode; });
+    if (actionRow) actionRow.hidden = mode !== 'catalog';
+    if (readiness) readiness.hidden = mode !== 'catalog';
+  }
+  sourceModeTabs.addEventListener('click', event => {
+    const button = event.target.closest('[data-source-mode]');
+    if (button) setSourceMode(button.dataset.sourceMode);
+  });
 
   const drawerBackdrop = document.createElement('div');
   drawerBackdrop.className = 'dataset-drawer-backdrop';
@@ -307,6 +324,8 @@
     const field = q(`#${id}`)?.closest('.field');
     if (field) advancedGrid.appendChild(field);
   }
+  const reportModeField = q('.report-overlap-field');
+  if (reportModeField) advancedGrid.appendChild(reportModeField);
   actionRow?.before(advanced);
   actionRow?.classList.add('analysis-actions');
 
@@ -317,6 +336,7 @@
   readiness.setAttribute('aria-live', 'polite');
   readiness.innerHTML = '<span class="analysis-readiness-dot"></span><span id="analysisReadinessText">เลือกชุดข้อมูลอย่างน้อยหนึ่งฝั่งเพื่อเริ่มวิเคราะห์</span>';
   advanced.before(readiness);
+  setSourceMode('database');
 
   function updateSelectionSummary() {
     const baseDatasetCount = Array.isArray(window.permissionOutBaseDatasetIds)
@@ -365,7 +385,7 @@
         : `พร้อมแสดงข้อมูลฝั่งเดียว — เลือกอีกฝั่งเมื่อต้องการเปรียบเทียบ`
       : 'เลือกชุดข้อมูลอย่างน้อยหนึ่งฝั่งเพื่อเริ่มวิเคราะห์';
     q('[data-workflow="datasets"]')?.classList.toggle('is-complete', isReady);
-    q('[data-workflow="analyze"]')?.classList.toggle('is-current', isReady && !body.classList.contains('has-analysis'));
+    q('[data-workflow="datasets"]')?.classList.toggle('is-current', !body.classList.contains('has-analysis'));
   }
   const summaryObserver = new MutationObserver(updateSelectionSummary);
   for (const element of [q('#baseCatalogStatus'), q('#compareCatalogStatus'), q('#baseCatalogCount'), q('#compareCatalogCount'), q('#baseRoleSummary'), q('#compareRoleSummary')]) {
@@ -384,6 +404,18 @@
   rightCol.prepend(tabs);
   rightCol.appendChild(reportCard);
   rightCol.dataset.workspaceView = 'map';
+
+  const mapTools = q('.map-title-tools', mapCard);
+  const peaLayerControl = q('#peaLayerControl', mapCard);
+  const osmReferenceControl = q('.osm-reference-control', mapCard);
+  if (mapTools && peaLayerControl && osmReferenceControl) {
+    const layerMenu = document.createElement('details');
+    layerMenu.className = 'map-layer-menu';
+    layerMenu.innerHTML = '<summary><span aria-hidden="true">▱</span><strong>ชั้นข้อมูล</strong><small>PEA · ถนน · อาคาร</small></summary><div class="map-layer-menu-panel"></div>';
+    const layerPanel = q('.map-layer-menu-panel', layerMenu);
+    layerPanel.append(peaLayerControl, osmReferenceControl);
+    mapTools.prepend(layerMenu);
+  }
 
   function setCurrentWorkflow(key) {
     qa('.workflow-step').forEach(button => button.classList.toggle('is-current', button.dataset.workflow === key));
@@ -425,11 +457,23 @@
       <label><input type="checkbox" data-column="10"> พิกัดต้นทาง</label>
       <label><input type="checkbox" data-column="11"> พิกัดปลายทาง</label>
     </div>`;
-  reportCommandbar.append(filterTools, columnTools);
+  const resetFilters = document.createElement('button');
+  resetFilters.type = 'button';
+  resetFilters.className = 'report-reset-filters';
+  resetFilters.textContent = 'ล้างตัวกรอง';
+  resetFilters.addEventListener('click', () => {
+    qa('input[type="checkbox"]', filterPanel).forEach(input => { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); });
+    const province = q('#provinceFilter');
+    if (province && !province.disabled) { province.value = ''; province.dispatchEvent(new Event('change', { bubbles: true })); }
+    const office = q('#peaOfficeFilter');
+    if (office && !office.disabled) { office.value = ''; office.dispatchEvent(new Event('change', { bubbles: true })); }
+    updateFilterCount();
+  });
+  reportCommandbar.append(filterTools, columnTools, resetFilters);
   reportHeading.after(reportCommandbar);
 
   if (reportTable) {
-    reportTable.classList.add('hide-col-10', 'hide-col-11');
+    reportTable.classList.add('hide-col-5', 'hide-col-6', 'hide-col-7', 'hide-col-9', 'hide-col-10', 'hide-col-11');
     if (!q('caption', reportTable)) {
       const caption = document.createElement('caption');
       caption.className = 'sr-only';
@@ -437,6 +481,13 @@
       reportTable.prepend(caption);
     }
   }
+  q('.column-chooser-list', columnTools).innerHTML = `
+    <label><input type="checkbox" data-column="5"> Type / Core</label>
+    <label><input type="checkbox" data-column="6"> Status จากไฟล์</label>
+    <label><input type="checkbox" data-column="7"> Diameter</label>
+    <label><input type="checkbox" data-column="9"> จำนวนเสา</label>
+    <label><input type="checkbox" data-column="10"> พิกัดต้นทาง</label>
+    <label><input type="checkbox" data-column="11"> พิกัดปลายทาง</label>`;
   qa('[data-column]', columnTools).forEach(input => {
     input.addEventListener('change', () => {
       reportTable?.classList.toggle(`hide-col-${input.dataset.column}`, !input.checked);
@@ -450,6 +501,28 @@
   }
   filterPanel.addEventListener('change', updateFilterCount);
   updateFilterCount();
+
+  const compactSummary = document.createElement('section');
+  compactSummary.className = 'compact-result-summary';
+  compactSummary.setAttribute('aria-label', 'สรุปผลล่าสุด');
+  compactSummary.innerHTML = `
+    <div><small>ช่วงเส้นทาง</small><strong id="compactSegmentCount">—</strong></div>
+    <div><small>ระยะฐาน</small><strong id="compactDistance">— กม.</strong></div>
+    <div><small>จำนวนเสา</small><strong id="compactPoles">—</strong></div>
+    <div class="is-total"><small>ค่าบริการรวม</small><strong id="compactCost">— บาท</strong></div>`;
+  rightCol.insertBefore(compactSummary, mapCard);
+  function updateCompactSummary() {
+    const segmentCount = Number(compactSummary.dataset.segmentCount || q('#reportBody')?.children.length || 0);
+    q('#compactSegmentCount').textContent = segmentCount.toLocaleString('th-TH');
+    q('#compactDistance').textContent = `${q('#statTotalA')?.textContent || '—'} กม.`;
+    q('#compactPoles').textContent = q('#statTotalPoles')?.textContent || '—';
+    q('#compactCost').textContent = `${q('#costTotalBig')?.textContent || '—'} บาท`;
+  }
+  const compactObserver = new MutationObserver(updateCompactSummary);
+  for (const node of [q('#statTotalA'), q('#statTotalPoles'), q('#costTotalBig'), reportBody]) {
+    if (node) compactObserver.observe(node, { childList: true, subtree: true, characterData: true });
+  }
+  updateCompactSummary();
 
   function enhanceReportRows() {
     const headers = qa('thead th', reportTable).map(header => header.textContent.replace(/\s+/g, ' ').trim());
@@ -491,12 +564,6 @@
         setCurrentWorkflow('datasets');
         setMobileStage('setup');
         openDatasetDrawer();
-      } else if (key === 'analyze') {
-        if (!mobileMedia.matches) setWorkspaceView('map');
-        setMobileStage('setup');
-        setCurrentWorkflow('analyze');
-        analyzeButton?.focus();
-        analyzeButton?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       } else if (key === 'results') {
         setMobileStage('results');
         rightCol.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -517,16 +584,18 @@
   }
   analyzeButton?.addEventListener('click', () => setAnalyzing(true));
 
-  function markAnalysisComplete() {
+  function markAnalysisComplete(event) {
     setAnalyzing(false);
     body.classList.add('has-analysis');
+    if (Number.isFinite(event?.detail?.segmentCount)) compactSummary.dataset.segmentCount = String(event.detail.segmentCount);
+    updateCompactSummary();
     q('#reportViewTab').disabled = false;
     for (const key of ['results', 'billing']) {
       const button = q(`[data-workflow="${key}"]`);
       button.disabled = false;
       button.classList.add('is-complete');
     }
-    q('[data-workflow="analyze"]')?.classList.add('is-complete');
+    q('[data-workflow="datasets"]')?.classList.add('is-complete');
     if (mobileMedia.matches) setMobileStage('results');
     else {
       setCurrentWorkflow('results');
@@ -537,13 +606,15 @@
   window.addEventListener('permissionout:cleared', () => {
     setAnalyzing(false);
     body.classList.remove('has-analysis');
+    delete compactSummary.dataset.segmentCount;
+    updateCompactSummary();
     q('#reportViewTab').disabled = true;
     for (const key of ['results', 'billing']) {
       const button = q(`[data-workflow="${key}"]`);
       button.disabled = true;
       button.classList.remove('is-complete', 'is-current');
     }
-    q('[data-workflow="analyze"]')?.classList.remove('is-complete');
+    q('[data-workflow="datasets"]')?.classList.remove('is-complete');
     setWorkspaceView('map');
     setMobileStage('setup');
   });
