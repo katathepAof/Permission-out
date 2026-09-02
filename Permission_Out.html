@@ -196,10 +196,12 @@ body.mod1-map-focus #map{
 }
 .rightCol > .card > .map-card-header{
   display:grid;
-  grid-template-columns:max-content minmax(320px,1fr);
-  gap:12px;
-  align-items:center;
-  margin-bottom:14px;
+  grid-template-columns:minmax(0,1fr);
+  gap:14px;
+  align-items:stretch;
+  margin-bottom:16px;
+  padding-bottom:14px;
+  border-bottom:1px solid var(--border-soft);
 }
 .rightCol > .card .map-card-heading{
   display:flex;
@@ -211,8 +213,8 @@ body.mod1-map-focus #map{
 }
 .rightCol > .card .map-title-tools{
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-  gap:8px;
+  grid-template-columns:minmax(190px,.85fr) minmax(230px,1fr) minmax(260px,1.25fr);
+  gap:10px;
   align-items:stretch;
   min-width:0;
 }
@@ -495,6 +497,21 @@ button.ghost:hover{
   animation:spin .8s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg);}}
+
+body.is-analysis-loading{overflow:hidden;}
+.analysis-loading-overlay[hidden]{display:none;}
+.analysis-loading-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:rgba(8,29,56,.42);-webkit-backdrop-filter:blur(7px) saturate(.82);backdrop-filter:blur(7px) saturate(.82);}
+.analysis-loading-card{width:min(420px,calc(100vw - 40px));padding:30px 32px 27px;border:1px solid rgba(255,255,255,.78);border-radius:22px;background:rgba(255,255,255,.96);box-shadow:0 24px 70px rgba(4,25,51,.26);text-align:center;}
+.analysis-loading-brand{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:26px;padding:0 10px;border-radius:999px;background:var(--navy-700);color:#fff;font-size:.72rem;font-weight:800;letter-spacing:.08em;}
+.analysis-loading-ring{position:relative;width:62px;height:62px;margin:20px auto 17px;border-radius:50%;background:conic-gradient(var(--gold) 0 29%,var(--navy-700) 29% 62%,#dce8f5 62% 100%);animation:analysisLoadingSpin .95s linear infinite;}
+.analysis-loading-ring::after{content:"";position:absolute;inset:7px;border-radius:50%;background:#fff;}
+.analysis-loading-title{margin:0;color:var(--navy-900);font-size:1.12rem;font-weight:800;}
+.analysis-loading-detail{min-height:1.5em;margin:7px 0 18px;color:var(--ink-mute);font-size:.88rem;line-height:1.55;}
+.analysis-loading-track{height:5px;overflow:hidden;border-radius:999px;background:#e5edf6;}
+.analysis-loading-track::after{content:"";display:block;width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--gold),var(--gold-bright));animation:analysisLoadingTrack 1.25s ease-in-out infinite;}
+@keyframes analysisLoadingSpin{to{transform:rotate(360deg);}}
+@keyframes analysisLoadingTrack{0%{transform:translateX(-110%);}100%{transform:translateX(350%);}}
+@media (prefers-reduced-motion:reduce){.analysis-loading-ring,.analysis-loading-track::after{animation-duration:2.4s;}}
 
 #errBox{
   display:none;
@@ -835,6 +852,10 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
   padding:8px 10px;
   font-size:.74rem;
 }
+@media(max-width:1180px){
+  .rightCol > .card .map-title-tools{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+  .rightCol > .card .map-search-wrap{grid-column:1/-1;}
+}
 @media(max-width:900px){
   .rightCol > .card{
     padding:16px;
@@ -845,6 +866,7 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
   .rightCol > .card .map-title-tools{
     grid-template-columns:1fr;
   }
+  .rightCol > .card .map-search-wrap{grid-column:auto;}
   .rightCol > .card .map-focus-toggle-floating .map-focus-toggle-text{
     display:none;
   }
@@ -981,6 +1003,67 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
    ============================================================ */
 
 #reportCard{display:none;}
+
+.pea-scope-filter{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(180px,1fr));
+  gap:12px;
+  margin-bottom:14px;
+  padding:14px;
+  border:1px solid var(--border-strong);
+  border-radius:var(--r-md);
+  background:var(--bg-soft);
+}
+.pea-scope-field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.pea-scope-field label{font-size:.78rem;font-weight:700;color:var(--navy-800);}
+.pea-scope-field select{
+  width:100%;
+  min-height:40px;
+  padding:8px 34px 8px 10px;
+  border:1px solid var(--border-strong);
+  border-radius:8px;
+  background:var(--card);
+  color:var(--ink);
+  font:inherit;
+}
+.pea-scope-field select:disabled{opacity:.58;cursor:not-allowed;}
+.pea-scope-note{grid-column:1/-1;font-size:.75rem;color:var(--ink-mute);}
+#peaScopePrompt{padding:22px;text-align:center;color:var(--ink-soft);background:var(--bg-soft);border-radius:var(--r-md);}
+#reportCard.area-filter-pending > :not(.card-title):not(#peaScopeFilterBar):not(#peaScopePrompt){display:none!important;}
+@media (max-width:760px){.pea-scope-filter{grid-template-columns:1fr;}.pea-scope-note{grid-column:1;}}
+
+.quick-area-loader{
+  position:relative;
+  overflow:hidden;
+  margin-bottom:18px;
+  padding:18px;
+  border:1px solid #b8d7f8;
+  border-radius:14px;
+  background:linear-gradient(145deg,#f2f8ff 0%,#f8fbff 62%,#edf6ff 100%);
+  box-shadow:0 8px 22px rgba(30,91,168,.07);
+}
+.quick-area-loader::before{content:"";position:absolute;right:-42px;top:-52px;width:130px;height:130px;border-radius:50%;background:rgba(54,139,230,.07);pointer-events:none;}
+.quick-area-loader > summary{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:none;cursor:pointer;user-select:none;}
+.quick-area-loader > summary::-webkit-details-marker{display:none;}
+.quick-area-loader > summary::after{content:"⌄";display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border:1px solid #bfd5ec;border-radius:8px;background:#fff;color:#1e5ba8;font-size:.85rem;transition:transform .18s ease;}
+.quick-area-loader:not([open]) > summary::after{transform:rotate(-90deg);}
+.quick-area-loader h3{position:relative;margin:0;font-size:.96rem;line-height:1.35;color:var(--navy-800);}
+.quick-area-content{padding-top:7px;}
+.quick-area-content > p{position:relative;margin:0 0 15px;font-size:.74rem;line-height:1.55;color:var(--ink-soft);}
+.quick-area-grid{position:relative;display:grid;grid-template-columns:1fr;gap:11px;align-items:stretch;}
+.quick-area-loader .pea-scope-field{gap:7px;}
+.quick-area-loader .pea-scope-field label{font-size:.76rem;letter-spacing:.01em;}
+.quick-area-loader .pea-scope-field select{min-height:44px;border-color:#c4d4e7;background-color:#fff;box-shadow:0 2px 7px rgba(15,44,82,.04);}
+.quick-area-loader .pea-scope-field select:focus{outline:3px solid rgba(37,118,210,.13);border-color:#4e91dc;}
+.quick-area-datasets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-width:0;}
+.quick-area-datasets label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:8px 10px;border:1px solid #c4d4e7;border-radius:9px;background:rgba(255,255,255,.88);color:var(--navy-800);font-size:.78rem;font-weight:700;cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease;}
+.quick-area-datasets label:hover{border-color:#79aee7;background:#fff;transform:translateY(-1px);}
+.quick-area-datasets label:has(input:checked){border-color:#4e91dc;background:#e6f2ff;box-shadow:inset 0 0 0 1px rgba(78,145,220,.18);}
+.quick-area-datasets input{width:15px;height:15px;margin:0;accent-color:#1e5ba8;}
+.quick-area-loader .primary{width:100%;min-height:44px;padding:10px 16px;white-space:nowrap;border-radius:9px;box-shadow:0 7px 15px rgba(30,91,168,.2);}
+.quick-area-loader .primary:disabled{box-shadow:none;}
+.quick-area-status{display:flex;align-items:flex-start;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid rgba(142,177,216,.35);font-size:.7rem;line-height:1.45;color:var(--ink-mute);}
+.quick-area-status::before{content:"i";display:inline-grid;place-items:center;flex:0 0 16px;width:16px;height:16px;border-radius:50%;background:#dbeeff;color:#1e5ba8;font-size:.62rem;font-weight:800;}
 
 .reportWrap{
   max-height:420px;
@@ -1183,11 +1266,21 @@ table.report td.num{
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);}
 
 </style>
-<link rel="stylesheet" href="ux-refresh.css?v=20260825-route-selection-layout">
+<link rel="stylesheet" href="ux-refresh.css?v=20260902-compact-controls">
 <link rel="stylesheet" href="app-theme.css?v=20260807-thailand-overview">
 <script src="app-theme.js?v=20260807-theme-review"></script>
 </head>
 <body>
+
+<div class="analysis-loading-overlay" id="analysisLoadingOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="analysisLoadingTitle" aria-describedby="analysisLoadingDetail">
+  <div class="analysis-loading-card">
+    <span class="analysis-loading-brand">PO</span>
+    <div class="analysis-loading-ring" aria-hidden="true"></div>
+    <h2 class="analysis-loading-title" id="analysisLoadingTitle">กำลังโหลดข้อมูล</h2>
+    <p class="analysis-loading-detail" id="analysisLoadingDetail">กรุณารอสักครู่ ระบบกำลังเตรียมข้อมูลสำหรับการวิเคราะห์</p>
+    <div class="analysis-loading-track" aria-hidden="true"></div>
+  </div>
+</div>
 
 <div class="app-shellbar" aria-label="แถบจัดการระบบ">
   <div class="shellbar-inner">
@@ -1235,6 +1328,24 @@ table.report td.num{
       อัปโหลดไฟล์ KML
       <span class="liveBadge"><span class="liveDot"></span>Active</span>
     </h2>
+    <details class="quick-area-loader" open>
+      <summary><h3 id="quickAreaTitle">เลือกเขตและโหลดข้อมูลจากฐานข้อมูล</h3></summary>
+      <div class="quick-area-content">
+        <div class="quick-area-grid">
+        <div class="pea-scope-field">
+          <label for="quickPeaRegion">เขตการไฟฟ้าหลัก</label>
+          <select id="quickPeaRegion"><option value="">เลือกเขตการไฟฟ้าหลัก</option></select>
+        </div>
+        <div class="quick-area-datasets" role="group" aria-label="เลือกชุดข้อมูลที่จะโหลด">
+          <label><input type="checkbox" id="quickUseRd03" checked> RD03</label>
+          <label><input type="checkbox" id="quickUseRd05"> RD05</label>
+          <label><input type="checkbox" id="quickUseMaxi" checked> Maxi</label>
+        </div>
+        <button type="button" class="primary" id="quickAreaLoadBtn" disabled>โหลดและคำนวณ</button>
+        </div>
+        <span class="quick-area-status" id="quickAreaStatus">เลือกเขตและชุดข้อมูลอย่างน้อยหนึ่งรายการ</span>
+      </div>
+    </details>
     <div class="source-role-switch" aria-label="กำหนดบทบาทชุดข้อมูล">
       <div>
         <span class="source-role-pill is-base" id="baseRoleSummary">ชุดฐาน: PEA + UFM</span>
@@ -1575,16 +1686,22 @@ table.report td.num{
     รายงานรายละเอียดช่วงเส้นทาง
     <span class="title-meta">คลิกแถวเพื่อซูมแผนที่ไปตำแหน่งนั้น</span>
   </h2>
-  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
-    <label for="provinceFilter" style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรองจังหวัด:</label>
-    <div id="provinceFilter" role="group" aria-label="เลือกจังหวัด" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; max-height:104px; overflow-y:auto; padding:7px 10px; border:1px solid var(--border-strong); border-radius:8px; background:#fff; color:var(--ink-soft); min-width:240px; max-width:100%;">
-      <label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" checked>ทุกจังหวัด</label>
+  <div class="pea-scope-filter" id="peaScopeFilterBar">
+    <div class="pea-scope-field">
+      <label for="peaRegionFilter">เขตการไฟฟ้าหลัก</label>
+      <select id="peaRegionFilter"><option value="">เลือกเขตการไฟฟ้าหลัก</option></select>
     </div>
-    <button type="button" class="ghost" id="selectAllProvinces" style="padding:6px 10px; font-size:.75rem;">ทุกจังหวัด</button>
-    <button type="button" class="ghost" id="clearProvinceSelection" style="padding:6px 10px; font-size:.75rem;">ล้างตัวกรอง</button>
-    <span id="provinceFilterCount" style="font-size:.78rem; color:var(--ink-mute);"></span>
-    <span style="font-size:.72rem; color:var(--ink-mute);">เลือกได้มากกว่าหนึ่งจังหวัด</span>
+    <div class="pea-scope-field">
+      <label for="provinceFilter">จังหวัด</label>
+      <select id="provinceFilter" disabled><option value="">ทุกจังหวัดในเขต</option></select>
+    </div>
+    <div class="pea-scope-field">
+      <label for="peaOfficeFilter">เขตการไฟฟ้าย่อย</label>
+      <select id="peaOfficeFilter" disabled><option value="">ทุกหน่วยงานในจังหวัด</option></select>
+    </div>
+    <span class="pea-scope-note" id="provinceFilterCount">กรุณาเลือกเขตการไฟฟ้าหลักเพื่อแสดงข้อมูล</span>
   </div>
+  <div id="peaScopePrompt">เลือกเขตการไฟฟ้าหลักเพื่อดูแผนที่ รายงาน และสรุปค่าบริการ</div>
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
     <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรองการแสดงผล / ค่าบริการ:</span>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="new" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#1e5ba8;"></span> New</label>
@@ -1829,6 +1946,21 @@ const REPORT_ROW_LIMIT = 300;
 let aggregateResultMode = false;
 let aggregateSelectionLayer = null;
 let selectedRouteLayer = null;
+let peaOfficeBuildToken = 0;
+const PEA_REGION_PROVINCES = Object.freeze({
+  'น.1': ['เชียงใหม่', 'ลำพูน', 'ลำปาง', 'เชียงราย', 'แม่ฮ่องสอน', 'พะเยา'],
+  'น.2': ['พิษณุโลก', 'สุโขทัย', 'ตาก', 'กำแพงเพชร', 'พิจิตร', 'อุตรดิตถ์', 'แพร่', 'น่าน'],
+  'น.3': ['ลพบุรี', 'สิงห์บุรี', 'ชัยนาท', 'อุทัยธานี', 'เพชรบูรณ์'],
+  'ฉ.1': ['ขอนแก่น', 'อุดรธานี', 'หนองบัวลำภู', 'เลย', 'หนองคาย', 'บึงกาฬ', 'สกลนคร', 'นครพนม'],
+  'ฉ.2': ['อุบลราชธานี', 'ศรีสะเกษ', 'ยโสธร', 'ร้อยเอ็ด', 'มหาสารคาม', 'กาฬสินธุ์', 'อำนาจเจริญ', 'มุกดาหาร'],
+  'ฉ.3': ['นครราชสีมา', 'ชัยภูมิ', 'บุรีรัมย์', 'สุรินทร์'],
+  'ก.1': ['อ่างทอง', 'ปราจีนบุรี', 'นครนายก', 'สระแก้ว', 'พระนครศรีอยุธยา', 'ปทุมธานี', 'สระบุรี'],
+  'ก.2': ['ฉะเชิงเทรา', 'ชลบุรี', 'ระยอง', 'จันทบุรี', 'ตราด'],
+  'ก.3': ['นครปฐม', 'สมุทรสาคร', 'สุพรรณบุรี', 'กาญจนบุรี'],
+  'ต.1': ['เพชรบุรี', 'ราชบุรี', 'สมุทรสงคราม', 'ประจวบคีรีขันธ์', 'ชุมพร', 'ระนอง'],
+  'ต.2': ['นครศรีธรรมราช', 'ตรัง', 'กระบี่', 'สุราษฎร์ธานี', 'พังงา', 'ภูเก็ต'],
+  'ต.3': ['นราธิวาส', 'ปัตตานี', 'สงขลา', 'สตูล', 'พัทลุง']
+});
 const SELECTED_ROUTE_STYLE = Object.freeze({ color: '#facc15', weight: 8, opacity: 1 });
 
 function clearSelectedRouteLayer() {
@@ -3151,6 +3283,15 @@ function provinceFilterSourceSegments() {
   return [...state.segmentsB, ...(state.mapSourceLines || [])];
 }
 
+function filterLinesForQuickRegion(lines) {
+  const provinces = Array.isArray(window.permissionOutQuickRegionProvinces)
+    ? window.permissionOutQuickRegionProvinces
+    : [];
+  if (!provinces.length) return lines;
+  const allowed = new Set(provinces);
+  return lines.filter(line => getSegProvinces(line).some(province => allowed.has(province)));
+}
+
 /* ===================== Report / cost UI ===================== */
 
 function fmtKm(meters) { return (meters / 1000).toFixed(3); }
@@ -3285,42 +3426,78 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
   else try { seg._mapLayer && seg._mapLayer.openPopup(); } catch (err) { /* layer no longer on map — bounds already zoomed, ignore */ }
 });
 
-// เติมรายชื่อจังหวัดจากผลวิเคราะห์และข้อมูลต้นทาง rd03/Maxi ลงใน dropdown
+function selectedPeaRegion() {
+  return document.getElementById('peaRegionFilter')?.value || '';
+}
+
+function selectedPeaOfficeId() {
+  return document.getElementById('peaOfficeFilter')?.value || '';
+}
+
 function populateProvinceFilter() {
-  const container = document.getElementById('provinceFilter');
-  if (!container) return;
-  const provinceSources = provinceFilterSourceSegments();
-  const prev = Array.from(container.querySelectorAll('.provinceFilterOption:checked')).map(o => o.value);
-  const token = ++provinceBuildToken;
-  const renderOptions = provinces => {
-    if (token !== provinceBuildToken) return;
-    provinces.sort((a, b) => a.localeCompare(b, 'th'));
-    const selected = prev.filter(p => provinces.includes(p));
-    const useAll = prev.includes('__ALL__') || selected.length === 0;
-    container.innerHTML = `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" ${useAll ? 'checked' : ''}>ทุกจังหวัด</label>` +
-      provinces.map(p => `<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer;"><input type="checkbox" class="provinceFilterOption" value="${p}" ${!useAll && selected.includes(p) ? 'checked' : ''}>${p}</label>`).join('');
-    bindProvinceFilterOptions();
-    if (state.segmentsB.length) applyProvinceFilter();
-  };
-  if (provinceSources.length <= LARGE_RESULT_THRESHOLD) {
-    renderOptions(Array.from(new Set(provinceSources.flatMap(getSegProvinces).filter(p => p && p !== '-'))));
-    return;
+  const regionSelect = document.getElementById('peaRegionFilter');
+  const quickRegionSelect = document.getElementById('quickPeaRegion');
+  const provinceSelect = document.getElementById('provinceFilter');
+  const officeSelect = document.getElementById('peaOfficeFilter');
+  if (!regionSelect || !provinceSelect || !officeSelect) return;
+  if (regionSelect.options.length <= 1) {
+    Object.keys(PEA_REGION_PROVINCES).forEach(region => regionSelect.add(new Option(`กฟ${region}`, region)));
   }
-  container.innerHTML = '<label style="display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" checked>ทุกจังหวัด</label><span style="font-size:.76rem;color:var(--ink-mute);">กำลังเตรียมตัวกรองจังหวัดเบื้องหลัง…</span>';
-  const provinces = new Set();
-  let cursor = 0;
-  const processChunk = () => {
-    if (token !== provinceBuildToken) return;
-    const end = Math.min(cursor + 180, provinceSources.length);
-    for (; cursor < end; cursor++) {
-      getSegProvinces(provinceSources[cursor]).forEach(province => {
-        if (province && province !== '-') provinces.add(province);
+  if (quickRegionSelect && quickRegionSelect.options.length <= 1) {
+    Object.keys(PEA_REGION_PROVINCES).forEach(region => quickRegionSelect.add(new Option(`กฟ${region}`, region)));
+  }
+  const region = selectedPeaRegion();
+  const previousProvince = provinceSelect.value;
+  const provinces = PEA_REGION_PROVINCES[region] || [];
+  provinceSelect.innerHTML = '<option value="">ทุกจังหวัดในเขต</option>' + provinces
+    .map(province => `<option value="${xmlEscape(province)}">${xmlEscape(province)}</option>`).join('');
+  provinceSelect.disabled = !region;
+  if (provinces.includes(previousProvince)) provinceSelect.value = previousProvince;
+  officeSelect.innerHTML = '<option value="">ทุกหน่วยงานในจังหวัด</option>';
+  officeSelect.disabled = !provinceSelect.value;
+}
+
+function peaOfficeLabel(area) {
+  const name = String(area?.name || '').trim();
+  const type = String(area?.officeType || '').trim();
+  if (!type || name.startsWith(type)) return name || type || 'ไม่ระบุชื่อหน่วยงาน';
+  return `${type}${name}`;
+}
+
+async function populatePeaOfficeFilter() {
+  const officeSelect = document.getElementById('peaOfficeFilter');
+  const province = document.getElementById('provinceFilter')?.value || '';
+  const token = ++peaOfficeBuildToken;
+  officeSelect.innerHTML = '<option value="">ทุกหน่วยงานในจังหวัด</option>';
+  officeSelect.disabled = !province;
+  if (!province) return;
+  const candidates = state.segmentsB.filter(segment => getSegProvinces(segment).includes(province));
+  officeSelect.innerHTML = '<option value="">กำลังค้นหาหน่วยงานจากพื้นที่ PEA…</option>';
+  officeSelect.disabled = true;
+  try {
+    if (typeof window.permissionOutResolvePeaAreas === 'function') {
+      await window.permissionOutResolvePeaAreas(candidates);
+    } else {
+      candidates.forEach(segment => {
+        if (!Array.isArray(segment._peaAreas)) segment._peaAreas = [];
       });
     }
-    if (cursor < provinceSources.length) setTimeout(processChunk, 0);
-    else renderOptions(Array.from(provinces));
-  };
-  setTimeout(processChunk, 0);
+    if (token !== peaOfficeBuildToken) return;
+    const offices = new Map();
+    candidates.flatMap(segment => segment._peaAreas || []).forEach(area => {
+      const officeType = String(area.officeType || '').trim();
+      if (!/กฟ(?:จ|อ|ส|ย)/.test(officeType) && !/กฟ(?:จ|อ|ส|ย)/.test(String(area.name || ''))) return;
+      offices.set(String(area.id), area);
+    });
+    const sorted = Array.from(offices.values()).sort((left, right) => peaOfficeLabel(left).localeCompare(peaOfficeLabel(right), 'th'));
+    officeSelect.innerHTML = '<option value="">ทุกหน่วยงานในจังหวัด</option>' + sorted
+      .map(area => `<option value="${xmlEscape(String(area.id))}">${xmlEscape(peaOfficeLabel(area))}</option>`).join('');
+    officeSelect.disabled = false;
+  } catch (error) {
+    if (token !== peaOfficeBuildToken) return;
+    officeSelect.innerHTML = '<option value="">ไม่สามารถโหลดพื้นที่ PEA ได้</option>';
+    officeSelect.disabled = true;
+  }
 }
 
 // ===== ตัวกรอง Status ของสาย (จากไฟล์ KML) — dynamic เหมือนตัวกรองจังหวัด =====
@@ -3359,24 +3536,31 @@ function bindCableStatusOptions() {
 
 // กรองตารางรายงาน + เส้นบนแผนที่ ตามจังหวัด และหมวดสถานะ (New/Same/Remove) ที่เลือก
 function getSelectedProvinces() {
-  const container = document.getElementById('provinceFilter');
-  return container ? Array.from(container.querySelectorAll('.provinceFilterOption:checked')).map(o => o.value) : ['__ALL__'];
+  const region = selectedPeaRegion();
+  if (!region) return ['__NONE__'];
+  const province = document.getElementById('provinceFilter')?.value || '';
+  return province ? [province] : [...(PEA_REGION_PROVINCES[region] || [])];
 }
 function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinces(), activeOverlaps = getActiveOverlaps(), selectedCableStatuses = getSelectedCableStatuses(), activeCategories = getActiveCategories()) {
-  const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
   const segmentProvinces = getSegProvinces(seg);
-  const provOk = showAllProv || segmentProvinces.some(province => selectedProvinces.includes(province));
+  const provOk = selectedProvinces.length > 0 && !selectedProvinces.includes('__NONE__') && segmentProvinces.some(province => selectedProvinces.includes(province));
+  const officeId = selectedPeaOfficeId();
+  const officeOk = !officeId || (seg._peaAreas || []).some(area => String(area.id) === officeId);
   const overlapOk = activeOverlaps[OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none'];
   const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
   const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(seg));
   const category = normalizeImportCategory(seg.importCategory);
   const categoryOk = activeCategories[category] === true;
-  return provOk && overlapOk && cableStatusOk && categoryOk;
+  return provOk && officeOk && overlapOk && cableStatusOk && categoryOk;
 }
 function applyProvinceFilter(fitMapToSelection = false) {
   const selectedProvinces = getSelectedProvinces();
-  const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
-  const selectedText = selectedProvinces.filter(p => p !== '__ALL__').join(', ');
+  const region = selectedPeaRegion();
+  const province = document.getElementById('provinceFilter')?.value || '';
+  const officeSelect = document.getElementById('peaOfficeFilter');
+  const officeText = officeSelect?.value ? officeSelect.options[officeSelect.selectedIndex]?.text : '';
+  const hasScope = Boolean(region);
+  const selectedText = province || `ทุกจังหวัดใน กฟ${region}`;
   const active = getActiveStatuses();
   const activeOverlaps = getActiveOverlaps();
   const selectedCableStatuses = getSelectedCableStatuses();
@@ -3409,7 +3593,14 @@ function applyProvinceFilter(fitMapToSelection = false) {
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
-  if (cnt) cnt.textContent = showAllProv ? `แสดง ${shown} ช่วง` : `แสดง ${shown} ช่วง ในจังหวัด: ${selectedText}`;
+  if (cnt) cnt.textContent = hasScope
+    ? `แสดง ${shown.toLocaleString('th-TH')} ช่วง · ${selectedText}${officeText ? ` · ${officeText}` : ''}`
+    : 'กรุณาเลือกเขตการไฟฟ้าหลักเพื่อแสดงข้อมูล';
+  document.getElementById('results').style.display = hasScope ? 'block' : 'none';
+  const reportCard = document.getElementById('reportCard');
+  reportCard?.classList.toggle('area-filter-pending', !hasScope);
+  const prompt = document.getElementById('peaScopePrompt');
+  if (prompt) prompt.hidden = hasScope;
   const selectedStatuses = selectedCableStatuses;
   const showAllStatus = selectedStatuses.length === 0 || selectedStatuses.includes('__ALL__');
   const statusCnt = document.getElementById('cableStatusFilterCount');
@@ -3432,26 +3623,15 @@ function onStatusFilterChange() {
   applyProvinceFilter();
 }
 
-function bindProvinceFilterOptions() {
-  document.querySelectorAll('.provinceFilterOption').forEach(cb => cb.addEventListener('change', (event) => {
-    const all = document.querySelector('.provinceFilterOption[value="__ALL__"]');
-    if (event.target.value === '__ALL__' && event.target.checked) {
-      document.querySelectorAll('.provinceFilterOption:not([value="__ALL__"])').forEach(box => { box.checked = false; });
-    } else if (event.target.value !== '__ALL__' && event.target.checked && all) {
-      all.checked = false;
-    }
-    applyProvinceFilter(true);
-  }));
-}
-bindProvinceFilterOptions();
-document.getElementById('selectAllProvinces').addEventListener('click', () => {
-  document.querySelectorAll('.provinceFilterOption').forEach(o => { o.checked = o.value === '__ALL__'; });
+document.getElementById('peaRegionFilter').addEventListener('change', () => {
+  populateProvinceFilter();
   applyProvinceFilter(true);
 });
-document.getElementById('clearProvinceSelection').addEventListener('click', () => {
-  document.querySelectorAll('.provinceFilterOption').forEach(o => { o.checked = false; });
+document.getElementById('provinceFilter').addEventListener('change', async () => {
+  await populatePeaOfficeFilter();
   applyProvinceFilter(true);
 });
+document.getElementById('peaOfficeFilter').addEventListener('change', () => applyProvinceFilter(true));
 document.querySelectorAll('.statusFilter').forEach(cb => cb.addEventListener('change', onStatusFilterChange));
 document.querySelectorAll('.categoryFilter').forEach(cb => cb.addEventListener('change', onStatusFilterChange));
 document.querySelectorAll('.overlapFilter').forEach(cb => cb.addEventListener('change', () => applyProvinceFilter()));
@@ -3582,7 +3762,30 @@ function recomputeAll() {
   document.getElementById(id).addEventListener('input', recomputeAll);
 });
 
+function updateAnalysisLoading(title, detail) {
+  const titleNode = document.getElementById('analysisLoadingTitle');
+  const detailNode = document.getElementById('analysisLoadingDetail');
+  if (titleNode && title) titleNode.textContent = title;
+  if (detailNode && detail) detailNode.textContent = detail;
+}
+
+function showAnalysisLoading(title, detail) {
+  updateAnalysisLoading(title, detail);
+  const overlay = document.getElementById('analysisLoadingOverlay');
+  if (overlay) overlay.hidden = false;
+  document.body.classList.add('is-analysis-loading');
+}
+
+function hideAnalysisLoading() {
+  const overlay = document.getElementById('analysisLoadingOverlay');
+  if (overlay) overlay.hidden = true;
+  document.body.classList.remove('is-analysis-loading');
+}
+
 async function runAnalysis(options = {}) {
+  window.permissionOutQuickRegionProvinces = Array.isArray(options.quickRegionProvinces)
+    ? [...options.quickRegionProvinces]
+    : null;
   undoTrimResults();
   errBox.style.display = 'none';
   const transientFiles = Array.isArray(options.transientFiles) ? options.transientFiles.filter(Boolean) : [];
@@ -3604,6 +3807,12 @@ async function runAnalysis(options = {}) {
 
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
+  showAnalysisLoading(
+    'กำลังโหลดข้อมูล',
+    options.quickRegionProvinces?.length
+      ? 'กำลังดึงข้อมูลของเขตการไฟฟ้าที่เลือกจากฐานข้อมูล'
+      : 'กำลังอ่านและตรวจสอบชุดข้อมูลที่เลือก'
+  );
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('results').style.display = 'none';
   document.getElementById('reportCard').style.display = 'none';
@@ -3656,6 +3865,7 @@ async function runAnalysis(options = {}) {
     ]);
 
     if (runRevision !== analysisRunRevision) return;
+    updateAnalysisLoading('กำลังเตรียมเส้นทาง', 'กำลังกรองและจัดกลุ่มข้อมูลตามเงื่อนไขที่เลือก');
     let linesA = isTransientAnalysis
       ? transientParsedLines
       : optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
@@ -3672,6 +3882,10 @@ async function runAnalysis(options = {}) {
         return line;
       })
     ));
+    // Keep the existing data loaders, but reduce the expensive geometry
+    // comparison to the selected PEA region before analysis begins.
+    linesA = filterLinesForQuickRegion(linesA);
+    linesB = filterLinesForQuickRegion(linesB);
     if (!singleFileMode) {
       const selectedComparisonLines = [...linesA, ...linesB];
       linesA = filterMod1ComparisonPair(selectedComparisonLines, 'BASE');
@@ -3708,6 +3922,10 @@ async function runAnalysis(options = {}) {
     const totalB = linesB.reduce((sum, l) => sum + lineLengthMeters(l.coords), 0);
     // เปรียบเทียบแบบผลต่าง: New = มีในฐานไม่มีในเปรียบเทียบ, Remove = มีในเปรียบเทียบไม่มีในฐาน, เหมือนกัน = ซ่อน
     let resB;
+    updateAnalysisLoading(
+      singleFileMode ? 'กำลังคำนวณข้อมูล' : 'กำลังเปรียบเทียบเส้นทาง',
+      'ระบบกำลังประมวลผลระยะทางและค่าบริการ'
+    );
     if (!singleFileMode) {
       resB = analyzeDiff(linesA, linesB, threshold, interval);
     } else if (hasCompare) {
@@ -3758,6 +3976,7 @@ async function runAnalysis(options = {}) {
     document.getElementById('execMeta').textContent = `${dateStr} · ${timeStr} · ${importNote} · ${state.segmentsB.length} ช่วง${breakdown} · ${elapsedMs.toLocaleString('th-TH')} มิลลิวินาที`;
 
     previews = { BASE: null, COMPARE: null };
+    updateAnalysisLoading('กำลังแสดงผล', 'กำลังจัดเตรียมแผนที่ ตาราง และสรุปค่าบริการ');
     drawResults(resB);
     document.getElementById('mapStatus').textContent = aggregateResultMode
       ? `แสดงผลแบบรวมเส้นความเร็วสูง ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง · คำนวณและ Export ครบทั้งหมด`
@@ -3768,8 +3987,9 @@ async function runAnalysis(options = {}) {
     populateCableStatusFilter();
     applyProvinceFilter();
 
-    document.getElementById('results').style.display = 'block';
     document.getElementById('reportCard').style.display = 'block';
+    document.getElementById('reportCard').classList.toggle('area-filter-pending', !selectedPeaRegion());
+    document.getElementById('results').style.display = selectedPeaRegion() ? 'block' : 'none';
     costStatus.textContent = state.segmentsB.length > 0
       ? `${isTransientAnalysis ? 'ผลชั่วคราว (ไม่บันทึก) · ' : ''}เริ่มต้นคำนวณค่าพาดสายครบทุกเส้นที่ Import ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง — เมื่อกรองในการ์ด 4 ยอดจะปรับตามผลกรอง`
       : 'วิเคราะห์เสร็จแล้ว — ไม่พบช่วงเส้นทาง จึงไม่มีค่าบริการให้คำนวณ';
@@ -3786,6 +4006,7 @@ async function runAnalysis(options = {}) {
     if (runRevision === analysisRunRevision) {
       btn.disabled = false;
       document.getElementById('loading').style.display = 'none';
+      hideAnalysisLoading();
     }
   }
 }
@@ -5225,7 +5446,65 @@ swapSourceRolesButton?.addEventListener('click', async () => {
 });
 updateSourceRoleUI();
 
-document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
+document.getElementById('analyzeBtn').addEventListener('click', () => {
+  window.permissionOutQuickRegionProvinces = null;
+  runAnalysis();
+});
+const quickPeaRegion = document.getElementById('quickPeaRegion');
+const quickUseRd03 = document.getElementById('quickUseRd03');
+const quickUseRd05 = document.getElementById('quickUseRd05');
+const quickUseMaxi = document.getElementById('quickUseMaxi');
+const quickAreaLoadBtn = document.getElementById('quickAreaLoadBtn');
+const quickAreaStatus = document.getElementById('quickAreaStatus');
+
+function updateQuickAreaLoaderState() {
+  const hasRegion = Boolean(quickPeaRegion?.value);
+  const hasDataset = Boolean(quickUseRd03?.checked || quickUseRd05?.checked || quickUseMaxi?.checked);
+  if (quickAreaLoadBtn) quickAreaLoadBtn.disabled = !hasRegion || !hasDataset;
+  if (quickAreaStatus && !quickAreaLoadBtn?.disabled) {
+    const selected = [quickUseRd03.checked ? 'RD03' : '', quickUseRd05.checked ? 'RD05' : '', quickUseMaxi.checked ? 'Maxi' : ''].filter(Boolean).join(' + ');
+    quickAreaStatus.textContent = `พร้อมโหลด ${selected} สำหรับ กฟ${quickPeaRegion.value}`;
+  } else if (quickAreaStatus) {
+    quickAreaStatus.textContent = 'เลือกเขตและชุดข้อมูลอย่างน้อยหนึ่งรายการ';
+  }
+}
+
+[quickPeaRegion, quickUseRd03, quickUseRd05, quickUseMaxi].forEach(control => control?.addEventListener('change', updateQuickAreaLoaderState));
+quickAreaLoadBtn?.addEventListener('click', async () => {
+  const region = quickPeaRegion.value;
+  const provinces = PEA_REGION_PROVINCES[region] || [];
+  const useRd03 = quickUseRd03.checked;
+  const useRd05 = quickUseRd05.checked;
+  const useMaxi = quickUseMaxi.checked;
+  if (!region || (!useRd03 && !useRd05 && !useMaxi)) return;
+  quickAreaLoadBtn.disabled = true;
+  quickAreaStatus.textContent = `กำลังเลือกข้อมูลจากฐานสำหรับ กฟ${region}…`;
+  try {
+    if (typeof window.permissionOutSelectRegionDatasets !== 'function') {
+      throw new Error('คลังข้อมูลยังไม่พร้อม กรุณารอสักครู่แล้วลองใหม่');
+    }
+    window.permissionOutBaseFiles = [];
+    window.permissionOutCompareFiles = [];
+    [fileBase, fileCompare].forEach(input => { if (input) input.value = ''; });
+    [boxBase, boxCompare].forEach(box => box?.classList.remove('hasFile'));
+    [tagBase, tagCompare].forEach(tag => { if (tag) { tag.textContent = ''; tag.hidden = true; } });
+    const selection = window.permissionOutSelectRegionDatasets({ provinces, useRd03, useRd05, useMaxi });
+    if (!selection?.ready) throw new Error('รายการข้อมูลจากฐานยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่');
+    const resultRegion = document.getElementById('peaRegionFilter');
+    resultRegion.value = region;
+    populateProvinceFilter();
+    updateSourceRoleUI();
+    quickAreaStatus.textContent = `เลือก RD03 ${selection.rd03Count.toLocaleString('th-TH')} · RD05 ${selection.rd05Count.toLocaleString('th-TH')} · Maxi ${selection.maxiCount.toLocaleString('th-TH')} ชุด · กำลังคำนวณ…`;
+    const result = await runAnalysis({ quickRegionProvinces: provinces });
+    quickAreaStatus.textContent = result?.segmentCount !== undefined
+      ? `แสดงผล กฟ${region} แล้ว · ${result.segmentCount.toLocaleString('th-TH')} ช่วงก่อนกรองพื้นที่`
+      : 'วิเคราะห์ไม่สำเร็จ กรุณาตรวจสอบข้อความแจ้งเตือนด้านล่าง';
+  } catch (error) {
+    quickAreaStatus.textContent = error?.message || 'ไม่สามารถโหลดข้อมูลตามเขตได้';
+  } finally {
+    quickAreaLoadBtn.disabled = false;
+  }
+});
 externalCalcFiles?.addEventListener('change', () => {
   const files = Array.from(externalCalcFiles.files || []);
   const button = document.getElementById('externalCalcBtn');
@@ -5340,11 +5619,19 @@ function clearAll() {
 
   buildReportTable();
   recomputeAll();
+  const regionSel = document.getElementById('peaRegionFilter');
+  if (regionSel) regionSel.value = '';
   const provSel = document.getElementById('provinceFilter');
   if (provSel) {
-    provSel.innerHTML = '<label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="provinceFilterOption" value="__ALL__" checked>ทุกจังหวัด</label>';
-    bindProvinceFilterOptions();
+    provSel.innerHTML = '<option value="">ทุกจังหวัดในเขต</option>';
+    provSel.disabled = true;
   }
+  const officeSel = document.getElementById('peaOfficeFilter');
+  if (officeSel) {
+    officeSel.innerHTML = '<option value="">ทุกหน่วยงานในจังหวัด</option>';
+    officeSel.disabled = true;
+  }
+  peaOfficeBuildToken++;
   const provCnt = document.getElementById('provinceFilterCount');
   if (provCnt) provCnt.textContent = '';
   const cableStatusSel = document.getElementById('cableStatusFilter');
@@ -5484,13 +5771,13 @@ document.addEventListener('keydown', (event) => {
 });
 setMapFocus(localStorage.getItem(mapFocusKey) === '1', false);
 
-document.addEventListener('DOMContentLoaded', () => { initMap(); buildReportTable(); recomputeAll(); });
+document.addEventListener('DOMContentLoaded', () => { initMap(); populateProvinceFilter(); buildReportTable(); recomputeAll(); });
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="production.js?v=20260831-external-calc"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
-<script src="ux-refresh.js?v=20260825-route-selection-layout"></script>
+<script src="ux-refresh.js?v=20260902-compact-controls"></script>
 </body>
 </html>

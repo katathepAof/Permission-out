@@ -122,11 +122,6 @@
   const summaryTitle = q('.execSummary-title');
   if (summaryTitle) summaryTitle.textContent = 'สรุปผลการวิเคราะห์';
 
-  const setupIntro = document.createElement('p');
-  setupIntro.className = 'setup-intro';
-  setupIntro.textContent = 'กำหนดชุดฐานและชุดเปรียบเทียบ จากนั้นตรวจสอบการตั้งค่าก่อนเริ่มวิเคราะห์';
-  setupHeading.after(setupIntro);
-
   const labelMap = [
     ['threshold', 'ระยะที่ถือว่าทับกัน (เมตร)'],
     ['interval', 'ความละเอียดในการวิเคราะห์ (เมตร)'],
@@ -174,22 +169,26 @@
 
   const sourceSwitch = q('.source-role-switch', setupCard);
   const dataGrid = q('.grid2', setupCard);
-  const selectionSummary = document.createElement('div');
+  const selectionSummary = document.createElement('details');
   selectionSummary.className = 'dataset-selection-summary';
+  selectionSummary.open = true;
   selectionSummary.innerHTML = `
-    <div class="dataset-summary-row">
-      <span class="dataset-summary-role" id="uxBaseRole">ชุดฐาน</span>
-      <span class="dataset-summary-copy" id="uxBaseSummary">ยังไม่ได้เลือกชุดข้อมูล</span>
-      <span class="dataset-summary-count" id="uxBaseCount">0</span>
-    </div>
-    <div class="dataset-summary-row">
-      <span class="dataset-summary-role" id="uxCompareRole">ชุดเปรียบเทียบ</span>
-      <span class="dataset-summary-copy" id="uxCompareSummary">ยังไม่ได้เลือกชุดข้อมูล</span>
-      <span class="dataset-summary-count" id="uxCompareCount">0</span>
-    </div>
-    <button type="button" class="dataset-open-button" id="openDatasetPicker">
-      <span aria-hidden="true">＋</span> เลือกหรือเปลี่ยนชุดข้อมูล
-    </button>`;
+    <summary class="dataset-selection-toggle"><span>เลือกหรือเปลี่ยนชุดข้อมูล</span></summary>
+    <div class="dataset-selection-content">
+      <div class="dataset-summary-row">
+        <span class="dataset-summary-role" id="uxBaseRole">ชุดฐาน</span>
+        <span class="dataset-summary-copy" id="uxBaseSummary">ยังไม่ได้เลือกชุดข้อมูล</span>
+        <span class="dataset-summary-count" id="uxBaseCount">0</span>
+      </div>
+      <div class="dataset-summary-row">
+        <span class="dataset-summary-role" id="uxCompareRole">ชุดเปรียบเทียบ</span>
+        <span class="dataset-summary-copy" id="uxCompareSummary">ยังไม่ได้เลือกชุดข้อมูล</span>
+        <span class="dataset-summary-count" id="uxCompareCount">0</span>
+      </div>
+      <button type="button" class="dataset-open-button" id="openDatasetPicker">
+        <span aria-hidden="true">＋</span> เปิดตัวเลือกชุดข้อมูล
+      </button>
+    </div>`;
   sourceSwitch.before(selectionSummary);
 
   const drawerBackdrop = document.createElement('div');

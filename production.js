@@ -686,6 +686,59 @@
     updateCompareCatalogSummary();
   };
 
+  function catalogItemSearchText(item) {
+    return [
+      item?.name, item?.group, item?.sourceName, item?.sourceRelative,
+      item?.canonicalName, item?.displayName, item?.metadata?.province,
+      ...(Array.isArray(item?.metadata?.provinces) ? item.metadata.provinces : [])
+    ].filter(Boolean).join(' ').normalize('NFKC').toLocaleLowerCase('th');
+  }
+
+  function catalogItemMatchesProvinces(item, provinces) {
+    const text = catalogItemSearchText(item);
+    return provinces.some(province => text.includes(String(province).normalize('NFKC').toLocaleLowerCase('th')));
+  }
+
+  function catalogItemRdType(item) {
+    const text = catalogItemSearchText(item).replace(/[\s_-]+/g, '');
+    if (text.includes('rd05')) return 'rd05';
+    if (text.includes('rd03')) return 'rd03';
+    return 'other';
+  }
+
+  window.permissionOutSelectRegionDatasets = ({ provinces = [], useRd03 = true, useRd05 = false, useMaxi = true } = {}) => {
+    if (((useRd03 || useRd05) && !baseCatalogManifest) || (useMaxi && !compareCatalogManifest)) {
+      return { ready: false, rd03Count: 0, rd05Count: 0, maxiCount: 0 };
+    }
+    baseCatalogSelected.clear();
+    peaCompareCatalogSelected.clear();
+    ufmBaseCatalogSelected.clear();
+    compareCatalogSelected.clear();
+
+    let regionalPeaItems = (baseCatalogManifest?.items || []).filter(item => catalogItemMatchesProvinces(item, provinces));
+    // A managed nationwide dataset may not carry province metadata yet. Loading it
+    // remains correct because quick mode filters every line to the selected region.
+    if (!regionalPeaItems.length) regionalPeaItems = baseCatalogManifest?.items || [];
+    const rd03Items = useRd03
+      ? regionalPeaItems.filter(item => ['rd03', 'other'].includes(catalogItemRdType(item)))
+      : [];
+    const rd05Items = useRd05
+      ? regionalPeaItems.filter(item => catalogItemRdType(item) === 'rd05')
+      : [];
+    [...rd03Items, ...rd05Items].forEach(item => baseCatalogSelected.add(item.id));
+    const maxiItems = useMaxi ? (compareCatalogManifest?.items || []) : [];
+    // Quick mode is for combined display and billing, not comparison. Put Maxi on
+    // the same logical BASE side as RD03/RD05 so existing direct-analysis billing applies.
+    maxiItems.forEach(item => ufmBaseCatalogSelected.add(item.id));
+
+    syncLogicalDatasetSelections();
+    renderBaseCatalog();
+    renderCompareCatalog();
+    updateBaseCatalogSummary();
+    updateCompareCatalogSummary();
+    return { ready: true, rd03Count: rd03Items.length, rd05Count: rd05Items.length, maxiCount: maxiItems.length };
+  };
+
   async function initializeCompareCatalog() {
     if (!compareCatalogList || !cloudEnabled) {
       updateCompareCatalogSummary(cloudEnabled ? 'ไม่พบส่วนแสดงรายการไฟล์' : 'ต้องเชื่อมต่อ Supabase');

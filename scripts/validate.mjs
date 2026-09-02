@@ -80,7 +80,7 @@ for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEna
 if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();')) {
   throw new Error('KML/KMZ export must include all selected source data, not only overlap-only result segments');
 }
-if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260825-route-selection-layout')) {
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260902-compact-controls')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Object.freeze({ label: 'Network', color: '#1E5BA8' })", "'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' })", "customer: Object.freeze({ label: 'Customer', color: '#B7791F' })", 'applyDatasetLineColors(', 'maxiCategoryColor(line, colorByKey.get(key))', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
@@ -209,8 +209,20 @@ if (!html.includes("window.permissionOutLoadGroupLines('BASE')") || !html.includ
 if (!html.includes('function clearSourceColorOverlay()') || !html.includes('// Result mode must mirror the report table exactly.')) {
   throw new Error('MOD 1 report filters must hide unfiltered source overlays from the result map');
 }
-if (!html.includes('function getSegProvinces(seg)') || !html.includes('function provinceFilterSourceSegments()') || !html.includes('provinceSources.flatMap(getSegProvinces)') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))')) {
-  throw new Error('MOD 1 province filtering must include provinces from result segments and selected rd03/Maxi source data');
+if (!html.includes('function getSegProvinces(seg)') || !html.includes('const PEA_REGION_PROVINCES') || !html.includes('function populatePeaOfficeFilter()') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))') || !html.includes("window.permissionOutResolvePeaAreas(candidates)")) {
+  throw new Error('MOD 1 cascading PEA region, province and office filtering is missing');
+}
+for (const marker of ['id="quickPeaRegion"', 'id="quickUseRd03"', 'id="quickUseRd05"', 'id="quickUseMaxi"', 'id="quickAreaLoadBtn"', 'window.permissionOutSelectRegionDatasets({ provinces, useRd03, useRd05, useMaxi })']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 quick regional database loader marker is missing: ${marker}`);
+}
+if (!html.includes('<details class="quick-area-loader" open>') || !uxRefresh.includes("document.createElement('details')") || !uxRefresh.includes('dataset-selection-toggle')) {
+  throw new Error('MOD 1 quick and manual dataset controls must remain independently collapsible');
+}
+for (const marker of ['function filterLinesForQuickRegion(lines)', 'linesA = filterLinesForQuickRegion(linesA)', 'linesB = filterLinesForQuickRegion(linesB)', 'runAnalysis({ quickRegionProvinces: provinces })']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 quick regional prefilter marker is missing: ${marker}`);
+}
+for (const marker of ['window.permissionOutSelectRegionDatasets =', 'catalogItemMatchesProvinces(item, provinces)', "catalogItemRdType(item) === 'rd05'", 'baseCatalogSelected.add(item.id)', 'ufmBaseCatalogSelected.add(item.id)']) {
+  if (!production.includes(marker)) throw new Error(`MOD 1 regional catalog selection marker is missing: ${marker}`);
 }
 if (!html.includes("[...state.segmentsB, ...(state.mapSourceLines || [])].map(getSegCableStatus)")) {
   throw new Error('MOD 1 cable status filter must include source-line statuses');
