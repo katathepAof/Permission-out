@@ -31,6 +31,12 @@
   const peaLayerList = document.getElementById('peaLayerList');
   const peaLayerTypes = document.getElementById('peaLayerTypes');
   const peaSelected = new Set();
+  let peaScopeOfficeId = '';
+  function activePeaSelection() {
+    const ids = new Set(Array.from(peaSelected, String));
+    if (peaScopeOfficeId) ids.add(peaScopeOfficeId);
+    return ids;
+  }
   const peaChunkCache = new Map();
   let peaManifest = null;
   let peaLookupGrid = null;
@@ -781,10 +787,11 @@
   }
 
   function updatePeaSummary(message = '') {
-    if (peaLayerCount) peaLayerCount.textContent = peaSelected.size.toLocaleString('th-TH');
+    const selectedCount = activePeaSelection().size;
+    if (peaLayerCount) peaLayerCount.textContent = selectedCount.toLocaleString('th-TH');
     if (!peaLayerStatus) return;
     peaLayerStatus.textContent = message || (peaManifest
-      ? `เลือก ${peaSelected.size.toLocaleString('th-TH')} จาก ${peaManifest.featureCount.toLocaleString('th-TH')} พื้นที่`
+      ? `เลือก ${selectedCount.toLocaleString('th-TH')} จาก ${peaManifest.featureCount.toLocaleString('th-TH')} พื้นที่`
       : 'ยังไม่พบรายการข้อมูล');
   }
 
@@ -803,7 +810,8 @@
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.value = item.id;
-      input.checked = peaSelected.has(item.id);
+      input.checked = activePeaSelection().has(String(item.id));
+      input.disabled = String(item.id) === peaScopeOfficeId;
       input.addEventListener('change', () => {
         if (input.checked) peaSelected.add(item.id); else peaSelected.delete(item.id);
         updatePeaSummary();
@@ -987,8 +995,8 @@
     return chunks.flatMap(chunk => chunk.features || []).filter(feature => ids.has(String(feature.id || feature.properties?.pea_id)));
   };
   window.permissionOutSelectedPeaFeatures = async () => {
-    if (!peaSelected.size || !peaManifest) return [];
-    const selectedIds = new Set(Array.from(peaSelected, String));
+    const selectedIds = activePeaSelection();
+    if (!selectedIds.size || !peaManifest) return [];
     const paths = [...new Set(
       peaManifest.items
         .filter(item => selectedIds.has(String(item.id)))
@@ -1002,7 +1010,8 @@
 
   async function updatePeaMap() {
     const version = ++peaRenderVersion;
-    if (!peaSelected.size || !peaManifest) {
+    const selectedIds = activePeaSelection();
+    if (!selectedIds.size || !peaManifest) {
       clearPeaOverlay();
       peaShouldFocus = false;
       updatePeaSummary();
@@ -1014,13 +1023,13 @@
     // Keep PEA polygons below route vectors so selecting an area never blocks
     // clicks and tooltips on the routes currently shown on the map.
     peaPane.style.zIndex = '390';
-    const selectedItems = peaManifest.items.filter(item => peaSelected.has(item.id));
+    const selectedItems = peaManifest.items.filter(item => selectedIds.has(String(item.id)));
     const chunkPaths = [...new Set(selectedItems.map(item => item.chunk))];
-    updatePeaSummary(`กำลังโหลด ${peaSelected.size.toLocaleString('th-TH')} พื้นที่…`);
+    updatePeaSummary(`กำลังโหลด ${selectedIds.size.toLocaleString('th-TH')} พื้นที่…`);
     try {
       const chunks = await Promise.all(chunkPaths.map(fetchPeaChunk));
       if (version !== peaRenderVersion) return;
-      const features = chunks.flatMap(chunk => chunk.features || []).filter(feature => peaSelected.has(feature.id || feature.properties?.pea_id));
+      const features = chunks.flatMap(chunk => chunk.features || []).filter(feature => selectedIds.has(String(feature.id || feature.properties?.pea_id)));
       clearPeaOverlay();
       peaOverlayLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
         pane: 'peaAreaPane',
@@ -1033,7 +1042,10 @@
         }
       }).addTo(map);
       if (peaShouldFocus) {
-        const bounds = peaOverlayLayer.getBounds();
+        const scopeFeatures = features.filter(feature => String(feature.id || feature.properties?.pea_id) === peaScopeOfficeId);
+        const bounds = scopeFeatures.length
+          ? L.geoJSON({ type: 'FeatureCollection', features: scopeFeatures }).getBounds()
+          : peaOverlayLayer.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 12 });
       }
       peaShouldFocus = false;
@@ -1047,10 +1059,24 @@
   }
 
   function schedulePeaMapUpdate(focus = false) {
+    ++peaRenderVersion;
     if (focus) peaShouldFocus = true;
     clearTimeout(peaRenderTimer);
     peaRenderTimer = setTimeout(updatePeaMap, 120);
   }
+
+  // Keep the dropdown-selected boundary separate from manually selected layers.
+  window.permissionOutShowPeaOffice = officeId => {
+    const nextId = String(officeId || '');
+    if (nextId === peaScopeOfficeId) return;
+    peaScopeOfficeId = nextId;
+    peaShouldFocus = Boolean(nextId);
+    clearPeaOverlay();
+    renderPeaOptions();
+    updatePeaSummary();
+    schedulePeaMapUpdate(Boolean(nextId));
+  };
+  window.addEventListener('permissionout:cleared', () => window.permissionOutShowPeaOffice(''));
 
   async function initializePeaLayers() {
     if (!peaLayerTrigger || !cfg.supabaseUrl) return;
@@ -1070,6 +1096,7 @@
         label.append(input, text); peaLayerTypes.appendChild(label);
       }
       renderPeaOptions(); updatePeaSummary();
+      if (activePeaSelection().size) schedulePeaMapUpdate();
     } catch (error) {
       updatePeaSummary(`โหลดรายการไม่สำเร็จ: ${error.message}`);
     } finally { peaLayerTrigger.disabled = false; }
@@ -1571,7 +1598,7 @@
   });
   window.addEventListener('permissionout:map-ready', () => {
     peaOverlayLayer = null;
-    if (peaSelected.size) schedulePeaMapUpdate();
+    if (activePeaSelection().size) schedulePeaMapUpdate();
     map.on('moveend', scheduleOsmReferenceUpdate);
     scheduleOsmReferenceUpdate();
   });

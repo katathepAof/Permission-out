@@ -3554,6 +3554,7 @@ function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinc
   return provOk && officeOk && overlapOk && cableStatusOk && categoryOk;
 }
 function applyProvinceFilter(fitMapToSelection = false) {
+  window.permissionOutShowPeaOffice?.(selectedPeaOfficeId());
   const selectedProvinces = getSelectedProvinces();
   const region = selectedPeaRegion();
   const province = document.getElementById('provinceFilter')?.value || '';
@@ -5775,7 +5776,7 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); populateProvinc
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260831-external-calc"></script>
+<script src="production.js?v=20260902-office-boundary"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
 <script src="ux-refresh.js?v=20260902-streamlined-workflow-2"></script>
