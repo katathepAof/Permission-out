@@ -60,6 +60,24 @@
       customer: '#ff5576'
     }
   };
+  const MOD1_SELECTED_ROUTE_STYLE = Object.freeze({ color: '#facc15', weight: 8, opacity: 1 });
+  let selectedMod1Route = null;
+
+  function selectMod1Route(route) {
+    if (selectedMod1Route?.route !== route) {
+      if (selectedMod1Route?.route?._map) selectedMod1Route.route.setStyle(selectedMod1Route.style);
+      selectedMod1Route = { route, style: {
+        color: route.options.color, weight: route.options.weight, opacity: route.options.opacity
+      } };
+    }
+    route.setStyle(MOD1_SELECTED_ROUTE_STYLE);
+    route.bringToFront?.();
+  }
+
+  function clearSelectedMod1Route() {
+    if (selectedMod1Route?.route?._map) selectedMod1Route.route.setStyle(selectedMod1Route.style);
+    selectedMod1Route = null;
+  }
   const MODULES = [
     { key: 'mod1', label: 'MOD 1', detail: 'PEA / UFM route intelligence' },
     { key: 'mod2', label: 'MOD 2', detail: 'Site Facility & Design' }
@@ -148,9 +166,9 @@
   const map = L.map('mod2Map', { zoomControl: true, preferCanvas: true }).setView([13.2, 101.2], 6);
   map.createPane('mod1RoutePane');
   map.getPane('mod1RoutePane').style.zIndex = '450';
-  const lightMapUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   const fallbackMapUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const lightMapUrl = fallbackMapUrl;
+  const darkMapUrl = fallbackMapUrl;
   let usingFallbackMap = false;
   let tileErrors = 0;
   let tileLoaded = false;
@@ -160,9 +178,8 @@
     baseMapLayer.setUrl(fallbackMapUrl);
   };
   const baseMapLayer = L.tileLayer(document.documentElement.dataset.theme === 'dark' ? darkMapUrl : lightMapUrl, {
-    subdomains: 'abcd',
-    maxZoom: 20,
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
     crossOrigin: true
   })
     .on('tileload', () => { tileLoaded = true; tileErrors = 0; })
@@ -691,6 +708,7 @@
     });
     route.on('click', event => {
       L.DomEvent.stopPropagation(event.originalEvent);
+      selectMod1Route(route);
       L.popup({
           minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
         })
@@ -699,6 +717,9 @@
         .openOn(map);
     });
     route.addTo(mod1RouteLayers[type]);
+    route.on('popupclose', () => {
+      if (selectedMod1Route?.route === route) clearSelectedMod1Route();
+    });
   }
 
   async function loadMod1RouteType(type, area, requestId) {
@@ -723,6 +744,7 @@
   }
 
   async function syncMod1RouteLayers() {
+    clearSelectedMod1Route();
     const areas = [...selectedValues(filterElements.area)];
     const areaLabel = areas.join(', ');
     const enabledTypes = [

@@ -31,6 +31,12 @@
   const peaLayerList = document.getElementById('peaLayerList');
   const peaLayerTypes = document.getElementById('peaLayerTypes');
   const peaSelected = new Set();
+  let peaScopeOfficeId = '';
+  function activePeaSelection() {
+    const ids = new Set(Array.from(peaSelected, String));
+    if (peaScopeOfficeId) ids.add(peaScopeOfficeId);
+    return ids;
+  }
   const peaChunkCache = new Map();
   let peaManifest = null;
   let peaLookupGrid = null;
@@ -686,6 +692,59 @@
     updateCompareCatalogSummary();
   };
 
+  function catalogItemSearchText(item) {
+    return [
+      item?.name, item?.group, item?.sourceName, item?.sourceRelative,
+      item?.canonicalName, item?.displayName, item?.metadata?.province,
+      ...(Array.isArray(item?.metadata?.provinces) ? item.metadata.provinces : [])
+    ].filter(Boolean).join(' ').normalize('NFKC').toLocaleLowerCase('th');
+  }
+
+  function catalogItemMatchesProvinces(item, provinces) {
+    const text = catalogItemSearchText(item);
+    return provinces.some(province => text.includes(String(province).normalize('NFKC').toLocaleLowerCase('th')));
+  }
+
+  function catalogItemRdType(item) {
+    const text = catalogItemSearchText(item).replace(/[\s_-]+/g, '');
+    if (text.includes('rd05')) return 'rd05';
+    if (text.includes('rd03')) return 'rd03';
+    return 'other';
+  }
+
+  window.permissionOutSelectRegionDatasets = ({ provinces = [], useRd03 = true, useRd05 = false, useMaxi = true } = {}) => {
+    if (((useRd03 || useRd05) && !baseCatalogManifest) || (useMaxi && !compareCatalogManifest)) {
+      return { ready: false, rd03Count: 0, rd05Count: 0, maxiCount: 0 };
+    }
+    baseCatalogSelected.clear();
+    peaCompareCatalogSelected.clear();
+    ufmBaseCatalogSelected.clear();
+    compareCatalogSelected.clear();
+
+    let regionalPeaItems = (baseCatalogManifest?.items || []).filter(item => catalogItemMatchesProvinces(item, provinces));
+    // A managed nationwide dataset may not carry province metadata yet. Loading it
+    // remains correct because quick mode filters every line to the selected region.
+    if (!regionalPeaItems.length) regionalPeaItems = baseCatalogManifest?.items || [];
+    const rd03Items = useRd03
+      ? regionalPeaItems.filter(item => ['rd03', 'other'].includes(catalogItemRdType(item)))
+      : [];
+    const rd05Items = useRd05
+      ? regionalPeaItems.filter(item => catalogItemRdType(item) === 'rd05')
+      : [];
+    [...rd03Items, ...rd05Items].forEach(item => baseCatalogSelected.add(item.id));
+    const maxiItems = useMaxi ? (compareCatalogManifest?.items || []) : [];
+    // Quick mode is for combined display and billing, not comparison. Put Maxi on
+    // the same logical BASE side as RD03/RD05 so existing direct-analysis billing applies.
+    maxiItems.forEach(item => ufmBaseCatalogSelected.add(item.id));
+
+    syncLogicalDatasetSelections();
+    renderBaseCatalog();
+    renderCompareCatalog();
+    updateBaseCatalogSummary();
+    updateCompareCatalogSummary();
+    return { ready: true, rd03Count: rd03Items.length, rd05Count: rd05Items.length, maxiCount: maxiItems.length };
+  };
+
   async function initializeCompareCatalog() {
     if (!compareCatalogList || !cloudEnabled) {
       updateCompareCatalogSummary(cloudEnabled ? 'ไม่พบส่วนแสดงรายการไฟล์' : 'ต้องเชื่อมต่อ Supabase');
@@ -728,10 +787,11 @@
   }
 
   function updatePeaSummary(message = '') {
-    if (peaLayerCount) peaLayerCount.textContent = peaSelected.size.toLocaleString('th-TH');
+    const selectedCount = activePeaSelection().size;
+    if (peaLayerCount) peaLayerCount.textContent = selectedCount.toLocaleString('th-TH');
     if (!peaLayerStatus) return;
     peaLayerStatus.textContent = message || (peaManifest
-      ? `เลือก ${peaSelected.size.toLocaleString('th-TH')} จาก ${peaManifest.featureCount.toLocaleString('th-TH')} พื้นที่`
+      ? `เลือก ${selectedCount.toLocaleString('th-TH')} จาก ${peaManifest.featureCount.toLocaleString('th-TH')} พื้นที่`
       : 'ยังไม่พบรายการข้อมูล');
   }
 
@@ -750,7 +810,8 @@
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.value = item.id;
-      input.checked = peaSelected.has(item.id);
+      input.checked = activePeaSelection().has(String(item.id));
+      input.disabled = String(item.id) === peaScopeOfficeId;
       input.addEventListener('change', () => {
         if (input.checked) peaSelected.add(item.id); else peaSelected.delete(item.id);
         updatePeaSummary();
@@ -934,8 +995,8 @@
     return chunks.flatMap(chunk => chunk.features || []).filter(feature => ids.has(String(feature.id || feature.properties?.pea_id)));
   };
   window.permissionOutSelectedPeaFeatures = async () => {
-    if (!peaSelected.size || !peaManifest) return [];
-    const selectedIds = new Set(Array.from(peaSelected, String));
+    const selectedIds = activePeaSelection();
+    if (!selectedIds.size || !peaManifest) return [];
     const paths = [...new Set(
       peaManifest.items
         .filter(item => selectedIds.has(String(item.id)))
@@ -949,7 +1010,8 @@
 
   async function updatePeaMap() {
     const version = ++peaRenderVersion;
-    if (!peaSelected.size || !peaManifest) {
+    const selectedIds = activePeaSelection();
+    if (!selectedIds.size || !peaManifest) {
       clearPeaOverlay();
       peaShouldFocus = false;
       updatePeaSummary();
@@ -961,13 +1023,13 @@
     // Keep PEA polygons below route vectors so selecting an area never blocks
     // clicks and tooltips on the routes currently shown on the map.
     peaPane.style.zIndex = '390';
-    const selectedItems = peaManifest.items.filter(item => peaSelected.has(item.id));
+    const selectedItems = peaManifest.items.filter(item => selectedIds.has(String(item.id)));
     const chunkPaths = [...new Set(selectedItems.map(item => item.chunk))];
-    updatePeaSummary(`กำลังโหลด ${peaSelected.size.toLocaleString('th-TH')} พื้นที่…`);
+    updatePeaSummary(`กำลังโหลด ${selectedIds.size.toLocaleString('th-TH')} พื้นที่…`);
     try {
       const chunks = await Promise.all(chunkPaths.map(fetchPeaChunk));
       if (version !== peaRenderVersion) return;
-      const features = chunks.flatMap(chunk => chunk.features || []).filter(feature => peaSelected.has(feature.id || feature.properties?.pea_id));
+      const features = chunks.flatMap(chunk => chunk.features || []).filter(feature => selectedIds.has(String(feature.id || feature.properties?.pea_id)));
       clearPeaOverlay();
       peaOverlayLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
         pane: 'peaAreaPane',
@@ -980,7 +1042,10 @@
         }
       }).addTo(map);
       if (peaShouldFocus) {
-        const bounds = peaOverlayLayer.getBounds();
+        const scopeFeatures = features.filter(feature => String(feature.id || feature.properties?.pea_id) === peaScopeOfficeId);
+        const bounds = scopeFeatures.length
+          ? L.geoJSON({ type: 'FeatureCollection', features: scopeFeatures }).getBounds()
+          : peaOverlayLayer.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 12 });
       }
       peaShouldFocus = false;
@@ -994,10 +1059,24 @@
   }
 
   function schedulePeaMapUpdate(focus = false) {
+    ++peaRenderVersion;
     if (focus) peaShouldFocus = true;
     clearTimeout(peaRenderTimer);
     peaRenderTimer = setTimeout(updatePeaMap, 120);
   }
+
+  // Keep the dropdown-selected boundary separate from manually selected layers.
+  window.permissionOutShowPeaOffice = officeId => {
+    const nextId = String(officeId || '');
+    if (nextId === peaScopeOfficeId) return;
+    peaScopeOfficeId = nextId;
+    peaShouldFocus = Boolean(nextId);
+    clearPeaOverlay();
+    renderPeaOptions();
+    updatePeaSummary();
+    schedulePeaMapUpdate(Boolean(nextId));
+  };
+  window.addEventListener('permissionout:cleared', () => window.permissionOutShowPeaOffice(''));
 
   async function initializePeaLayers() {
     if (!peaLayerTrigger || !cfg.supabaseUrl) return;
@@ -1017,6 +1096,7 @@
         label.append(input, text); peaLayerTypes.appendChild(label);
       }
       renderPeaOptions(); updatePeaSummary();
+      if (activePeaSelection().size) schedulePeaMapUpdate();
     } catch (error) {
       updatePeaSummary(`โหลดรายการไม่สำเร็จ: ${error.message}`);
     } finally { peaLayerTrigger.disabled = false; }
@@ -1171,6 +1251,10 @@
   }
 
   async function saveProject(silent = false) {
+    if (window.permissionOutTransientAnalysis) {
+      if (!silent) toast('ผลคำนวณจากไฟล์ภายนอกเป็นข้อมูลชั่วคราวและไม่สามารถบันทึกเข้าระบบได้', 'error');
+      return;
+    }
     if (!state?.segmentsB?.length) {
       if (!silent) toast('กรุณาวิเคราะห์เส้นทางก่อนบันทึก', 'error');
       return;
@@ -1524,13 +1608,20 @@
   });
   window.addEventListener('permissionout:map-ready', () => {
     peaOverlayLayer = null;
-    if (peaSelected.size) schedulePeaMapUpdate();
+    if (activePeaSelection().size) schedulePeaMapUpdate();
     map.on('moveend', scheduleOsmReferenceUpdate);
     scheduleOsmReferenceUpdate();
   });
   osmRoadToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
   osmBuildingToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
-  window.addEventListener('permissionout:analysis-complete', () => { markDirty(); toast('วิเคราะห์เสร็จแล้ว พร้อมตรวจสอบและส่งออกข้อมูล', 'success'); });
+  window.addEventListener('permissionout:analysis-complete', event => {
+    if (event.detail?.transient) {
+      toast('คำนวณไฟล์ภายนอกเสร็จแล้ว · ผลลัพธ์จะไม่ถูกบันทึก', 'success');
+      return;
+    }
+    markDirty();
+    toast('วิเคราะห์เสร็จแล้ว พร้อมตรวจสอบและส่งออกข้อมูล', 'success');
+  });
   window.addEventListener('online', () => toast('กลับมาออนไลน์แล้ว', 'success'));
   window.addEventListener('offline', () => toast('ออฟไลน์ — ต้องเชื่อมต่ออีกครั้งเพื่ออ่านชุดข้อมูลจาก Supabase'));
 
