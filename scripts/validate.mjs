@@ -87,7 +87,7 @@ for (const marker of ['value="overlap-only"', 'function overlapOnlyReportModeEna
 if (html.includes('if (overlapOnlyReportModeEnabled()) return selectedSegmentsForExport();')) {
   throw new Error('KML/KMZ export must include all selected source data, not only overlap-only result segments');
 }
-if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260902-streamlined-workflow-2')) {
+if (!uxRefreshCss.includes('flex:1 1 100%') || !uxRefreshCss.includes('flex-direction:column') || !uxRefreshCss.includes('padding:6px 9px') || !uxRefreshCss.includes('.report-overlap-options small{display:none}') || !html.includes('ux-refresh.css?v=20260903-loading-motion')) {
   throw new Error('MOD 1 overlap-only report option must be visible in the report layout');
 }
 for (const marker of ['DATASET_LINE_COLORS', 'MAXI_CATEGORY_META', "network: Object.freeze({ label: 'Network', color: '#1E5BA8' })", "'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' })", "customer: Object.freeze({ label: 'Customer', color: '#B7791F' })", 'applyDatasetLineColors(', 'maxiCategoryColor(line, colorByKey.get(key))', 'datasetColorLegend', 'sourceColor: line.sourceColor', "dashArray: isRemove ? '2,7'"]) {
@@ -226,6 +226,9 @@ if (!html.includes("if (!region) return ['__ALL__'];") || !html.includes("const 
 }
 if (html.includes('area-filter-pending') || html.includes("document.getElementById('results').style.display = selectedPeaRegion() ? 'block' : 'none';")) {
   throw new Error('MOD 1 results must not be hidden while the optional PEA region filter is empty');
+}
+for (const marker of ['.analysis-loading-ring{', '.analysis-loading-track::after{', 'animation-iteration-count:infinite!important;']) {
+  if (!uxRefreshCss.includes(marker)) throw new Error(`Reduced-motion loading feedback marker is missing: ${marker}`);
 }
 for (const marker of ['id="quickPeaRegion"', 'id="quickUseRd03"', 'id="quickUseRd05"', 'id="quickUseMaxi"', 'id="quickAreaLoadBtn"', 'window.permissionOutSelectRegionDatasets({ provinces, useRd03, useRd05, useMaxi })']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 quick regional database loader marker is missing: ${marker}`);

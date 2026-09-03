@@ -1442,6 +1442,15 @@ table.report.hide-col-11 th:nth-child(11),table.report.hide-col-11 td:nth-child(
     animation-iteration-count:1!important;
     transition-duration:.01ms!important;
   }
+  /* Loading feedback must remain perceptible even when decorative motion is reduced. */
+  .analysis-loading-ring{
+    animation-duration:1.8s!important;
+    animation-iteration-count:infinite!important;
+  }
+  .analysis-loading-track::after{
+    animation-duration:2.4s!important;
+    animation-iteration-count:infinite!important;
+  }
 }
 
 @media(forced-colors:active){
