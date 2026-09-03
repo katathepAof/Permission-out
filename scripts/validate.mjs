@@ -221,6 +221,12 @@ if (!html.includes('function clearSourceColorOverlay()') || !html.includes('// R
 if (!html.includes('function getSegProvinces(seg)') || !html.includes('const PEA_REGION_PROVINCES') || !html.includes('function populatePeaOfficeFilter()') || !html.includes('segmentProvinces.some(province => selectedProvinces.includes(province))') || !html.includes("window.permissionOutResolvePeaAreas(candidates)")) {
   throw new Error('MOD 1 cascading PEA region, province and office filtering is missing');
 }
+if (!html.includes("if (!region) return ['__ALL__'];") || !html.includes("const showAllProvinces = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');") || !html.includes("document.getElementById('results').style.display = 'block';")) {
+  throw new Error('MOD 1 manual catalog analysis must display all areas before an optional PEA region filter is selected');
+}
+if (html.includes('area-filter-pending') || html.includes("document.getElementById('results').style.display = selectedPeaRegion() ? 'block' : 'none';")) {
+  throw new Error('MOD 1 results must not be hidden while the optional PEA region filter is empty');
+}
 for (const marker of ['id="quickPeaRegion"', 'id="quickUseRd03"', 'id="quickUseRd05"', 'id="quickUseMaxi"', 'id="quickAreaLoadBtn"', 'window.permissionOutSelectRegionDatasets({ provinces, useRd03, useRd05, useMaxi })']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 quick regional database loader marker is missing: ${marker}`);
 }

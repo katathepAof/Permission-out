@@ -1028,8 +1028,6 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
 }
 .pea-scope-field select:disabled{opacity:.58;cursor:not-allowed;}
 .pea-scope-note{grid-column:1/-1;font-size:.75rem;color:var(--ink-mute);}
-#peaScopePrompt{padding:22px;text-align:center;color:var(--ink-soft);background:var(--bg-soft);border-radius:var(--r-md);}
-#reportCard.area-filter-pending > :not(.card-title):not(#peaScopeFilterBar):not(#peaScopePrompt){display:none!important;}
 @media (max-width:760px){.pea-scope-filter{grid-template-columns:1fr;}.pea-scope-note{grid-column:1;}}
 
 .quick-area-loader{
@@ -1689,7 +1687,7 @@ table.report td.num{
   <div class="pea-scope-filter" id="peaScopeFilterBar">
     <div class="pea-scope-field">
       <label for="peaRegionFilter">เขตการไฟฟ้าหลัก</label>
-      <select id="peaRegionFilter"><option value="">เลือกเขตการไฟฟ้าหลัก</option></select>
+      <select id="peaRegionFilter"><option value="">ทุกเขตการไฟฟ้า</option></select>
     </div>
     <div class="pea-scope-field">
       <label for="provinceFilter">จังหวัด</label>
@@ -1699,9 +1697,8 @@ table.report td.num{
       <label for="peaOfficeFilter">เขตการไฟฟ้าย่อย</label>
       <select id="peaOfficeFilter" disabled><option value="">ทุกหน่วยงานในจังหวัด</option></select>
     </div>
-    <span class="pea-scope-note" id="provinceFilterCount">กรุณาเลือกเขตการไฟฟ้าหลักเพื่อแสดงข้อมูล</span>
+    <span class="pea-scope-note" id="provinceFilterCount">แสดงข้อมูลทุกพื้นที่</span>
   </div>
-  <div id="peaScopePrompt">เลือกเขตการไฟฟ้าหลักเพื่อดูแผนที่ รายงาน และสรุปค่าบริการ</div>
   <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
     <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรองการแสดงผล / ค่าบริการ:</span>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="new" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#1e5ba8;"></span> New</label>
@@ -3537,13 +3534,14 @@ function bindCableStatusOptions() {
 // กรองตารางรายงาน + เส้นบนแผนที่ ตามจังหวัด และหมวดสถานะ (New/Same/Remove) ที่เลือก
 function getSelectedProvinces() {
   const region = selectedPeaRegion();
-  if (!region) return ['__NONE__'];
+  if (!region) return ['__ALL__'];
   const province = document.getElementById('provinceFilter')?.value || '';
   return province ? [province] : [...(PEA_REGION_PROVINCES[region] || [])];
 }
 function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinces(), activeOverlaps = getActiveOverlaps(), selectedCableStatuses = getSelectedCableStatuses(), activeCategories = getActiveCategories()) {
   const segmentProvinces = getSegProvinces(seg);
-  const provOk = selectedProvinces.length > 0 && !selectedProvinces.includes('__NONE__') && segmentProvinces.some(province => selectedProvinces.includes(province));
+  const showAllProvinces = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
+  const provOk = showAllProvinces || segmentProvinces.some(province => selectedProvinces.includes(province));
   const officeId = selectedPeaOfficeId();
   const officeOk = !officeId || (seg._peaAreas || []).some(area => String(area.id) === officeId);
   const overlapOk = activeOverlaps[OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none'];
@@ -3560,8 +3558,7 @@ function applyProvinceFilter(fitMapToSelection = false) {
   const province = document.getElementById('provinceFilter')?.value || '';
   const officeSelect = document.getElementById('peaOfficeFilter');
   const officeText = officeSelect?.value ? officeSelect.options[officeSelect.selectedIndex]?.text : '';
-  const hasScope = Boolean(region);
-  const selectedText = province || `ทุกจังหวัดใน กฟ${region}`;
+  const selectedText = region ? (province || `ทุกจังหวัดใน กฟ${region}`) : 'ทุกพื้นที่';
   const active = getActiveStatuses();
   const activeOverlaps = getActiveOverlaps();
   const selectedCableStatuses = getSelectedCableStatuses();
@@ -3594,14 +3591,7 @@ function applyProvinceFilter(fitMapToSelection = false) {
   buildReportTable();
   const shown = matching.length;
   const cnt = document.getElementById('provinceFilterCount');
-  if (cnt) cnt.textContent = hasScope
-    ? `แสดง ${shown.toLocaleString('th-TH')} ช่วง · ${selectedText}${officeText ? ` · ${officeText}` : ''}`
-    : 'กรุณาเลือกเขตการไฟฟ้าหลักเพื่อแสดงข้อมูล';
-  document.getElementById('results').style.display = hasScope ? 'block' : 'none';
-  const reportCard = document.getElementById('reportCard');
-  reportCard?.classList.toggle('area-filter-pending', !hasScope);
-  const prompt = document.getElementById('peaScopePrompt');
-  if (prompt) prompt.hidden = hasScope;
+  if (cnt) cnt.textContent = `แสดง ${shown.toLocaleString('th-TH')} ช่วง · ${selectedText}${officeText ? ` · ${officeText}` : ''}`;
   const selectedStatuses = selectedCableStatuses;
   const showAllStatus = selectedStatuses.length === 0 || selectedStatuses.includes('__ALL__');
   const statusCnt = document.getElementById('cableStatusFilterCount');
@@ -3989,8 +3979,7 @@ async function runAnalysis(options = {}) {
     applyProvinceFilter();
 
     document.getElementById('reportCard').style.display = 'block';
-    document.getElementById('reportCard').classList.toggle('area-filter-pending', !selectedPeaRegion());
-    document.getElementById('results').style.display = selectedPeaRegion() ? 'block' : 'none';
+    document.getElementById('results').style.display = 'block';
     costStatus.textContent = state.segmentsB.length > 0
       ? `${isTransientAnalysis ? 'ผลชั่วคราว (ไม่บันทึก) · ' : ''}เริ่มต้นคำนวณค่าพาดสายครบทุกเส้นที่ Import ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง — เมื่อกรองในการ์ด 4 ยอดจะปรับตามผลกรอง`
       : 'วิเคราะห์เสร็จแล้ว — ไม่พบช่วงเส้นทาง จึงไม่มีค่าบริการให้คำนวณ';
