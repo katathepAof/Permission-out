@@ -401,10 +401,9 @@
   function compactLineToApp(line, item) {
     const properties = propertiesWithDescriptionFields(line.p || line.properties || {});
     const originalName = String(line.n || properties.name || '');
-    const rd03Source = String(item?.name || item?.sourceName || item?.canonicalName || '').toLocaleLowerCase('en-US').includes('rd03');
     const sourceTag = propertyValue(properties, [/^\s*tag\s*$/i]);
     const identifier = routeIdentifier(properties);
-    const name = String((rd03Source ? sourceTag : '') || identifier || originalName || 'ไม่ระบุชื่อ');
+    const name = String(sourceTag || identifier || originalName || 'ไม่ระบุชื่อ');
     const cableType = propertyValue(properties, [/cable[_\s-]*type/i, /cabletype/i, /ชนิดสาย/i, /ประเภทสาย/i]);
     const rawType = propertyValue(properties, [/^type$/i, /line[_\s-]*type/i, /ชนิด/i, /ประเภท/i]);
     const cableStatus = propertyValue(properties, [/^status$/i, /cable[_\s-]*status/i, /line[_\s-]*status/i, /สถานะ/i]);
@@ -472,7 +471,7 @@
       rawType,
       cableStatus,
       importCategory,
-      sourceMetadata: { tag: rd03Source ? sourceTag : '', code: sourceCode, originalName, province, measured, calculated },
+      sourceMetadata: { tag: sourceTag || '', code: sourceCode, originalName, province, measured, calculated },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item?.name || line.sourceFile || '',
       sourceDatasetId: item?.id || line.sourceDatasetId || '',

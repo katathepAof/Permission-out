@@ -2497,9 +2497,8 @@ function parseKML(text, sourceName = '') {
       // in ExtendedData instead, so use that as a visible fallback.
       const directName = Array.from(pm.children || []).find(child => child.localName === 'name');
       const originalName = getText(directName) || '';
-      const rd03Source = String(sourceName || '').toLocaleLowerCase('en-US').includes('rd03');
       const sourceTag = pickExtField(ext, [/^\s*tag\s*$/i]);
-      const identifierCandidate = (rd03Source ? sourceTag : '') || placemarkIdentifierFromData(pm, ext, description) || '';
+      const identifierCandidate = sourceTag || placemarkIdentifierFromData(pm, ext, description) || '';
       const identifier = /^\d{2}[A-Z]{2,}[A-Z0-9-]{4,}$/i.test(identifierCandidate) ? identifierCandidate : '';
       const name = identifier || originalName || identifierCandidate || '(ไม่ระบุชื่อ)';
       const importCategory = detectImportCategory(ext, description, originalName, placemarkFolderPath(pm), sourceName);
@@ -2513,7 +2512,7 @@ function parseKML(text, sourceName = '') {
       // Status ของสายจากไฟล์ต้นทาง (ต่างจากสถานะเปรียบเทียบ New/Same/Remove) — แสดงบนแผนที่ + ตอน Export
       const cableStatus = pickExtField(ext, [/^\s*status\s*$/i, /สถานะ(?:สาย|การใช้งาน)?/i, /cable[_\s-]*status/i, /line[_\s-]*status/i]);
       const sourceMetadata = {
-        tag: rd03Source ? sourceTag : '',
+        tag: sourceTag || '',
         code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier,
         originalName,
         province: pickExtField(ext, [/^\s*province\s*$/i, /^\s*prov(?:ince)?[_\s-]*name\s*$/i, /^\s*changwat\s*$/i, /จังหวัด/i]) || '',
@@ -2718,7 +2717,6 @@ function sourceCodeValue(line) {
   return String(line?.sourceMetadata?.code || '').trim();
 }
 function rd03Tag(line) {
-  if (!mod1ComparisonFileName(line).includes('rd03')) return '';
   return String(line?.sourceMetadata?.tag || '').trim();
 }
 function placemarkName(line) {

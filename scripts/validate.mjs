@@ -119,7 +119,7 @@ if (!html.includes('function sourceLineMatchedWith(') || !html.includes('functio
 for (const marker of ['function rd03Tag(line)', "pickExtField(ext, [/^\\s*tag\\s*$/i])", 'RD03 tag / รหัส / ชื่อ Placemark', "'RD03 tag'", 'Data name="rd03_tag"', "['RD03 tag', rd03Tag(seg)]"]) {
   if (!html.includes(marker)) throw new Error(`RD03 tag must remain visible in map/report/export flows: ${marker}`);
 }
-if (!production.includes("propertyValue(properties, [/^\\s*tag\\s*$/i])") || !production.includes("sourceMetadata: { tag: rd03Source ? sourceTag : ''")) {
+if (!production.includes("propertyValue(properties, [/^\\s*tag\\s*$/i])") || !production.includes("sourceMetadata: { tag: sourceTag || ''")) {
   throw new Error('Optimized RD03 datasets must preserve the source tag field');
 }
 if (!html.includes('function rd03MaxiMatchRows(') || !csvSection.includes('rd03 to Maxi match detail') || !csvSection.includes('Maxi count for rd03') || !csvSection.includes('Maxi source file')) {
