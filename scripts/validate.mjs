@@ -116,14 +116,20 @@ if (!csvSection.includes('Imported source lines included in this export') || !cs
 if (!html.includes('function sourceLineMatchedWith(') || !html.includes('function sourceLineBillingNote(') || !html.includes('function sourceLineOverlapMatches(') || !csvSection.includes('=== Export Summary ===')) {
   throw new Error('CSV export must include summary, matched routes, and billing inclusion audit fields');
 }
+for (const marker of ['function rd03Tag(line)', "pickExtField(ext, [/^\\s*tag\\s*$/i])", 'RD03 tag / รหัส / ชื่อ Placemark', "'RD03 tag'", 'Data name="rd03_tag"', "['RD03 tag', rd03Tag(seg)]"]) {
+  if (!html.includes(marker)) throw new Error(`RD03 tag must remain visible in map/report/export flows: ${marker}`);
+}
+if (!production.includes("propertyValue(properties, [/^\\s*tag\\s*$/i])") || !production.includes("sourceMetadata: { tag: rd03Source ? sourceTag : ''")) {
+  throw new Error('Optimized RD03 datasets must preserve the source tag field');
+}
 if (!html.includes('function rd03MaxiMatchRows(') || !csvSection.includes('rd03 to Maxi match detail') || !csvSection.includes('Maxi count for rd03') || !csvSection.includes('Maxi source file')) {
   throw new Error('CSV export must include complete rd03-to-Maxi match detail rows');
 }
 if (!html.includes('function sourceFileColumnValue(line)') || !html.includes('`${groupLabel} | ${fileName}`') || !csvSection.includes('sourceFileColumnValue(seg)')) {
   throw new Error('CSV export must show each route source file clearly in one column');
 }
-if (!csvSection.includes("'รหัส Placemark', 'ชื่อ Placemark'") || !csvSection.includes('placemarkCode(seg)') || !csvSection.includes('placemarkName(seg)')) {
-  throw new Error('CSV export must separate Placemark code and name columns');
+if (!csvSection.includes("'RD03 tag', 'รหัส Placemark', 'ชื่อ Placemark'") || !csvSection.includes('rd03Tag(seg)') || !csvSection.includes('sourceCodeValue(seg)') || !csvSection.includes('placemarkName(seg)')) {
+  throw new Error('CSV export must separate RD03 tag, Placemark code, and Placemark name columns');
 }
 if (csvSection.includes("placemarkCode(seg) || '-'")) {
   throw new Error('CSV export must leave missing Placemark codes blank');

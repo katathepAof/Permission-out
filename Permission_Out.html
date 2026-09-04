@@ -1733,7 +1733,7 @@ table.report td.num{
     <table class="report">
       <thead>
         <tr>
-          <th>รหัส / ชื่อ Placemark</th>
+          <th>RD03 tag / รหัส / ชื่อ Placemark</th>
           <th>จังหวัด</th>
           <th>สถานะ</th>
           <th>ความสัมพันธ์</th>
@@ -2497,7 +2497,9 @@ function parseKML(text, sourceName = '') {
       // in ExtendedData instead, so use that as a visible fallback.
       const directName = Array.from(pm.children || []).find(child => child.localName === 'name');
       const originalName = getText(directName) || '';
-      const identifierCandidate = placemarkIdentifierFromData(pm, ext, description) || '';
+      const rd03Source = String(sourceName || '').toLocaleLowerCase('en-US').includes('rd03');
+      const sourceTag = pickExtField(ext, [/^\s*tag\s*$/i]);
+      const identifierCandidate = (rd03Source ? sourceTag : '') || placemarkIdentifierFromData(pm, ext, description) || '';
       const identifier = /^\d{2}[A-Z]{2,}[A-Z0-9-]{4,}$/i.test(identifierCandidate) ? identifierCandidate : '';
       const name = identifier || originalName || identifierCandidate || '(ไม่ระบุชื่อ)';
       const importCategory = detectImportCategory(ext, description, originalName, placemarkFolderPath(pm), sourceName);
@@ -2511,6 +2513,7 @@ function parseKML(text, sourceName = '') {
       // Status ของสายจากไฟล์ต้นทาง (ต่างจากสถานะเปรียบเทียบ New/Same/Remove) — แสดงบนแผนที่ + ตอน Export
       const cableStatus = pickExtField(ext, [/^\s*status\s*$/i, /สถานะ(?:สาย|การใช้งาน)?/i, /cable[_\s-]*status/i, /line[_\s-]*status/i]);
       const sourceMetadata = {
+        tag: rd03Source ? sourceTag : '',
         code: pickExtField(ext, [/^\s*code\s*$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier,
         originalName,
         province: pickExtField(ext, [/^\s*province\s*$/i, /^\s*prov(?:ince)?[_\s-]*name\s*$/i, /^\s*changwat\s*$/i, /จังหวัด/i]) || '',
@@ -2709,7 +2712,14 @@ function initMap() {
 function toLatLngs(coords) { return coords.map(c => [c[1], c[0]]); }
 
 function placemarkCode(line) {
+  return rd03Tag(line) || sourceCodeValue(line);
+}
+function sourceCodeValue(line) {
   return String(line?.sourceMetadata?.code || '').trim();
+}
+function rd03Tag(line) {
+  if (!mod1ComparisonFileName(line).includes('rd03')) return '';
+  return String(line?.sourceMetadata?.tag || '').trim();
 }
 function placemarkName(line) {
   const code = placemarkCode(line);
@@ -2726,7 +2736,7 @@ function placemarkDisplayText(line) {
 function lineInfoPopup(routeLabel, line, lengthMeters) {
   const km = (lengthMeters / 1000).toFixed(3);
   const diameter = line.diameter, unit = line.unit;
-  const code = placemarkCode(line), name = placemarkName(line);
+  const tag = rd03Tag(line), code = placemarkCode(line), name = placemarkName(line);
   const diamText = (diameter !== null && diameter !== undefined) ? diameter + (unit ? ' ' + unit : '') : 'ไม่พบข้อมูล';
   const sourceText = line.diameterSource === 'table' ? ' <span style="color:#0e7c5a;font-weight:600;">(จากตารางอ้างอิง)</span>'
                     : line.diameterSource === 'file' ? ' <span style="color:#7a8499;">(จากไฟล์ KML)</span>' : '';
@@ -2748,7 +2758,7 @@ function lineInfoPopup(routeLabel, line, lengthMeters) {
     const endCoord = fmtCoord(line.coords[line.coords.length - 1]);
     coordText = `<br>พิกัดต้นทาง: ${startCoord}<br>พิกัดปลายทาง: ${endCoord}`;
   }
-  return `<b>เส้นทาง ${routeLabel}</b>${code ? `<br>รหัส: <b>${xmlEscape(code)}</b>` : ''}<br>ชื่อ: ${xmlEscape(name)}${extra}<br>Diameter: ${diamText}${sourceText}<br>ระยะทาง: ${km} กม.${coordText}`;
+  return `${tag ? `<div style="font-size:1.08em;font-weight:800;color:var(--navy-800);margin-bottom:6px;">RD03 tag: ${xmlEscape(tag)}</div>` : ''}<b>เส้นทาง ${routeLabel}</b>${code ? `<br>${tag ? 'รหัสหลัก' : 'รหัส'}: <b>${xmlEscape(code)}</b>` : ''}<br>ชื่อ: ${xmlEscape(name)}${extra}<br>Diameter: ${diamText}${sourceText}<br>ระยะทาง: ${km} กม.${coordText}`;
 }
 
 let previews = { BASE: null, COMPARE: null };
@@ -4489,21 +4499,21 @@ async function exportCSV() {
   }
   rows.push([]);
   rows.push(['รายละเอียดกลุ่มเส้นถนนเดียวกันฝั่งเดียวกัน']);
-  rows.push(['ลำดับ', 'กลุ่มเส้นทับกัน', 'รหัส Placemark', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
+  rows.push(['ลำดับ', 'กลุ่มเส้นทับกัน', 'RD03 tag', 'รหัส Placemark', 'ชื่อ Placemark', 'ชื่อไฟล์', 'สถานะ', 'ลักษณะการทับกัน', 'ระยะ (กม.)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)']);
   const groupedSegments = exportSegments.filter(seg => exportOverlapGroups.has(seg));
   if (groupedSegments.length === 0) {
     rows.push(['-', 'ไม่พบเส้นที่ทับกันตามตัวกรองที่เลือก']);
   } else {
     groupedSegments.forEach((seg, index) => {
       const st = STATUS_META[seg.status] || STATUS_META.new;
-      rows.push([index + 1, exportOverlapGroups.get(seg), placemarkCode(seg), placemarkName(seg), sourceFileColumnValue(seg), st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
+      rows.push([index + 1, exportOverlapGroups.get(seg), rd03Tag(seg), sourceCodeValue(seg), placemarkName(seg), sourceFileColumnValue(seg), st.th, (OVERLAP_META[seg.overlapType] || OVERLAP_META.none).th, (seg.length / 1000).toFixed(3), fmtCoord(seg.coords[0]), fmtCoord(seg.coords[seg.coords.length - 1])]);
     });
   }
   rows.push([]);
   rows.push([]);
   rows.push(['รายละเอียดช่วง (New = ฐาน A+B, Remove = เปรียบเทียบ C+D, Same = เหมือนกัน) พร้อมสถานะและความสัมพันธ์เส้นทาง']);
   rows.push(['ขอบเขตการคิดค่าบริการ', 'เส้นที่ตรงกับตัวกรองในการ์ด 4 (ค่าเริ่มต้นคือทุกเส้นที่ Import)']);
-  rows.push(['ลำดับ', 'ชื่อไฟล์', 'รหัส Placemark', 'ชื่อ Placemark', 'กลุ่มเส้นทับกัน', 'จังหวัด', 'พื้นที่การไฟฟ้าหลัก', 'พื้นที่การไฟฟ้าที่เส้นทางผ่าน', 'PEA Area IDs', 'PEA Office Types', 'PEA Assignment Method', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)', 'Measured', 'Calculated']);
+  rows.push(['ลำดับ', 'ชื่อไฟล์', 'RD03 tag', 'รหัส Placemark', 'ชื่อ Placemark', 'กลุ่มเส้นทับกัน', 'จังหวัด', 'พื้นที่การไฟฟ้าหลัก', 'พื้นที่การไฟฟ้าที่เส้นทางผ่าน', 'PEA Area IDs', 'PEA Office Types', 'PEA Assignment Method', 'สถานะ (ไทย)', 'สถานะ (EN)', 'ความสัมพันธ์เส้นทาง', 'รวมในยอด', 'cable_type', 'Type', 'Status (จากไฟล์)', 'Core', 'Diameter (มม.)', 'ที่มา Diameter', 'ระยะ (กม.)', 'จำนวนเสา (ต้น)', 'พิกัดต้นทาง (Lat, Lon)', 'พิกัดปลายทาง (Lat, Lon)', 'ค่าบริการ (บาท)', 'Measured', 'Calculated']);
 
   const costByStatus = { new: 0, same: 0, remove: 0 };
   let filteredSubtotal = 0;
@@ -4525,7 +4535,7 @@ async function exportCSV() {
     filteredSubtotal += cost;
     const overlapType = OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none';
     const sourceMetadata = seg.sourceMetadata || {};
-    rows.push([i + 1, srcFile, placemarkCode(seg), placemarkName(seg), exportOverlapGroups.get(seg) || '', province,
+    rows.push([i + 1, srcFile, rd03Tag(seg), sourceCodeValue(seg), placemarkName(seg), exportOverlapGroups.get(seg) || '', province,
       kmlPeaAreaFolderName(seg), peaAreaExportValue(seg, 'name'), peaAreaExportValue(seg, 'id'),
       peaAreaExportValue(seg, 'officeType'), peaAreaExportValue(seg, 'assignmentMethod'),
       m.th, m.en, OVERLAP_META[overlapType].th, 'รวม', cableTypeVal, typeVal, cableStatusVal,
@@ -4561,7 +4571,7 @@ async function exportCSV() {
   rows.push(['Imported source lines included in this export']);
   rows.push(['Count', sourceExportLines.length]);
   rows.push(['Overlapping groups', sourceOverlapGroupCount]);
-  rows.push(['No.', 'Group', 'Overlap marker', 'Overlap status', 'Overlap group', 'Overlap count', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'Placemark code', 'Placemark name', 'Province', 'เขตการไฟฟ้าหลัก', 'เขตการไฟฟ้าที่เส้นทางผ่าน', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
+  rows.push(['No.', 'Group', 'Overlap marker', 'Overlap status', 'Overlap group', 'Overlap count', 'Matched with', 'Included in billing', 'Source file', 'Source dataset ID', 'Source key', 'RD03 tag', 'Placemark code', 'Placemark name', 'Province', 'เขตการไฟฟ้าหลัก', 'เขตการไฟฟ้าที่เส้นทางผ่าน', 'Import category', 'Status from file', 'cable_type', 'Type', 'Core', 'Diameter (mm)', 'Diameter source', 'Length (km)', 'Start (Lat, Lon)', 'End (Lat, Lon)', 'Measured', 'Calculated']);
   sourceExportLines.forEach((line, index) => {
     const coords = line.coords || [];
     const sourceMetadata = line.sourceMetadata || {};
@@ -4579,7 +4589,8 @@ async function exportCSV() {
       sourceFileColumnValue(line),
       line.sourceDatasetId || '',
       line.sourceKey || '',
-      placemarkCode(line),
+      rd03Tag(line),
+      sourceCodeValue(line),
       placemarkName(line),
       getSegProvince(line),
       kmlPeaAreaFolderName(line),
@@ -4603,7 +4614,7 @@ async function exportCSV() {
   rows.push([]);
   rows.push(['rd03 to Maxi match detail']);
   rows.push(['Count', rd03MaxiRows.length]);
-  rows.push(['rd03 No.', 'Match No.', 'Maxi count for rd03', 'Match marker', 'Overlap group', 'rd03 source file', 'rd03 code', 'rd03 name', 'rd03 province', 'rd03 เขตการไฟฟ้าหลัก', 'rd03 เขตการไฟฟ้าที่ผ่าน', 'rd03 length (km)', 'Maxi source file', 'Maxi dataset ID', 'Maxi source key', 'Maxi code', 'Maxi name', 'Maxi province', 'Maxi เขตการไฟฟ้าหลัก', 'Maxi เขตการไฟฟ้าที่ผ่าน', 'Maxi import category', 'Maxi status from file', 'Maxi cable_type', 'Maxi Type', 'Maxi Core', 'Maxi Diameter (mm)', 'Maxi length (km)', 'Maxi start (Lat, Lon)', 'Maxi end (Lat, Lon)', 'Maxi measured', 'Maxi calculated']);
+  rows.push(['rd03 No.', 'Match No.', 'Maxi count for rd03', 'Match marker', 'Overlap group', 'rd03 source file', 'rd03 tag', 'rd03 code', 'rd03 name', 'rd03 province', 'rd03 เขตการไฟฟ้าหลัก', 'rd03 เขตการไฟฟ้าที่ผ่าน', 'rd03 length (km)', 'Maxi source file', 'Maxi dataset ID', 'Maxi source key', 'Maxi code', 'Maxi name', 'Maxi province', 'Maxi เขตการไฟฟ้าหลัก', 'Maxi เขตการไฟฟ้าที่ผ่าน', 'Maxi import category', 'Maxi status from file', 'Maxi cable_type', 'Maxi Type', 'Maxi Core', 'Maxi Diameter (mm)', 'Maxi length (km)', 'Maxi start (Lat, Lon)', 'Maxi end (Lat, Lon)', 'Maxi measured', 'Maxi calculated']);
   rd03MaxiRows.forEach(({ rd03Line, maxiLine, matchIndex, totalMatches }, index) => {
     const rd03Coords = rd03Line.coords || [];
     const maxiCoords = maxiLine.coords || [];
@@ -4615,7 +4626,8 @@ async function exportCSV() {
       '●',
       sourceOverlapGroups.get(rd03Line) || '',
       sourceFileColumnValue(rd03Line),
-      placemarkCode(rd03Line),
+      rd03Tag(rd03Line),
+      sourceCodeValue(rd03Line),
       placemarkName(rd03Line),
       getSegProvince(rd03Line),
       kmlPeaAreaFolderName(rd03Line),
@@ -4624,7 +4636,7 @@ async function exportCSV() {
       sourceFileColumnValue(maxiLine),
       maxiLine.sourceDatasetId || '',
       maxiLine.sourceKey || '',
-      placemarkCode(maxiLine),
+      sourceCodeValue(maxiLine),
       placemarkName(maxiLine),
       getSegProvince(maxiLine),
       kmlPeaAreaFolderName(maxiLine),
@@ -4991,7 +5003,7 @@ function kmlPopupHtmlEscape(value) {
 }
 function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
   const selected = selectedKmlPopupFields();
-  const rows = [
+  const selectedRows = [
     ['province', 'จังหวัดหลัก', kmlExportProvinceName(seg)],
     ['province', 'จังหวัดที่เส้นทางผ่าน', kmlTraversedProvinceNames(seg)],
     ['province', 'การตรวจสอบจังหวัด', kmlProvinceMismatch(seg) ? 'จังหวัดจากไฟล์ไม่ตรงกับพิกัด' : 'ตรงกัน'],
@@ -5007,11 +5019,15 @@ function kmlPopupDescription(seg, status, overlap, billing, exportMeta) {
     ['pea', 'เขตการไฟฟ้าหลัก', kmlPeaAreaFolderName(seg)],
     ['pea', 'เขตการไฟฟ้าที่เส้นทางผ่าน', peaAreaExportValue(seg, 'name') || '-'],
     ['pea', 'สายสังกัด PEA', kmlPeaHierarchy(seg).path.join(' → ')]
-  ].filter(([key]) => selected.has(key));
+  ].filter(([key]) => selected.has(key)).map(([, label, value]) => [label, value]);
+  const rows = [
+    ...(rd03Tag(seg) ? [['RD03 tag', rd03Tag(seg)]] : []),
+    ...selectedRows
+  ];
   if (!rows.length) return '';
   const title = placemarkDisplayText(seg) || placemarkName(seg) || exportMeta.folderName;
   const html = `<div style="font-family:Arial,sans-serif;min-width:260px"><h3 style="margin:0 0 8px">${kmlPopupHtmlEscape(title)}</h3><table style="border-collapse:collapse;width:100%">` +
-    rows.map(([, label, value]) => `<tr><th style="padding:4px 8px 4px 0;text-align:left;vertical-align:top">${kmlPopupHtmlEscape(label)}</th><td style="padding:4px 0">${kmlPopupHtmlEscape(value)}</td></tr>`).join('') +
+    rows.map(([label, value]) => `<tr><th style="padding:4px 8px 4px 0;text-align:left;vertical-align:top">${kmlPopupHtmlEscape(label)}</th><td style="padding:4px 0">${kmlPopupHtmlEscape(value)}</td></tr>`).join('') +
     `</table></div>`;
   return `<description>${xmlEscape(html)}</description>`;
 }
@@ -5200,6 +5216,7 @@ function buildSelectedKml(segments, peaFeatures = [], precomputedOverlapGroups =
       `<Data name="source_status"><value>${xmlEscape(seg.cableStatus || '')}</value></Data>` +
       `<Data name="source_type"><value>${xmlEscape(seg.rawType || seg.type || '')}</value></Data>` +
       `<Data name="source_core"><value>${xmlEscape(seg.core ?? '')}</value></Data>` +
+      `<Data name="rd03_tag"><value>${xmlEscape(rd03Tag(seg))}</value></Data>` +
       `<Data name="source_code"><value>${xmlEscape(seg.sourceMetadata?.code || '')}</value></Data>` +
       `<Data name="source_original_name"><value>${xmlEscape(placemarkName(seg))}</value></Data>` +
       `<Data name="source_measured"><value>${xmlEscape(seg.sourceMetadata?.measured || '')}</value></Data>` +
