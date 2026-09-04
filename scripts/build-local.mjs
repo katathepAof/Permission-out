@@ -29,7 +29,7 @@ try {
   const config = {
     supabaseUrl: supabaseUrl.replace(/\/$/, ''),
     supabaseAnonKey,
-    appName: 'Permission Out',
+    appName: 'ReconX',
     autosave: false,
     requireSupabase: true
   };

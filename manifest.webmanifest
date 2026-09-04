@@ -1,7 +1,7 @@
 {
-  "name": "Permission Out — Fiber Intelligence",
-  "short_name": "Permission Out",
-  "description": "วิเคราะห์เส้นทางเคเบิลไฟเบอร์และประเมินค่าบริการพาดสาย",
+  "name": "ReconX — Data Reconciliation & Intelligence",
+  "short_name": "ReconX",
+  "description": "ตรวจสอบ เปรียบเทียบ และสรุปผลข้อมูลโครงข่ายและไซต์",
   "lang": "th",
   "start_url": "/",
   "display": "standalone",

@@ -42,7 +42,7 @@
 
   const pageTitle = document.createElement('h1');
   pageTitle.className = 'sr-only';
-  pageTitle.textContent = 'Permission Out — วิเคราะห์และประเมินค่าบริการเส้นทาง';
+  pageTitle.textContent = 'ReconX — ตรวจสอบ เปรียบเทียบ และสรุปผลข้อมูล';
   container.prepend(pageTitle);
 
   function replaceHeadingCopy(heading, copy) {

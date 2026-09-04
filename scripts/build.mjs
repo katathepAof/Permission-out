@@ -27,6 +27,6 @@ await mkdir(login, { recursive: true });
 html = await readFile(resolve(root, 'login.html'), 'utf8');
 await writeFile(resolve(login, 'index.html'), html, 'utf8');
 
-const js = `window.APP_CONFIG = ${JSON.stringify({ supabaseUrl: '', supabaseAnonKey: '', appName: 'Permission Out', autosave: false, requireSupabase: true })};\n`;
+const js = `window.APP_CONFIG = ${JSON.stringify({ supabaseUrl: '', supabaseAnonKey: '', appName: 'ReconX', autosave: false, requireSupabase: true })};\n`;
 await writeFile(resolve(dist, 'bootstrap.js'), js, 'utf8');
-console.log('Built Permission Out → dist (Supabase configuration will be injected by the Cloudflare Worker at runtime)');
+console.log('Built ReconX → dist (Supabase configuration will be injected by the Cloudflare Worker at runtime)');

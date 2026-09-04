@@ -26,7 +26,7 @@ function appConfig(env) {
   return {
     supabaseUrl: env.SUPABASE_URL || '',
     supabaseAnonKey: env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || '',
-    appName: 'Permission Out',
+    appName: 'ReconX',
     autosave: false,
     requireSupabase: true
   };

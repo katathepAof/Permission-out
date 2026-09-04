@@ -2,7 +2,7 @@
 window.APP_CONFIG = window.APP_CONFIG || {
   supabaseUrl: '',
   supabaseAnonKey: '',
-  appName: 'Permission Out',
+  appName: 'ReconX',
   autosave: true,
   requireSupabase: true
 };
