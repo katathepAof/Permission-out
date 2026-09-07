@@ -28,6 +28,9 @@ for (const id of ['peaDatasetStatus', 'ufmDatasetStatus', 'accountBtn', 'analyze
   if (!html.includes(`id="${id}"`)) throw new Error(`Missing required element: ${id}`);
 }
 if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis lifecycle event is missing');
+for (const marker of ['TEMPLATE_CSV_HEADERS', 'templateCsvRow(', 'templatePoleCounts(', 'Template_CSV_', "'ชื่อ(Maxi)\\u00A0'"]) {
+  if (!html.includes(marker)) throw new Error(`Template CSV export marker is missing: ${marker}`);
+}
 for (const marker of ['source-mode-tabs', 'compact-result-summary', 'map-layer-menu', 'billing-calculation-details', 'billing-export-menu', 'report-reset-filters']) {
   if (!uxRefresh.includes(marker) && !uxRefreshCss.includes(marker)) throw new Error(`MOD 1 streamlined workflow marker is missing: ${marker}`);
 }

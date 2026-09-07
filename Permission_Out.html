@@ -4189,13 +4189,73 @@ function sourceLineMatchedWithFast(line, sourceOverlapMatchIndex) {
 }
 
 function rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups, sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups)) {
-  return sourceExportLines
-    .filter(line => sourceLineGroup(line) === 'BASE' && mod1ComparisonFileName(line).includes('rd03'))
-    .flatMap(rd03Line => {
-      const matches = (sourceOverlapMatchIndex.get(rd03Line) || [])
-        .filter(item => mod1ComparisonFileName(item).includes('maxi'));
-      return matches.map((maxiLine, matchIndex) => ({ rd03Line, maxiLine, matchIndex, totalMatches: matches.length }));
-    });
+  const rd03Lines = sourceExportLines.filter(line => mod1ComparisonFileName(line).includes('rd03'));
+  const maxiLines = sourceExportLines.filter(isMaxiSourceLine);
+  const matchedMaxi = new Set();
+  const rows = rd03Lines.flatMap(rd03Line => {
+    const matches = (sourceOverlapMatchIndex.get(rd03Line) || []).filter(isMaxiSourceLine);
+    matches.forEach(line => matchedMaxi.add(line));
+    return matches.length
+      ? matches.map((maxiLine, matchIndex) => ({ rd03Line, maxiLine, matchIndex, totalMatches: matches.length }))
+      : [{ rd03Line, maxiLine: null, matchIndex: 0, totalMatches: 0 }];
+  });
+  maxiLines.filter(line => !matchedMaxi.has(line)).forEach(maxiLine => {
+    rows.push({ rd03Line: null, maxiLine, matchIndex: 0, totalMatches: 0 });
+  });
+  return rows;
+}
+
+const TEMPLATE_CSV_HEADERS = Object.freeze([
+  'เขตการไฟฟ้าย่อย(RD03)', 'เขตการไฟฟ้าหลัก(RD03)', 'จังหวัด(RD03)',
+  'ชื่อเส้นทาง(RD03)', 'tag ของสายสื่อสาร(RD03)', 'ประเภทสาย(RD03)',
+  'เส้นผ่านศูนย์กลาง(มม.)(RD03)', 'จำนวนเสา ทั้งหมด(RD03)\n(ต้น)',
+  'จำนวนเสา ในพื้นที่(RD03)\n(ต้น)', 'พิกัดต้นทาง (RD03)', 'พิกัดปลายทาง (RD03)',
+  'รหัส(Maxi)', 'ชื่อ(Maxi)\u00A0', 'Type(Maxi)', 'Status(Maxi)', 'Diameter(Maxi)',
+  'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)'
+]);
+
+function templatePeaMainOffice(line) {
+  const path = kmlPeaHierarchy(line).path || [];
+  return path[0] && path[0] !== 'Other PEA areas'
+    ? path[0]
+    : (selectedPeaRegion() ? `กฟ${selectedPeaRegion()}` : '');
+}
+
+function templatePoleCounts(line, polesPerKm) {
+  if (!line) return { total: '', inArea: '' };
+  const total = billingForSegment({ ...line, length: lineLengthMeters(line.coords || []) }, 0, polesPerKm).poles;
+  const officeId = selectedPeaOfficeId();
+  if (!officeId) return { total, inArea: total };
+  const area = (line._peaAreas || []).find(item => String(item.id) === officeId);
+  const coverage = Math.max(0, Math.min(1, Number(area?.coverageRatio) || 0));
+  return { total, inArea: Math.round(total * coverage) };
+}
+
+function templateCsvRow(rd03Line, maxiLine, polesPerKm) {
+  const rd03Coords = rd03Line?.coords || [];
+  const maxiCoords = maxiLine?.coords || [];
+  const poles = templatePoleCounts(rd03Line, polesPerKm);
+  return [
+    rd03Line ? kmlPeaAreaFolderName(rd03Line) : '',
+    rd03Line ? templatePeaMainOffice(rd03Line) : '',
+    rd03Line ? getSegProvince(rd03Line) : '',
+    rd03Line ? placemarkName(rd03Line) : '',
+    rd03Line ? rd03Tag(rd03Line) : '',
+    rd03Line ? (rd03Line.cableType || rd03Line.rawType || rd03Line.type || '') : '',
+    rd03Line ? segmentDiameterValue(rd03Line) : '',
+    poles.total,
+    poles.inArea,
+    rd03Coords.length ? fmtCoord(rd03Coords[0]) : '',
+    rd03Coords.length ? fmtCoord(rd03Coords[rd03Coords.length - 1]) : '',
+    maxiLine ? sourceCodeValue(maxiLine) : '',
+    maxiLine ? placemarkName(maxiLine) : '',
+    maxiLine ? (maxiLine.rawType || maxiLine.type || maxiLine.cableType || '') : '',
+    maxiLine ? (maxiLine.cableStatus || '') : '',
+    maxiLine ? segmentDiameterValue(maxiLine) : '',
+    maxiCoords.length ? fmtCoord(maxiCoords[0]) : '',
+    maxiCoords.length ? fmtCoord(maxiCoords[maxiCoords.length - 1]) : '',
+    maxiLine ? getSegProvince(maxiLine) : ''
+  ];
 }
 
 // Assign one stable export label to every connected group of routes that follows
@@ -4441,6 +4501,17 @@ async function exportCSV() {
   await ensurePeaAreasForExport([...exportSegments, ...sourceExportLines]);
   const sourceOverlapGroups = kmlExportSelectionCache.overlapGroups;
   const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
+  const templateMatches = rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups, sourceOverlapMatchIndex);
+  const templateRows = [TEMPLATE_CSV_HEADERS, ...templateMatches.map(({ rd03Line, maxiLine }) => templateCsvRow(rd03Line, maxiLine, polesPerKm))];
+  const templateCsvContent = templateRows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+  const templateBlob = new Blob(['\uFEFF' + templateCsvContent], { type: 'text/csv;charset=utf-8;' });
+  const templateNow = new Date();
+  const templatePad = value => String(value).padStart(2, '0');
+  const templateFilename = `Template_CSV_${templateNow.getFullYear()}${templatePad(templateNow.getMonth() + 1)}${templatePad(templateNow.getDate())}_${templatePad(templateNow.getHours())}${templatePad(templateNow.getMinutes())}.csv`;
+  downloadBlob(templateBlob, templateFilename);
+  return { filename: templateFilename, itemCount: templateMatches.length, size: templateBlob.size };
+
+  /* Legacy detailed CSV report retained below for field-reference compatibility. */
   const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
   const billingSourceKeys = new Set(exportSegments.map(sourceLineRouteKey));
   const sourceOverlapLineCount = sourceExportLines.filter(line => sourceOverlapGroups.has(line)).length;
