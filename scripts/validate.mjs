@@ -239,8 +239,8 @@ for (const marker of ['function filterLinesForQuickRegion(lines)', 'linesA = fil
 for (const marker of ['window.permissionOutSelectRegionDatasets =', 'catalogItemMatchesProvinces(item, provinces)', "catalogItemRdType(item) === 'rd05'", 'baseCatalogSelected.add(item.id)', 'ufmBaseCatalogSelected.add(item.id)']) {
   if (!production.includes(marker)) throw new Error(`MOD 1 regional catalog selection marker is missing: ${marker}`);
 }
-if (!html.includes("[...state.segmentsB, ...(state.mapSourceLines || [])].map(getSegCableStatus)")) {
-  throw new Error('MOD 1 cable status filter must include source-line statuses');
+if (!html.includes("[...state.segmentsB, ...(state.mapSourceLines || [])].filter(isMaxiSourceLine).map(getSegCableStatus)")) {
+  throw new Error('MOD 1 cable status filter must include Maxi source-line statuses only');
 }
 if (!html.includes('function filterMod1ComparisonPair(lines, groupKey)') || !html.includes("name.includes('rd03')") || !html.includes("name.includes('maxi')") || !html.includes('const selectedComparisonLines = [...linesA, ...linesB]') || !html.includes("linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE')")) {
   throw new Error('MOD 1 comparison must be limited to rd03 base routes and Maxi compare routes');

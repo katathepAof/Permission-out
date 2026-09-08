@@ -1709,7 +1709,7 @@ table.report td.num{
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="statusFilter" value="remove" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#7c3aed;"></span> Remove</label>
   </div>
   <div class="report-category-row" style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
-    <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">ประเภทข้อมูล:</span>
+    <span style="font-size:.82rem; font-weight:600; color:var(--navy-800);">ประเภทข้อมูล (เฉพาะ Maxi):</span>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="categoryFilter" value="network" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#1e5ba8;"></span> Network</label>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="categoryFilter" value="ready-access" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0e9f6e;"></span> Ready Access</label>
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="categoryFilter" value="customer" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#b7791f;"></span> Customer</label>
@@ -1721,7 +1721,7 @@ table.report td.num{
     <label style="display:inline-flex; align-items:center; gap:5px; font-size:.82rem; cursor:pointer;"><input type="checkbox" class="overlapFilter" value="full" checked><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0e9f6e;"></span> ทับกันทั้งหมด</label>
   </div>
   <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
-    <label for="cableStatusFilter" style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรอง Status (จากไฟล์):</label>
+    <label for="cableStatusFilter" style="font-size:.82rem; font-weight:600; color:var(--navy-800);">กรอง Status (จากไฟล์ Maxi):</label>
     <div id="cableStatusFilter" role="group" aria-label="เลือก Status ของสาย" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; max-height:104px; overflow-y:auto; padding:7px 10px; border:1px solid var(--border-strong); border-radius:8px; background:#fff; color:var(--ink-soft); min-width:240px; max-width:100%;">
       <label style="display:inline-flex; align-items:center; gap:5px; font-size:.8rem; cursor:pointer; font-weight:600;"><input type="checkbox" class="cableStatusOption" value="__ALL__" checked>ทุก Status</label>
     </div>
@@ -3517,7 +3517,7 @@ function getSegCableStatus(seg) {
 function populateCableStatusFilter() {
   const container = document.getElementById('cableStatusFilter');
   if (!container) return;
-  const statuses = Array.from(new Set([...state.segmentsB, ...(state.mapSourceLines || [])].map(getSegCableStatus)))
+  const statuses = Array.from(new Set([...state.segmentsB, ...(state.mapSourceLines || [])].filter(isMaxiSourceLine).map(getSegCableStatus)))
     .sort((a, b) => a.localeCompare(b, 'th'));
   const prev = Array.from(container.querySelectorAll('.cableStatusOption:checked')).map(o => o.value);
   const selected = prev.filter(s => statuses.includes(s));
@@ -3549,17 +3549,21 @@ function getSelectedProvinces() {
   const province = document.getElementById('provinceFilter')?.value || '';
   return province ? [province] : [...(PEA_REGION_PROVINCES[region] || [])];
 }
+// File status and category describe Maxi; preserve RD03 as the reference side.
+function matchesMaxiFileFilters(line, selectedCableStatuses, activeCategories) {
+  if (!isMaxiSourceLine(line)) return true;
+  const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
+  const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(line));
+  const categoryOk = activeCategories[normalizeImportCategory(line.importCategory)] === true;
+  return cableStatusOk && categoryOk;
+}
 function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinces(), activeOverlaps = getActiveOverlaps(), selectedCableStatuses = getSelectedCableStatuses(), activeCategories = getActiveCategories()) {
   const segmentProvinces = getSegProvinces(seg);
   const provOk = selectedProvinces.length > 0 && !selectedProvinces.includes('__NONE__') && segmentProvinces.some(province => selectedProvinces.includes(province));
   const officeId = selectedPeaOfficeId();
   const officeOk = !officeId || (seg._peaAreas || []).some(area => String(area.id) === officeId);
   const overlapOk = activeOverlaps[OVERLAP_META[seg.overlapType] ? seg.overlapType : 'none'];
-  const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
-  const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(seg));
-  const category = normalizeImportCategory(seg.importCategory);
-  const categoryOk = activeCategories[category] === true;
-  return provOk && officeOk && overlapOk && cableStatusOk && categoryOk;
+  return provOk && officeOk && overlapOk && matchesMaxiFileFilters(seg, selectedCableStatuses, activeCategories);
 }
 function applyProvinceFilter(fitMapToSelection = false) {
   window.permissionOutShowPeaOffice?.(selectedPeaOfficeId());
@@ -4121,10 +4125,7 @@ function sourceLineMatchesExportFilters(line, selectedProvinces, selectedCableSt
   const provinces = getSegProvinces(line);
   const showAllProv = selectedProvinces.length === 0 || selectedProvinces.includes('__ALL__');
   const provinceOk = showAllProv || provinces.some(province => selectedProvinces.includes(province));
-  const showAllStatus = selectedCableStatuses.length === 0 || selectedCableStatuses.includes('__ALL__');
-  const cableStatusOk = showAllStatus || selectedCableStatuses.includes(getSegCableStatus(line));
-  const categoryOk = activeCategories[normalizeImportCategory(line.importCategory)] === true;
-  return provinceOk && cableStatusOk && categoryOk;
+  return provinceOk && matchesMaxiFileFilters(line, selectedCableStatuses, activeCategories);
 }
 
 function sourceLineRouteKey(line) {
