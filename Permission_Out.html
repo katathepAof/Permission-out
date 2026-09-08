@@ -4206,13 +4206,196 @@ function rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups, sourceOverlap
   return rows;
 }
 
+// CSV only: measure the union of parallel Maxi projections along each RD03 edge.
+// Distance uses the analysis tolerance; crossings over 30 degrees are excluded.
+// Conservative spatial candidates only; exact overlap math remains unchanged.
+function exportRouteIndex(lines) {
+  const size = 0.02, cells = new Map(), overflow = [];
+  const bounds = line => (line.coords || []).reduce((b, p) => [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
+  lines.forEach((line, index) => {
+    const b = bounds(line), x0 = Math.floor(b[0] / size), x1 = Math.floor(b[2] / size), y0 = Math.floor(b[1] / size), y1 = Math.floor(b[3] / size);
+    if (!Number.isFinite(x0) || !Number.isFinite(y0)) return;
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) { overflow.push(index); return; }
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+      const key = `${x},${y}`;
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(index);
+    }
+  });
+  return (line, threshold) => {
+    const b = bounds(line);
+    if (!Number.isFinite(b[0])) return [];
+    const padY = Math.max(0.5, Number(threshold) || 20) / 110000;
+    const padX = padY / Math.max(0.01, Math.cos(Math.max(Math.abs(b[1]), Math.abs(b[3])) * Math.PI / 180));
+    const x0 = Math.floor((b[0] - padX) / size), x1 = Math.floor((b[2] + padX) / size), y0 = Math.floor((b[1] - padY) / size), y1 = Math.floor((b[3] + padY) / size);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) return lines.map((_, index) => index);
+    const found = new Set(overflow);
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (const index of cells.get(`${x},${y}`) || []) found.add(index);
+    return [...found].sort((a, b) => a - b);
+  };
+}
+async function trimExportSourceLinesAsync(lines, threshold) {
+  const references = lines.filter(line => mod1ComparisonFileName(line).includes('rd03'));
+  const query = exportRouteIndex(references), result = [];
+  let lastYield = performance.now();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    result.push(...(isMaxiSourceLine(line) ? exportTrimmedMaxi(line, query(line, threshold).map(index => references[index]), threshold) : [line]));
+    if (performance.now() - lastYield > 50) {
+      setExportStatus(`กำลังตัดส่วนเกิน Maxi ${i + 1} / ${lines.length} เส้น…`, 'busy');
+      await new Promise(resolve => setTimeout(resolve, 0)); lastYield = performance.now();
+    }
+  }
+  return result;
+}
+function csvDirectOverlapMeters(rd03Line, maxiLine, threshold) {
+  const rd = rd03Line?.coords || [], maxi = maxiLine?.coords || [];
+  const tolerance = Math.max(0.5, Number(threshold) || 20);
+  let total = 0;
+  for (let i = 1; i < rd.length; i++) {
+    const origin = rd[i - 1], end = rd[i];
+    const scaleX = 111320 * Math.cos((origin[1] + end[1]) * Math.PI / 360);
+    const project = p => [(p[0] - origin[0]) * scaleX, (p[1] - origin[1]) * 111320];
+    const [dx, dy] = project(end), length = Math.hypot(dx, dy);
+    if (!length) continue;
+    const intervals = [];
+    for (let j = 1; j < maxi.length; j++) {
+      const a = project(maxi[j - 1]), b = project(maxi[j]);
+      const vx = b[0] - a[0], vy = b[1] - a[1], size = Math.hypot(vx, vy);
+      if (!size || Math.abs((vx * dx + vy * dy) / (size * length)) < Math.cos(Math.PI / 6)) continue;
+      const x0 = (a[0] * dx + a[1] * dy) / length, x1 = (b[0] * dx + b[1] * dy) / length;
+      const y0 = (a[1] * dx - a[0] * dy) / length, y1 = (b[1] * dx - b[0] * dy) / length;
+      let lo = 0, hi = 1;
+      const delta = y1 - y0;
+      if (Math.abs(delta) < 1e-9) { if (Math.abs(y0) > tolerance) continue; }
+      else {
+        const t0 = (-tolerance - y0) / delta, t1 = (tolerance - y0) / delta;
+        lo = Math.max(lo, Math.min(t0, t1)); hi = Math.min(hi, Math.max(t0, t1));
+      }
+      if (hi <= lo) continue;
+      const start = Math.max(0, Math.min(x0 + (x1 - x0) * lo, x0 + (x1 - x0) * hi));
+      const stop = Math.min(length, Math.max(x0 + (x1 - x0) * lo, x0 + (x1 - x0) * hi));
+      if (stop > start) intervals.push([start, stop]);
+    }
+    intervals.sort((a, b) => a[0] - b[0]);
+    let stop = 0, covered = 0;
+    for (const [a, b] of intervals) { covered += Math.max(0, b - Math.max(a, stop)); stop = Math.max(stop, b); }
+    total += covered / length * lineLengthMeters([origin, end]);
+  }
+  return total;
+}
+
+function exportOverlapParts(rd03Line, references, threshold) {
+  const rd = rd03Line?.coords || [], maxi = references.flatMap(line => (line.coords || []).slice(1).map((point, index) => [line.coords[index], point]));
+  const tolerance = Math.max(0.5, Number(threshold) || 20);
+  const parts = [];
+  for (let i = 1; i < rd.length; i++) {
+    const origin = rd[i - 1], end = rd[i];
+    const scaleX = 111320 * Math.cos((origin[1] + end[1]) * Math.PI / 360);
+    const project = p => [(p[0] - origin[0]) * scaleX, (p[1] - origin[1]) * 111320];
+    const [dx, dy] = project(end), length = Math.hypot(dx, dy);
+    if (!length) continue;
+    const intervals = [];
+    for (let j = 0; j < maxi.length; j++) {
+      const a = project(maxi[j][0]), b = project(maxi[j][1]);
+      const vx = b[0] - a[0], vy = b[1] - a[1], size = Math.hypot(vx, vy);
+      if (!size || Math.abs((vx * dx + vy * dy) / (size * length)) < Math.cos(Math.PI / 6)) continue;
+      const x0 = (a[0] * dx + a[1] * dy) / length, x1 = (b[0] * dx + b[1] * dy) / length;
+      const y0 = (a[1] * dx - a[0] * dy) / length, y1 = (b[1] * dx - b[0] * dy) / length;
+      let lo = 0, hi = 1;
+      const delta = y1 - y0;
+      if (Math.abs(delta) < 1e-9) { if (Math.abs(y0) > tolerance) continue; }
+      else {
+        const t0 = (-tolerance - y0) / delta, t1 = (tolerance - y0) / delta;
+        lo = Math.max(lo, Math.min(t0, t1)); hi = Math.min(hi, Math.max(t0, t1));
+      }
+      if (hi <= lo) continue;
+      const start = Math.max(0, Math.min(x0 + (x1 - x0) * lo, x0 + (x1 - x0) * hi));
+      const stop = Math.min(length, Math.max(x0 + (x1 - x0) * lo, x0 + (x1 - x0) * hi));
+      if (stop > start) intervals.push([start, stop]);
+    }
+    intervals.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const pair of intervals) {
+      const last = merged[merged.length - 1];
+      if (last && pair[0] <= last[1] + 1e-7) last[1] = Math.max(last[1], pair[1]);
+      else merged.push([...pair]);
+    }
+    const at = distance => origin.map((value, axis) => value + (end[axis] - value) * distance / length);
+    for (const [start, stop] of merged) {
+      const first = at(start), last = at(stop), previous = parts[parts.length - 1];
+      const tail = previous?.[previous.length - 1];
+      if (tail && Math.hypot(tail[0] - first[0], tail[1] - first[1]) < 1e-10) previous.push(last);
+      else parts.push([first, last]);
+    }
+  }
+  return parts;
+}
+
+function exportTrimmedMaxi(line, references, threshold) {
+  return exportOverlapParts(line, references, threshold).map(coords => ({
+    ...line, coords, length: lineLengthMeters(coords)
+  }));
+}
+function trimExportSourceLines(lines, threshold) {
+  const references = lines.filter(line => mod1ComparisonFileName(line).includes('rd03'));
+  return lines.flatMap(line => isMaxiSourceLine(line) ? exportTrimmedMaxi(line, references, threshold) : [line]);
+}
+function requestExportTrimOptions(format) {
+  return new Promise(resolve => {
+    const dialog = document.createElement('dialog');
+    dialog.style.cssText = 'width:min(520px,90vw);padding:24px;border:0;border-radius:16px';
+    dialog.innerHTML = `<form method="dialog"><h3>ส่วนเกิน Maxi — Export ${xmlEscape(format)}</h3>
+      <p><label><input type="radio" name="trim" value="no" checked> ไม่ตัดส่วนเกิน (เส้นเต็มเหมือนเดิม)</label></p>
+      <p><label><input type="radio" name="trim" value="yes"> ตัด Maxi ให้เหลือเฉพาะช่วงที่ทับ RD03</label></p>
+      <p>ใช้ RD03 ตามตัวกรองปัจจุบัน เส้น Maxi ที่ไม่ทับจะไม่ส่งออก ช่วงที่ไม่ต่อกันจะแยกเป็นหลายรายการ ข้อมูลต้นฉบับและ RD03 ไม่เปลี่ยน</p>
+      <p>ใช้ระยะห่างตามการวิเคราะห์ และแนวเส้นทำมุมกันไม่เกิน 30°</p>
+      <button value="cancel">ยกเลิก</button> <button value="export">ส่งออก</button></form>`;
+    dialog.addEventListener('close', () => {
+      const result = dialog.returnValue === 'export' ? { trimMaxi: dialog.querySelector('[name="trim"]:checked').value === 'yes' } : null;
+      dialog.remove(); resolve(result);
+    }, { once: true });
+    document.body.append(dialog); dialog.showModal();
+  });
+}
+
+async function csvDirectMatchRows(lines, threshold) {
+  const rd03 = lines.filter(line => mod1ComparisonFileName(line).includes('rd03'));
+  const maxi = lines.filter(isMaxiSourceLine), used = new Set(), rows = [];
+  const bounds = line => (line.coords || []).reduce((b, p) => [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])], [Infinity, Infinity, -Infinity, -Infinity]);
+  const maxiBounds = maxi.map(bounds);
+  const queryMaxi = exportRouteIndex(maxi);
+  for (let i = 0; i < rd03.length; i++) {
+    const rd03Line = rd03[i], box = bounds(rd03Line), length = lineLengthMeters(rd03Line.coords || []);
+    const padY = Math.max(0.5, Number(threshold) || 20) / 110000;
+    const padX = padY / Math.max(0.01, Math.cos(Math.max(Math.abs(box[1]), Math.abs(box[3])) * Math.PI / 180));
+    let found = false;
+    for (const j of queryMaxi(rd03Line, threshold)) {
+      const b = maxiBounds[j];
+      if (b[2] < box[0] - padX || b[0] > box[2] + padX || b[3] < box[1] - padY || b[1] > box[3] + padY) continue;
+      const overlapMeters = Math.min(length, csvDirectOverlapMeters(rd03Line, maxi[j], threshold));
+      if (overlapMeters <= 0.001) continue;
+      rows.push({ rd03Line, maxiLine: maxi[j], overlapMeters, overlapPercent: length ? overlapMeters / length * 100 : 0 });
+      used.add(maxi[j]); found = true;
+    }
+    if (!found) rows.push({ rd03Line, maxiLine: null, overlapMeters: 0, overlapPercent: 0 });
+    if (i % 20 === 0) {
+      setExportStatus(`กำลังคำนวณระยะทับซ้อน CSV ${i + 1} / ${rd03.length} เส้น…`, 'busy');
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+  maxi.filter(line => !used.has(line)).forEach(maxiLine => rows.push({ rd03Line: null, maxiLine, overlapMeters: 0, overlapPercent: '' }));
+  return rows;
+}
+
 const TEMPLATE_CSV_HEADERS = Object.freeze([
   'เขตการไฟฟ้าย่อย(RD03)', 'เขตการไฟฟ้าหลัก(RD03)', 'จังหวัด(RD03)',
   'ชื่อเส้นทาง(RD03)', 'tag ของสายสื่อสาร(RD03)', 'ประเภทสาย(RD03)',
   'เส้นผ่านศูนย์กลาง(มม.)(RD03)', 'จำนวนเสา ทั้งหมด(RD03)\n(ต้น)',
   'จำนวนเสา ในพื้นที่(RD03)\n(ต้น)', 'พิกัดต้นทาง (RD03)', 'พิกัดปลายทาง (RD03)',
   'รหัส(Maxi)', 'ชื่อ(Maxi)\u00A0', 'Type(Maxi)', 'Status(Maxi)', 'Diameter(Maxi)',
-  'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)'
+  'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)',
+  'ระยะทางทับซ้อนจริง (เมตร)', '% ทับซ้อนเทียบ RD03'
 ]);
 
 function templatePeaMainOffice(line) {
@@ -4474,7 +4657,7 @@ async function getCachedExportOverlapGroupsAsync(segments, threshold, interval, 
   return groups;
 }
 
-async function exportCSV() {
+async function exportCSV(options = {}) {
   const rateB = parseFloat(document.getElementById('rateB').value) || 0;
   const polesPerKm = Math.round(parseFloat(document.getElementById('polesPerKm').value)) || 29;
   const threshold = parseFloat(document.getElementById('threshold').value) || 20;
@@ -4492,18 +4675,23 @@ async function exportCSV() {
     activeCsv[STATUS_META[seg.status] ? seg.status : 'new'] &&
     segmentMatchesReportFilters(seg, selectedProvinces, activeOverlaps, selectedCableStatuses)
   );
-  const exportOverlapGroups = await getCachedExportOverlapGroupsAsync(exportSegments, threshold, interval, progress => {
-    setExportStatus(`กำลังจัดกลุ่มผลวิเคราะห์ ${progress.completed.toLocaleString('th-TH')} / ${progress.total.toLocaleString('th-TH')} ช่วง…`, 'busy');
-  });
-  const overlapGroupCount = new Set(exportOverlapGroups.values()).size;
   const formula = activeBillingFormula();
   const activeCategories = getActiveCategories();
   const sourceExportLines = await prepareSourceLinesForKmlExport();
-  await ensurePeaAreasForExport([...exportSegments, ...sourceExportLines]);
+  await ensurePeaAreasForExport(sourceExportLines);
   const sourceOverlapGroups = kmlExportSelectionCache.overlapGroups;
-  const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
-  const templateMatches = rd03MaxiMatchRows(sourceExportLines, sourceOverlapGroups, sourceOverlapMatchIndex);
-  const templateRows = [TEMPLATE_CSV_HEADERS, ...templateMatches.map(({ rd03Line, maxiLine }) => templateCsvRow(rd03Line, maxiLine, polesPerKm))];
+
+  let templateMatches = await csvDirectMatchRows(sourceExportLines, threshold);
+  if (options.trimMaxi) templateMatches = templateMatches.flatMap(row => {
+    if (!row.maxiLine) return [row];
+    if (!row.rd03Line) return [];
+    return exportTrimmedMaxi(row.maxiLine, [row.rd03Line], threshold).map(maxiLine => {
+      const overlapMeters = csvDirectOverlapMeters(row.rd03Line, maxiLine, threshold);
+      const length = lineLengthMeters(row.rd03Line.coords || []);
+      return { ...row, maxiLine, overlapMeters, overlapPercent: length ? overlapMeters / length * 100 : 0 };
+    });
+  });
+  const templateRows = [TEMPLATE_CSV_HEADERS, ...templateMatches.map(({ rd03Line, maxiLine, overlapMeters, overlapPercent }) => [...templateCsvRow(rd03Line, maxiLine, polesPerKm), overlapMeters.toFixed(2), overlapPercent === '' ? '' : overlapPercent.toFixed(2)])];
   const templateCsvContent = templateRows.map(row => row.map(csvEscape).join(',')).join('\r\n');
   const templateBlob = new Blob(['\uFEFF' + templateCsvContent], { type: 'text/csv;charset=utf-8;' });
   const templateNow = new Date();
@@ -4513,6 +4701,12 @@ async function exportCSV() {
   return { filename: templateFilename, itemCount: templateMatches.length, size: templateBlob.size };
 
   /* Legacy detailed CSV report retained below for field-reference compatibility. */
+  const exportOverlapGroups = await getCachedExportOverlapGroupsAsync(exportSegments, threshold, interval, progress => {
+    setExportStatus(`กำลังจัดกลุ่มผลวิเคราะห์ ${progress.completed.toLocaleString('th-TH')} / ${progress.total.toLocaleString('th-TH')} ช่วง…`, 'busy');
+  });
+  const overlapGroupCount = new Set(exportOverlapGroups.values()).size;
+  const sourceOverlapMatchIndex = buildSourceOverlapMatchIndex(sourceExportLines, sourceOverlapGroups);
+
   const sourceOverlapGroupCount = new Set(sourceOverlapGroups.values()).size;
   const billingSourceKeys = new Set(exportSegments.map(sourceLineRouteKey));
   const sourceOverlapLineCount = sourceExportLines.filter(line => sourceOverlapGroups.has(line)).length;
@@ -5339,9 +5533,10 @@ function ensureSegmentsAvailableForExport() {
   }
   return true;
 }
-async function exportKML() {
+async function exportKML(options = {}) {
   if (!ensureSegmentsAvailableForExport()) return;
-  const segments = await prepareSourceLinesForKmlExport();
+  const originalSegments = await prepareSourceLinesForKmlExport();
+  const segments = options.trimMaxi ? await trimExportSourceLinesAsync(originalSegments, parseFloat(document.getElementById('threshold').value) || 20) : originalSegments;
   await ensurePeaAreasForExport(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
@@ -5352,10 +5547,11 @@ async function exportKML() {
   downloadBlob(blob, filename);
   return { filename, itemCount: segments.length, size: blob.size };
 }
-async function exportKMZ() {
+async function exportKMZ(options = {}) {
   if (!ensureSegmentsAvailableForExport()) return;
   if (typeof JSZip === 'undefined') { alert('ไม่สามารถสร้างไฟล์ KMZ ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่'); return; }
-  const segments = await prepareSourceLinesForKmlExport();
+  const originalSegments = await prepareSourceLinesForKmlExport();
+  const segments = options.trimMaxi ? await trimExportSourceLinesAsync(originalSegments, parseFloat(document.getElementById('threshold').value) || 20) : originalSegments;
   await ensurePeaAreasForExport(segments);
   const peaFeatures = await peaFeaturesForExportMode(segments);
   const overlapGroups = kmlExportSelectionCache.segments === segments ? kmlExportSelectionCache.overlapGroups : null;
@@ -5457,7 +5653,9 @@ async function runExport(format, button, exporter, optionsConfirmed = false) {
   if (button) button.textContent = `กำลังสร้าง ${format}…`;
   setExportStatus(`กำลังเตรียม ${preview.itemCount.toLocaleString('th-TH')} รายการ กรุณารอสักครู่…`, 'busy');
   try {
-    const result = await exporter();
+    const options = await requestExportTrimOptions(format);
+    if (!options) { setExportStatus('ยกเลิกการส่งออกแล้ว'); return; }
+    const result = await exporter(options);
     if (!result) {
       setExportStatus('ไม่พบข้อมูลที่ตรงกับตัวกรองสำหรับส่งออก', 'error');
       return;

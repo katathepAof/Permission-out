@@ -107,12 +107,12 @@ for (const marker of ['lineInfoPopup(sourceFileColumnValue(line), line, lengthMe
 if (!html.includes('costFiltered') || !html.includes('เส้นที่ตรงกับตัวกรองในการ์ด 4')) {
   throw new Error('Card-4-filtered billing is missing');
 }
-const csvSection = html.slice(html.indexOf('function exportCSV()'), html.indexOf('function selectedSegmentsForExport()'));
+const csvSection = html.slice(html.indexOf('function exportCSV('), html.indexOf('function selectedSegmentsForExport()'));
 if (csvSection.includes('document.querySelector(`.diamInput')) {
   throw new Error('CSV export must not depend on rendered report rows');
 }
 if (!csvSection.includes('ผลต่างระหว่างหน้าเว็บกับ Export')) throw new Error('CSV reconciliation row is missing');
-if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('await ensurePeaAreasForExport([...exportSegments, ...sourceExportLines])') || !csvSection.includes('เขตการไฟฟ้าหลัก') || !csvSection.includes("peaAreaExportValue(line, 'name')") || !html.includes('function exportIncludesPeaDetails()') || !html.includes('id="exportDetailMode"')) throw new Error('CSV PEA area export data is missing');
+if (!csvSection.includes('PEA Area IDs') || !csvSection.includes('await ensurePeaAreasForExport(sourceExportLines)') || !csvSection.includes('เขตการไฟฟ้าหลัก') || !csvSection.includes("peaAreaExportValue(line, 'name')") || !html.includes('function exportIncludesPeaDetails()') || !html.includes('id="exportDetailMode"')) throw new Error('CSV PEA area export data is missing');
 if (!csvSection.includes('Imported source lines included in this export') || !csvSection.includes('prepareSourceLinesForKmlExport()') || !csvSection.includes('sourceOverlapGroups.get(line)') || !csvSection.includes("'ทับกัน' : 'ไม่ทับกัน'") || !csvSection.includes('Source dataset ID') || !csvSection.includes('Included in billing') || !csvSection.includes('Matched with') || !csvSection.includes('Overlap count') || !csvSection.includes('Overlap marker')) {
   throw new Error('CSV export must include the complete imported source-line audit section');
 }
