@@ -1268,6 +1268,7 @@ table.report td.num{
 </style>
 <link rel="stylesheet" href="ux-refresh.css?v=20260902-streamlined-workflow-2">
 <link rel="stylesheet" href="app-theme.css?v=20260807-thailand-overview">
+<link rel="stylesheet" href="mod1-dashboard.css?v=20260909-route-detail-drawer">
 <script src="app-theme.js?v=20260807-theme-review"></script>
 </head>
 <body>
@@ -1281,6 +1282,53 @@ table.report td.num{
     <div class="analysis-loading-track" aria-hidden="true"></div>
   </div>
 </div>
+
+<aside class="mod1-sidebar" aria-label="เมนูหลัก MOD1">
+  <a class="mod1-sidebar-brand" href="/" aria-label="ReconX MOD1">
+    <span class="mod1-sidebar-logo" aria-hidden="true">RX</span>
+    <span><strong>ReconX</strong><small>Contract Intelligence</small></span>
+  </a>
+  <nav class="mod1-sidebar-nav">
+    <section>
+      <p>พื้นที่ทำงาน</p>
+      <a class="is-active" href="#mainContent" data-mod1-nav="overview" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+        <span>ภาพรวม MOD1</span>
+      </a>
+      <a href="#setupCard" data-mod1-nav="datasets">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="17" cy="17" r="3"/></svg>
+        <span>เลือกชุดข้อมูล</span>
+      </a>
+      <a href="#mapCard" data-mod1-nav="map">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></svg>
+        <span>แผนที่เส้นทาง</span>
+      </a>
+    </section>
+    <section>
+      <p>ผลการวิเคราะห์</p>
+      <a href="#reportCard" data-mod1-nav="report" aria-disabled="true" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        <span>รายงานรายละเอียด</span>
+      </a>
+      <a href="#billingCard" data-mod1-nav="billing" aria-disabled="true" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>
+        <span>ค่าบริการและส่งออก</span>
+      </a>
+    </section>
+    <section>
+      <p>โมดูลอื่น</p>
+      <a href="/mod2/">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM7 9h4v6H7zM14 9h3M14 13h3"/></svg>
+        <span>MOD2 · Site Facility</span>
+        <span class="mod1-sidebar-arrow" aria-hidden="true">›</span>
+      </a>
+    </section>
+  </nav>
+  <div class="mod1-sidebar-footer">
+    <span class="mod1-sidebar-avatar" aria-hidden="true">M1</span>
+    <span><strong>MOD1 Workspace</strong><small><i aria-hidden="true"></i> ระบบพร้อมใช้งาน</small></span>
+  </div>
+</aside>
 
 <div class="app-shellbar" aria-label="แถบจัดการระบบ">
   <div class="shellbar-inner">
@@ -1296,6 +1344,9 @@ table.report td.num{
         <span>MOD 2</span><strong>Site Facility</strong>
       </a>
     </nav>
+    <div class="mod1-page-heading">
+      <strong>วิเคราะห์เส้นทาง PEA / UFM</strong>
+    </div>
     <div class="dataset-health" aria-label="สถานะคลังข้อมูล">
       <span class="dataset-health-label">คลังข้อมูล</span>
       <span class="dataset-health-chip is-pea"><i aria-hidden="true"></i>PEA <strong id="peaDatasetStatus">กำลังโหลด</strong></span>
@@ -1666,6 +1717,13 @@ table.report td.num{
         <span class="map-focus-toggle-icon" aria-hidden="true">⛶</span>
         <span class="map-focus-toggle-text">เต็มจอ</span>
       </button>
+      <aside class="route-detail-drawer" id="routeDetailDrawer" aria-label="รายละเอียดเส้นทาง" hidden>
+        <header class="route-detail-drawer-header">
+          <strong><span aria-hidden="true">▱</span> รายละเอียดเส้นทาง</strong>
+          <button type="button" id="routeDetailClose" aria-label="ปิดรายละเอียดเส้นทาง">×</button>
+        </header>
+        <div class="route-detail-drawer-content" id="routeDetailContent"></div>
+      </aside>
       <div id="map"></div>
     </div>
     <div class="legend">
@@ -1962,6 +2020,21 @@ const PEA_REGION_PROVINCES = Object.freeze({
   'ต.3': ['นราธิวาส', 'ปัตตานี', 'สงขลา', 'สตูล', 'พัทลุง']
 });
 const SELECTED_ROUTE_STYLE = Object.freeze({ color: '#facc15', weight: 8, opacity: 1 });
+const routeDetailDrawer = document.getElementById('routeDetailDrawer');
+const routeDetailContent = document.getElementById('routeDetailContent');
+
+function closeRouteDetail(clearSelection = true) {
+  if (routeDetailDrawer) routeDetailDrawer.hidden = true;
+  if (routeDetailContent) routeDetailContent.innerHTML = '';
+  if (clearSelection) clearSelectedRouteLayer();
+}
+
+function showRouteDetail(content) {
+  if (!routeDetailDrawer || !routeDetailContent) return;
+  if (map && typeof map.closePopup === 'function') map.closePopup();
+  routeDetailContent.innerHTML = content || '';
+  routeDetailDrawer.hidden = false;
+}
 
 function clearSelectedRouteLayer() {
   if (!selectedRouteLayer) return;
@@ -1981,13 +2054,22 @@ function selectRouteLayer(layer) {
   layer.bringToFront?.();
 }
 
-function makeRouteSelectable(layer) {
-  layer.on('click', () => selectRouteLayer(layer));
-  layer.on('popupclose', () => {
-    if (selectedRouteLayer?.layer === layer) clearSelectedRouteLayer();
-  });
+function openRouteDetailForLayer(layer) {
+  if (!layer) return;
+  selectRouteLayer(layer);
+  const detail = layer._routeDetailContent;
+  if (detail) showRouteDetail(typeof detail === 'function' ? detail() : detail);
+}
+
+function makeRouteSelectable(layer, detailContent = null) {
+  layer._routeDetailContent = detailContent;
+  layer.on('click', () => openRouteDetailForLayer(layer));
   return layer;
 }
+document.getElementById('routeDetailClose')?.addEventListener('click', () => closeRouteDetail(true));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && routeDetailDrawer && !routeDetailDrawer.hidden) closeRouteDetail(true);
+});
 let sourceOverlayLayerGroup = null;
 let aggregateRenderer = null;
 let provinceBuildToken = 0;
@@ -2076,11 +2158,19 @@ function applyDatasetLineColors(groups) {
 function renderDatasetColorLegend(entries = []) {
   const container = document.getElementById('datasetColorLegend');
   if (!container) return;
-  container.hidden = entries.length === 0;
-  container.innerHTML = entries.length
-    ? `<span class="dataset-color-legend-label">สีชุดข้อมูล</span>${entries.map(entry =>
-        `<span title="${xmlEscape(`${GROUP_LABELS[entry.groupKey]} · ${entry.name}`)}"><span class="swatch" style="background:${entry.color}"></span>${xmlEscape(`${GROUP_LABELS[entry.groupKey]} · ${entry.name}`)}</span>`
-      ).join('')}`
+  const groups = [
+    { label: 'RD03', entries: entries.filter(entry => !String(entry.name || '').toLowerCase().includes('maxi')) },
+    { label: 'UFM', entries: entries.filter(entry => String(entry.name || '').toLowerCase().includes('maxi')) }
+  ].filter(group => group.entries.length);
+  container.hidden = groups.length === 0;
+  container.innerHTML = groups.length
+    ? `<span class="dataset-color-legend-label">สีชุดข้อมูล</span>${groups.map(group => {
+        const colors = [...new Set(group.entries.map(entry => entry.color).filter(Boolean))];
+        const background = colors.length > 1
+          ? `linear-gradient(90deg,${colors.map((color, index) => `${color} ${index / colors.length * 100}% ${(index + 1) / colors.length * 100}%`).join(',')})`
+          : (colors[0] || '#94a3b8');
+        return `<span title="${xmlEscape(`${group.label} · ${group.entries.length} ชุดสี`)}"><span class="swatch" style="background:${background}"></span>${group.label}</span>`;
+      }).join('')}`
     : '';
 }
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
@@ -2679,6 +2769,7 @@ let searchableLayers = []; // { name, routeLabel, layer, bounds }
 let mapResizeBound = false;
 
 function initMap() {
+  closeRouteDetail(true);
   if (map) { map.remove(); }
   map = L.map('map', { zoomControl: true, attributionControl: true, preferCanvas: true }).setView([13.7563, 100.5018], 6);
   usingFallbackMap = false;
@@ -2820,8 +2911,10 @@ async function previewGroup(groupKey) {
     lines.forEach(l => {
       const ll = toLatLngs(l.coords);
       const len = lineLengthMeters(l.coords);
-      const polyline = makeRouteSelectable(L.polyline(ll, { color: l.sourceColor || GROUP_COLORS[groupKey], weight: 4, opacity: 0.9 }))
-        .bindPopup(lineInfoPopup(label, l, len))
+      const polyline = makeRouteSelectable(
+        L.polyline(ll, { color: l.sourceColor || GROUP_COLORS[groupKey], weight: 4, opacity: 0.9 }),
+        () => lineInfoPopup(label, l, len)
+      )
         .bindTooltip(placemarkDisplayText(l), { sticky: true })
         .addTo(group);
       bounds.push(...ll);
@@ -2894,8 +2987,7 @@ function drawResults(resB) {
       weight: isRemove ? 4 : 5,
       opacity: isRemove ? 0.85 : (seg.status === 'same' ? 0.9 : 1),
       dashArray: isRemove ? '2,7' : (seg.status === 'same' ? '10,6' : null)
-    }))
-      .bindPopup(() => segmentStatusPopup(seg, idx))
+    }), () => segmentStatusPopup(seg, idx))
       .bindTooltip(placemarkDisplayText(seg), { sticky: true })
       .addTo(layerGroup);
     ll.forEach(point => bounds.extend(point));
@@ -2933,8 +3025,7 @@ function renderSourceColorOverlay(lines = []) {
         weight: 4,
         opacity: 0.95,
         interactive: true
-      }))
-        .bindPopup(() => lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters))
+      }), () => lineInfoPopup(sourceFileColumnValue(line), line, lengthMeters))
         .bindTooltip(placemarkDisplayText(line), { sticky: true })
         .addTo(sourceOverlayLayerGroup);
     });
@@ -3063,9 +3154,8 @@ function showAggregateSegment(seg, index, popupLatLng = null) {
     weight: SELECTED_ROUTE_STYLE.weight,
     opacity: 1,
     interactive: false
-  }).addTo(layerGroup).bindPopup(() => segmentStatusPopup(seg, index));
-  const popupPoint = popupLatLng || L.latLngBounds(latlngs).getCenter();
-  aggregateSelectionLayer.openPopup(popupPoint);
+  }).addTo(layerGroup);
+  showRouteDetail(segmentStatusPopup(seg, index));
 }
 
 function handleAggregateMapClick(event) {
@@ -3431,7 +3521,7 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
   if (!segmentBounds.length) return;
   map.fitBounds(segmentBounds, { padding: [60, 60], maxZoom: 18 });
   if (aggregateResultMode) showAggregateSegment(seg, seg._index);
-  else try { seg._mapLayer && seg._mapLayer.openPopup(); } catch (err) { /* layer no longer on map — bounds already zoomed, ignore */ }
+  else openRouteDetailForLayer(seg._mapLayer);
 });
 
 function selectedPeaRegion() {
@@ -5947,9 +6037,7 @@ function goToSearchResult(item) {
   if (bounds.length) map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 });
   if (item.segment) showAggregateSegment(item.segment, item.segmentIndex);
   try {
-    if (item.layer && (map.hasLayer(item.layer) || (layerGroup && layerGroup.hasLayer(item.layer)))) {
-      item.layer.openPopup();
-    }
+    if (item.layer && (map.hasLayer(item.layer) || (layerGroup && layerGroup.hasLayer(item.layer)))) openRouteDetailForLayer(item.layer);
   } catch (e) { /* layer no longer attached (e.g. after re-analysis) — bounds already zoomed, safe to ignore */ }
   hideSearchResults();
   mapSearchInput.value = item.name;
@@ -6064,6 +6152,6 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); populateProvinc
 <script src="production.js?v=20260902-office-boundary"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
-<script src="ux-refresh.js?v=20260902-streamlined-workflow-2"></script>
+<script src="ux-refresh.js?v=20260909-electricity-area-label"></script>
 </body>
 </html>

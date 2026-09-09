@@ -411,11 +411,87 @@
   if (mapTools && peaLayerControl && osmReferenceControl) {
     const layerMenu = document.createElement('details');
     layerMenu.className = 'map-layer-menu';
-    layerMenu.innerHTML = '<summary><span aria-hidden="true">▱</span><strong>ชั้นข้อมูล</strong><small>PEA · ถนน · อาคาร</small></summary><div class="map-layer-menu-panel"></div>';
+    layerMenu.innerHTML = '<summary><span aria-hidden="true">▱</span><strong>ชั้นข้อมูล</strong><small>พื้นที่การไฟฟ้า</small></summary><div class="map-layer-menu-panel"></div>';
     const layerPanel = q('.map-layer-menu-panel', layerMenu);
     layerPanel.append(peaLayerControl, osmReferenceControl);
     mapTools.prepend(layerMenu);
   }
+  if (mapTools) {
+    mapTools.classList.add('floating-map-tools-panel');
+  }
+
+  function setMapToolsPanel() {
+    if (!mapTools) return;
+    mapTools.hidden = false;
+    body.classList.add('mod1-map-tools-open');
+  }
+
+  const sidebarNavigation = qa('[data-mod1-nav]');
+  function setSidebarState(key) {
+    sidebarNavigation.forEach(link => {
+      const active = link.dataset.mod1Nav === key;
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+  }
+  function setSidebarAvailability(analysisReady) {
+    for (const key of ['report', 'billing']) {
+      const link = q(`[data-mod1-nav="${key}"]`);
+      if (!link) continue;
+      link.setAttribute('aria-disabled', String(!analysisReady));
+      if (analysisReady) link.removeAttribute('tabindex');
+      else link.tabIndex = -1;
+    }
+  }
+  setSidebarAvailability(body.classList.contains('has-analysis'));
+
+  const floatingTools = document.createElement('div');
+  floatingTools.className = 'map-floating-panel-tools';
+  floatingTools.setAttribute('aria-label', 'เปิดแผงทำงานบนแผนที่');
+  floatingTools.innerHTML = `
+    <button type="button" data-floating-panel="setup" aria-controls="setupCard" aria-expanded="true"><span>1</span> เลือกข้อมูล</button>
+    <button type="button" data-floating-panel="billing" aria-controls="billingCard" aria-expanded="false" disabled><span>3</span> ค่าบริการ</button>`;
+  q('.map-frame', mapCard)?.appendChild(floatingTools);
+
+  for (const [panel, card, label] of [
+    ['setup', setupCard, 'ปิดแผงเลือกข้อมูล'],
+    ['billing', billingCard, 'ปิดแผงค่าบริการ']
+  ]) {
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'floating-panel-close';
+    closeButton.setAttribute('aria-label', label);
+    closeButton.innerHTML = '<span aria-hidden="true">×</span>';
+    closeButton.addEventListener('click', () => setFloatingPanel(null, true));
+    q('.card-title', card)?.appendChild(closeButton);
+    card.dataset.floatingPanelCard = panel;
+  }
+
+  function setFloatingPanel(panel, focus = false) {
+    if (mobileMedia.matches) return;
+    if (panel) setMapToolsPanel(false);
+    body.dataset.floatingPanel = panel || '';
+    qa('[data-floating-panel]', floatingTools).forEach(button => {
+      const expanded = button.dataset.floatingPanel === panel;
+      button.setAttribute('aria-expanded', String(expanded));
+      if (focus && expanded) button.focus();
+    });
+    if (panel === 'setup') setSidebarState('datasets');
+    else if (panel === 'billing') setSidebarState('billing');
+    else setSidebarState(rightCol.dataset.workspaceView === 'report' ? 'report' : 'map');
+    window.setTimeout(() => window.dispatchEvent(new Event('resize')), 180);
+  }
+
+  floatingTools.addEventListener('click', event => {
+    const button = event.target.closest('[data-floating-panel]');
+    if (!button || button.disabled) return;
+    setFloatingPanel(button.getAttribute('aria-expanded') === 'true' ? null : button.dataset.floatingPanel);
+  });
+  body.classList.add('mod1-floating-workspace');
+  setFloatingPanel(null);
+  setMapToolsPanel(false);
+  setSidebarState('overview');
 
   function setCurrentWorkflow(key) {
     qa('.workflow-step').forEach(button => button.classList.toggle('is-current', button.dataset.workflow === key));
@@ -430,13 +506,54 @@
     mapTab.setAttribute('aria-selected', String(view === 'map'));
     reportTab.setAttribute('aria-selected', String(view === 'report'));
     if (body.classList.contains('has-analysis')) setCurrentWorkflow('results');
+    if (view === 'report') setSidebarState('report');
+    else if (!body.dataset.floatingPanel) setSidebarState('map');
     if (focus) (view === 'map' ? mapTab : reportTab).focus();
     if (view === 'map') {
       window.setTimeout(() => window.dispatchEvent(new Event('resize')), 20);
     }
   }
-  q('#mapViewTab').addEventListener('click', () => setWorkspaceView('map'));
-  q('#reportViewTab').addEventListener('click', () => setWorkspaceView('report'));
+  q('#mapViewTab').addEventListener('click', () => {
+    setWorkspaceView('map');
+    setFloatingPanel(null);
+  });
+  q('#reportViewTab').addEventListener('click', () => {
+    setFloatingPanel(null);
+    setWorkspaceView('report');
+  });
+
+  sidebarNavigation.forEach(link => {
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      if (link.getAttribute('aria-disabled') === 'true') return;
+      const key = link.dataset.mod1Nav;
+      if (key === 'overview') {
+        setWorkspaceView('map');
+        setFloatingPanel(null);
+        setMapToolsPanel(false);
+        setSidebarState('overview');
+        container.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      } else if (key === 'datasets') {
+        setWorkspaceView('map');
+        setMapToolsPanel(false);
+        setFloatingPanel('setup');
+      } else if (key === 'map') {
+        setWorkspaceView('map');
+        setFloatingPanel(null);
+        setMapToolsPanel(true);
+        rightCol.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      } else if (key === 'report') {
+        setFloatingPanel(null);
+        setMapToolsPanel(false);
+        setWorkspaceView('report');
+        rightCol.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      } else if (key === 'billing') {
+        setWorkspaceView('map');
+        setMapToolsPanel(false);
+        setFloatingPanel('billing');
+      }
+    });
+  });
 
   const reportWrap = q('.reportWrap', reportCard);
   const reportCommandbar = document.createElement('div');
@@ -510,7 +627,10 @@
     <div><small>ระยะฐาน</small><strong id="compactDistance">— กม.</strong></div>
     <div><small>จำนวนเสา</small><strong id="compactPoles">—</strong></div>
     <div class="is-total"><small>ค่าบริการรวม</small><strong id="compactCost">— บาท</strong></div>`;
-  rightCol.insertBefore(compactSummary, mapCard);
+  const shellbarInner = q('.shellbar-inner', shellbar);
+  const shellbarActions = q('.shellbar-actions', shellbarInner);
+  if (shellbarInner && shellbarActions) shellbarInner.insertBefore(compactSummary, shellbarActions);
+  else container.insertBefore(compactSummary, workflow);
   function updateCompactSummary() {
     const segmentCount = Number(compactSummary.dataset.segmentCount || q('#reportBody')?.children.length || 0);
     q('#compactSegmentCount').textContent = segmentCount.toLocaleString('th-TH');
@@ -560,18 +680,23 @@
     button.addEventListener('click', () => {
       const key = button.dataset.workflow;
       if (key === 'datasets') {
-        if (!mobileMedia.matches) setWorkspaceView('map');
+        if (!mobileMedia.matches) {
+          setWorkspaceView('map');
+          setFloatingPanel('setup');
+        }
         setCurrentWorkflow('datasets');
         setMobileStage('setup');
-        openDatasetDrawer();
+        if (mobileMedia.matches) openDatasetDrawer();
       } else if (key === 'results') {
         setMobileStage('results');
+        if (!mobileMedia.matches) setFloatingPanel(null);
         rightCol.scrollIntoView({ block: 'start', behavior: 'smooth' });
       } else if (key === 'billing') {
         if (!mobileMedia.matches) setWorkspaceView('map');
         setCurrentWorkflow('billing');
         setMobileStage('billing');
-        billingCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        if (mobileMedia.matches) billingCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        else setFloatingPanel('billing');
       }
     });
   });
@@ -596,10 +721,14 @@
       button.classList.add('is-complete');
     }
     q('[data-workflow="datasets"]')?.classList.add('is-complete');
+    q('[data-floating-panel="billing"]', floatingTools).disabled = false;
+    setSidebarAvailability(true);
     if (mobileMedia.matches) setMobileStage('results');
     else {
       setCurrentWorkflow('results');
       setWorkspaceView('map');
+      setFloatingPanel(null);
+      setMapToolsPanel(false);
     }
   }
   window.addEventListener('permissionout:analysis-complete', markAnalysisComplete);
@@ -615,8 +744,13 @@
       button.classList.remove('is-complete', 'is-current');
     }
     q('[data-workflow="datasets"]')?.classList.remove('is-complete');
+    q('[data-floating-panel="billing"]', floatingTools).disabled = true;
+    setSidebarAvailability(false);
     setWorkspaceView('map');
     setMobileStage('setup');
+    setFloatingPanel(null);
+    setMapToolsPanel(false);
+    setSidebarState('overview');
   });
   const errorObserver = new MutationObserver(() => {
     const errorBox = q('#errBox');
@@ -659,9 +793,19 @@
     if (!event.matches) {
       body.dataset.mobileStage = 'setup';
       setWorkspaceView(rightCol.dataset.workspaceView || 'map');
+      setFloatingPanel(null);
+      setMapToolsPanel(false);
+      setSidebarState('overview');
     } else {
+      setMapToolsPanel(true);
       setMobileStage(body.classList.contains('has-analysis') ? 'results' : 'setup');
     }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || mobileMedia.matches) return;
+    if (body.dataset.floatingPanel) setFloatingPanel(null);
+    else if (body.classList.contains('mod1-map-tools-open')) setMapToolsPanel(false);
   });
 
   document.documentElement.classList.add('ux-ready');
