@@ -1268,7 +1268,7 @@ table.report td.num{
 </style>
 <link rel="stylesheet" href="ux-refresh.css?v=20260902-streamlined-workflow-2">
 <link rel="stylesheet" href="app-theme.css?v=20260807-thailand-overview">
-<link rel="stylesheet" href="mod1-dashboard.css?v=20260909-route-detail-drawer">
+<link rel="stylesheet" href="mod1-dashboard.css?v=20260909-map-legend-spacing">
 <script src="app-theme.js?v=20260807-theme-review"></script>
 </head>
 <body>
@@ -1724,10 +1724,10 @@ table.report td.num{
         </header>
         <div class="route-detail-drawer-content" id="routeDetailContent"></div>
       </aside>
+      <div class="dataset-color-legend map-dataset-legend" id="datasetColorLegend" aria-label="สีชุดข้อมูล" hidden></div>
       <div id="map"></div>
     </div>
     <div class="legend">
-      <div class="dataset-color-legend" id="datasetColorLegend" hidden></div>
       <span><span class="route-swatch"></span> New · มีในฐาน ไม่มีในเปรียบเทียบ</span>
       <span><span class="route-swatch is-same"></span> Same · เหมือนกันทั้งสองฝั่ง</span>
       <span><span class="route-swatch is-remove"></span> Remove · มีในเปรียบเทียบ ไม่มีในฐาน</span>
@@ -2090,7 +2090,8 @@ const FILE_GROUPS = ['BASE', 'COMPARE'];
 const GROUP_INPUTS = { BASE: fileBase, COMPARE: fileCompare };
 const GROUP_BOXES = { BASE: boxBase, COMPARE: boxCompare };
 const GROUP_TAGS = { BASE: tagBase, COMPARE: tagCompare };
-const GROUP_COLORS = { BASE: '#e07b39', COMPARE: '#3a7bd5' };
+const RD03_LINE_COLOR = '#E07B39';
+const GROUP_COLORS = { BASE: RD03_LINE_COLOR, COMPARE: '#3a7bd5' };
 const GROUP_LABELS = { BASE: 'ฐาน', COMPARE: 'เปรียบเทียบ' };
 const DATASET_LINE_COLORS = [
   '#0057B8', '#D1495B', '#00876C', '#7A3DB8', '#D96C00', '#008FB3',
@@ -2101,7 +2102,7 @@ const DATASET_LINE_COLORS = [
 const MAXI_CATEGORY_META = Object.freeze({
   network: Object.freeze({ label: 'Network', color: '#1E5BA8' }),
   'ready-access': Object.freeze({ label: 'Ready Access', color: '#0E9F6E' }),
-  customer: Object.freeze({ label: 'Customer', color: '#B7791F' })
+  customer: Object.freeze({ label: 'Customer', color: '#7A3DB8' })
 });
 function isMaxiSourceLine(line) {
   return mod1ComparisonFileName(line).includes('maxi');
@@ -2128,7 +2129,7 @@ function applyDatasetLineColors(groups) {
       const identity = String(line.sourceDatasetId || line.sourceFile || GROUP_LABELS[groupKey]);
       const key = `${groupKey}:${identity}`;
       if (!colorByKey.has(key)) {
-        const color = datasetLineColor(colorByKey.size);
+        const color = isMaxiSourceLine(line) ? datasetLineColor(colorByKey.size) : RD03_LINE_COLOR;
         colorByKey.set(key, color);
         entries.push({ key, color, groupKey, name: line.sourceFile || identity });
       }
@@ -2164,13 +2165,13 @@ function renderDatasetColorLegend(entries = []) {
   ].filter(group => group.entries.length);
   container.hidden = groups.length === 0;
   container.innerHTML = groups.length
-    ? `<span class="dataset-color-legend-label">สีชุดข้อมูล</span>${groups.map(group => {
+    ? groups.map(group => {
         const colors = [...new Set(group.entries.map(entry => entry.color).filter(Boolean))];
         const background = colors.length > 1
           ? `linear-gradient(90deg,${colors.map((color, index) => `${color} ${index / colors.length * 100}% ${(index + 1) / colors.length * 100}%`).join(',')})`
           : (colors[0] || '#94a3b8');
         return `<span title="${xmlEscape(`${group.label} · ${group.entries.length} ชุดสี`)}"><span class="swatch" style="background:${background}"></span>${group.label}</span>`;
-      }).join('')}`
+    }).join('')
     : '';
 }
 window.permissionOutBaseFiles = window.permissionOutBaseFiles || [];
