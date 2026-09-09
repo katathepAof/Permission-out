@@ -78,6 +78,25 @@
     if (selectedMod1Route?.route?._map) selectedMod1Route.route.setStyle(selectedMod1Route.style);
     selectedMod1Route = null;
   }
+
+  function closeMod1RouteDetail({ restoreFocus = false } = {}) {
+    if (elements.mod1RouteDetailDrawer && !elements.mod1RouteDetailDrawer.hidden) {
+      elements.mod1RouteDetailDrawer.hidden = true;
+      elements.mod1RouteDetailContent.replaceChildren();
+    }
+    clearSelectedMod1Route();
+    if (restoreFocus) elements.mapSiteSearch?.focus();
+  }
+
+  function showMod1RouteDetail(route, content) {
+    if (!elements.mod1RouteDetailDrawer || !elements.mod1RouteDetailContent) return;
+    map.closePopup();
+    closeSiteDetail();
+    selectMod1Route(route);
+    elements.mod1RouteDetailContent.innerHTML = content;
+    elements.mod1RouteDetailDrawer.hidden = false;
+    elements.mod1RouteDetailContent.scrollTop = 0;
+  }
   const MODULES = [
     { key: 'mod1', label: 'MOD 1', detail: 'PEA / UFM route intelligence' },
     { key: 'mod2', label: 'MOD 2', detail: 'Site Facility & Design' }
@@ -130,6 +149,12 @@
     modalSubtitle: document.getElementById('modalSubtitle'),
     modalBody: document.getElementById('modalBody'),
     modalClose: document.getElementById('modalClose'),
+    mod1RouteDetailDrawer: document.getElementById('mod1RouteDetailDrawer'),
+    mod1RouteDetailContent: document.getElementById('mod1RouteDetailContent'),
+    mod1RouteDetailClose: document.getElementById('mod1RouteDetailClose'),
+    siteDetailDrawer: document.getElementById('siteDetailDrawer'),
+    siteDetailContent: document.getElementById('siteDetailContent'),
+    siteDetailClose: document.getElementById('siteDetailClose'),
     toastRegion: document.getElementById('toastRegion')
   };
   elements.thailandOverviewHud = document.getElementById('thailandOverviewHud');
@@ -699,18 +724,9 @@
     });
     route.on('click', event => {
       L.DomEvent.stopPropagation(event.originalEvent);
-      selectMod1Route(route);
-      L.popup({
-          minWidth: 300, maxWidth: 430, autoPanPaddingTopLeft: [24, 88], autoPanPaddingBottomRight: [24, 24], keepInView: false
-        })
-        .setLatLng(event.latlng)
-        .setContent(mod1RoutePopup(type, dataset, line, category, color))
-        .openOn(map);
+      showMod1RouteDetail(route, mod1RoutePopup(type, dataset, line, category, color));
     });
     route.addTo(mod1RouteLayers[type]);
-    route.on('popupclose', () => {
-      if (selectedMod1Route?.route === route) clearSelectedMod1Route();
-    });
   }
 
   async function loadMod1RouteType(type, area, requestId) {
@@ -735,7 +751,7 @@
   }
 
   async function syncMod1RouteLayers() {
-    clearSelectedMod1Route();
+    closeMod1RouteDetail();
     const areas = [...selectedValues(filterElements.area)];
     const areaLabel = areas.join(', ');
     const enabledTypes = [
@@ -933,6 +949,8 @@
   }
 
   function applyFilters(autoFit = false) {
+    closeMod1RouteDetail();
+    closeSiteDetail();
     const query = elements.mapSiteSearch.value.trim().toLocaleLowerCase('th');
     const selections = Object.fromEntries(
       Object.entries(filterElements).map(([key, select]) => [key, selectedValues(select)])
@@ -1446,8 +1464,25 @@
     return popup;
   }
 
+  function closeSiteDetail({ restoreFocus = false } = {}) {
+    if (!elements.siteDetailDrawer || elements.siteDetailDrawer.hidden) return;
+    elements.siteDetailDrawer.hidden = true;
+    elements.siteDetailContent.replaceChildren();
+    if (restoreFocus) elements.mapSiteSearch?.focus();
+  }
+
+  function showSiteDetail(site) {
+    if (!elements.siteDetailDrawer || !elements.siteDetailContent) return;
+    map.closePopup();
+    closeMod1RouteDetail();
+    elements.siteDetailContent.replaceChildren(popupContent(site));
+    elements.siteDetailDrawer.hidden = false;
+    elements.siteDetailContent.scrollTop = 0;
+  }
+
   function showSiteEditor(site) {
     map.closePopup();
+    closeSiteDetail();
     const content = document.createElement('form');
     content.className = 'site-edit-grid';
     const sections = [
@@ -1554,6 +1589,7 @@
       await authenticatedJson(`/api/mod2/sites/${site.id}`, { method: 'DELETE' });
       state.sites = state.sites.filter(item => item.id !== site.id);
       map.closePopup();
+      closeSiteDetail();
       populateFilters();
       applyFilters(false);
       toast(`ลบไซต์ ${site.siteCode} แล้ว`, 'success');
@@ -1666,15 +1702,7 @@
       offset: [0, -8],
       opacity: .92
     });
-    layer.bindPopup(() => popupContent(site), {
-      minWidth: 300,
-      maxWidth: 430,
-      autoPan: true,
-      autoPanPaddingTopLeft: [24, 88],
-      autoPanPaddingBottomRight: [24, 24],
-      keepInView: false,
-      closeButton: true
-    });
+    layer.on('click', () => showSiteDetail(site));
     return layer;
   }
 
@@ -1813,27 +1841,16 @@
   function focusSite(site, zoom = 15) {
     let opened = false;
     mapFocusInProgress = true;
-    const openSitePopup = () => {
+    const openSiteDetail = () => {
       if (opened) return;
       opened = true;
       mapFocusInProgress = false;
-      map.off('moveend', openSitePopup);
-      L.popup({
-        minWidth: 300,
-        maxWidth: 430,
-        autoPan: true,
-        autoPanPaddingTopLeft: [24, 88],
-        autoPanPaddingBottomRight: [24, 24],
-        keepInView: false,
-        closeButton: true
-      })
-        .setLatLng([site.latitude, site.longitude])
-        .setContent(popupContent(site))
-        .openOn(map);
+      map.off('moveend', openSiteDetail);
+      showSiteDetail(site);
     };
-    map.once('moveend', openSitePopup);
+    map.once('moveend', openSiteDetail);
     map.flyTo([site.latitude, site.longitude], zoom, { duration: .45 });
-    window.setTimeout(openSitePopup, 700);
+    window.setTimeout(openSiteDetail, 700);
   }
 
   function siteFromNotification(notification) {
@@ -1995,6 +2012,8 @@
       state.loaded = false;
       state.notifications = [];
       window.clearInterval(notificationTimer);
+      closeMod1RouteDetail();
+      closeSiteDetail();
       siteLayer.clearLayers();
       Object.values(mod1RouteLayers).forEach(layer => layer.clearLayers());
       renderCommentNotifications();
@@ -2166,6 +2185,8 @@
   });
   elements.commentNotificationRefresh?.addEventListener('click', () => loadCommentNotifications({ silent: false }));
   elements.modalClose.addEventListener('click', () => closeModal());
+  elements.mod1RouteDetailClose?.addEventListener('click', () => closeMod1RouteDetail({ restoreFocus: true }));
+  elements.siteDetailClose?.addEventListener('click', () => closeSiteDetail({ restoreFocus: true }));
   elements.modalBackdrop.addEventListener('click', event => {
     if (event.target === elements.modalBackdrop) closeModal();
   });
@@ -2180,6 +2201,14 @@
   document.addEventListener('keydown', event => {
     const target = event.target;
     const isEditing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+    if (event.key === 'Escape' && !elements.mod1RouteDetailDrawer?.hidden) {
+      closeMod1RouteDetail({ restoreFocus: true });
+      return;
+    }
+    if (event.key === 'Escape' && !elements.siteDetailDrawer?.hidden) {
+      closeSiteDetail({ restoreFocus: true });
+      return;
+    }
     if ((event.key === '/' || (event.key.toLocaleLowerCase() === 'k' && (event.ctrlKey || event.metaKey))) && !isEditing && elements.modalBackdrop.hidden) {
       event.preventDefault();
       elements.mapSiteSearch.focus();
