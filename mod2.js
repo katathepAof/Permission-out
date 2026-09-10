@@ -1569,13 +1569,29 @@
           method: 'PATCH',
           body: JSON.stringify(payload)
         });
+        const remark = String(payload.remark || '').trim();
+        let remarkNotificationError = null;
+        if (remark) {
+          try {
+            await authenticatedJson(`/api/mod2/sites/${site.id}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({ body: `อัปเดต Remark: ${remark}`.slice(0, 1000) })
+            });
+          } catch (error) {
+            remarkNotificationError = error;
+          }
+        }
         const updatedSite = featureToSite(result.site);
         updatedSite.sourceProperties = { ...site.sourceProperties, ...updatedSite.sourceProperties };
         Object.assign(site, updatedSite);
         closeModal(true);
         applyFilters(false);
         await loadCommentNotifications({ silent: true }).catch(() => {});
-        toast('บันทึกข้อมูลไซต์แล้ว', 'success');
+        if (remarkNotificationError) {
+          toast(`บันทึกข้อมูลไซต์แล้ว แต่สร้างแจ้งเตือนไม่สำเร็จ: ${remarkNotificationError.message}`, 'error');
+        } else {
+          toast(remark ? 'บันทึกข้อมูลไซต์และความคิดเห็นแล้ว' : 'บันทึกข้อมูลไซต์แล้ว', 'success');
+        }
       } catch (error) {
         toast(error.message, 'error');
         button.disabled = false;

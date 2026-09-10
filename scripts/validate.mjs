@@ -328,6 +328,12 @@ if (!workerSource.includes(".order('created_at', { ascending: false })") || !wor
 if (!workerSource.includes('async function adminMod2Comment') || !workerSource.includes("commentItemMatch && request.method === 'PATCH'") || !workerSource.includes("commentItemMatch && request.method === 'DELETE'")) {
   throw new Error('MOD 2 admin comment update/delete API is missing');
 }
+if (!mod2Js.includes("await authenticatedJson(`/api/mod2/sites/${site.id}/comments`") || !mod2Js.includes('body: JSON.stringify({ body: `อัปเดต Remark: ${remark}`.slice(0, 1000) })')) {
+  throw new Error('MOD 2 Remark saves must call the existing comment API, including repeated text');
+}
+if (!mod2Js.includes('await loadCommentNotifications({ silent: true }).catch(() => {});')) {
+  throw new Error('MOD 2 must refresh Remark notifications immediately after saving a site');
+}
 if (!mod2Js.includes('function canManageMod2Comments()') || !mod2Js.includes("data-action=\"edit\"") || !mod2Js.includes("`/api/mod2/comments/${item.id}`")) {
   throw new Error('MOD 2 admin comment controls are missing');
 }
