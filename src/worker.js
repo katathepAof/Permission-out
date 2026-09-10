@@ -1151,6 +1151,16 @@ async function updateMod2Site(request, env, siteId) {
   };
   const result = await supabase.from('mod2_sites').update(changes).eq('id', id).select('*').single();
   if (result.error) throw result.error;
+  const previousRemark = String(site.remark || '').trim();
+  const updatedRemark = String(result.data.remark || '').trim();
+  if (updatedRemark && updatedRemark !== previousRemark) {
+    const remarkNotification = await supabase.from('mod2_site_comments').insert({
+      site_id: id,
+      author_id: user.id,
+      body: `อัปเดต Remark: ${updatedRemark}`.slice(0, 1000)
+    });
+    if (remarkNotification.error) throw remarkNotification.error;
+  }
   const audit = await supabase.from('mod2_site_audit').insert({
     dataset_id: dataset.id,
     version_id: site.version_id,

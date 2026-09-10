@@ -1574,6 +1574,7 @@
         Object.assign(site, updatedSite);
         closeModal(true);
         applyFilters(false);
+        await loadCommentNotifications({ silent: true }).catch(() => {});
         toast('บันทึกข้อมูลไซต์แล้ว', 'success');
       } catch (error) {
         toast(error.message, 'error');
