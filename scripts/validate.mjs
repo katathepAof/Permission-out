@@ -31,6 +31,9 @@ if (!html.includes("permissionout:analysis-complete")) throw new Error('Analysis
 for (const marker of ['TEMPLATE_CSV_HEADERS', 'templateCsvRow(', 'templatePoleCounts(', 'Template_CSV_', "'ชื่อ(Maxi)\\u00A0'"]) {
   if (!html.includes(marker)) throw new Error(`Template CSV export marker is missing: ${marker}`);
 }
+if (!html.includes("'Type(Maxi)', 'Core(Maxi)', 'Status(Maxi)'") || !html.includes("maxiLine && maxiLine.core !== null && maxiLine.core !== undefined ? maxiLine.core : ''")) {
+  throw new Error('Template CSV export must include the numeric Core(Maxi) value from the matched Maxi route');
+}
 for (const marker of ['source-mode-tabs', 'compact-result-summary', 'map-layer-menu', 'billing-calculation-details', 'billing-export-menu', 'report-reset-filters']) {
   if (!uxRefresh.includes(marker) && !uxRefreshCss.includes(marker)) throw new Error(`MOD 1 streamlined workflow marker is missing: ${marker}`);
 }

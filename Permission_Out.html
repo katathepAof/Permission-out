@@ -4484,7 +4484,7 @@ const TEMPLATE_CSV_HEADERS = Object.freeze([
   'ชื่อเส้นทาง(RD03)', 'tag ของสายสื่อสาร(RD03)', 'ประเภทสาย(RD03)',
   'เส้นผ่านศูนย์กลาง(มม.)(RD03)', 'จำนวนเสา ทั้งหมด(RD03)\n(ต้น)',
   'จำนวนเสา ในพื้นที่(RD03)\n(ต้น)', 'พิกัดต้นทาง (RD03)', 'พิกัดปลายทาง (RD03)',
-  'รหัส(Maxi)', 'ชื่อ(Maxi)\u00A0', 'Type(Maxi)', 'Status(Maxi)', 'Diameter(Maxi)',
+  'รหัส(Maxi)', 'ชื่อ(Maxi)\u00A0', 'Type(Maxi)', 'Core(Maxi)', 'Status(Maxi)', 'Diameter(Maxi)',
   'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)',
   'ระยะทางทับซ้อนจริง (เมตร)', '% ทับซ้อนเทียบ RD03'
 ]);
@@ -4525,6 +4525,7 @@ function templateCsvRow(rd03Line, maxiLine, polesPerKm) {
     maxiLine ? sourceCodeValue(maxiLine) : '',
     maxiLine ? placemarkName(maxiLine) : '',
     maxiLine ? (maxiLine.rawType || maxiLine.type || maxiLine.cableType || '') : '',
+    maxiLine && maxiLine.core !== null && maxiLine.core !== undefined ? maxiLine.core : '',
     maxiLine ? (maxiLine.cableStatus || '') : '',
     maxiLine ? segmentDiameterValue(maxiLine) : '',
     maxiCoords.length ? fmtCoord(maxiCoords[0]) : '',
