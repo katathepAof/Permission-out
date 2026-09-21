@@ -105,6 +105,10 @@ assert.equal(context.templateCsvRow(null,{...sourceMaxi,provinces:['อุบล
 assert.equal(context.templateCsvRow(null,{...sourceMaxi,sourceMetadata:{}},29).at(-2),'');
 assert.equal(context.templateCsvRow(null,{...sourceMaxi,sourceMetadata:{calculatedFiberLength:'0'}},29).at(-2),'0.00');
 assert.equal(context.templateCsvRow(null,{...sourceMaxi,sourceMetadata:{calculatedFiberLength:'unknown'}},29).at(-2),'');
+const popupOnlyMaxi={...sourceMaxi,sourceMetadata:{calculated:'14837 m'}};
+assert.equal(context.templateCsvRow(null,popupOnlyMaxi,29).at(-2),'14837.00');
+assert.equal(context.templateCsvRow(null,popupOnlyMaxi,29).at(-1),'14.837');
+assert.equal(context.templateCsvRow(null,{...popupOnlyMaxi,sourceMetadata:{calculatedFiberLength:'19,725 m',calculated:'14837 m'}},29).at(-2),'19725.00');
 assert.equal(context.templateCsvRow(null,{...sourceMaxi,provinces:['unknown']},29).at(-3),'');
 assert.ok(html.includes("overlapMeters === '' ? '' : overlapMeters.toFixed(2)"));
 console.log('Direct CSV overlap: full, partial, reversed, repeated, disjoint, crossing, tolerance, multiple Maxi and unmatched passed');
