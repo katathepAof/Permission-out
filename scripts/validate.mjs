@@ -49,6 +49,9 @@ for (const marker of ['source-mode-tabs', 'compact-result-summary', 'map-layer-m
 if (!uxRefreshCss.includes('body.ux-enhanced #results{display:none!important;}')) {
   throw new Error('The redundant MOD 1 executive summary card must remain hidden');
 }
+if (!html.includes("new CustomEvent('permissionout:filtered-summary'") || !uxRefresh.includes("window.addEventListener('permissionout:filtered-summary'") || !uxRefresh.includes('filteredSummary.distanceKm.toLocaleString')) {
+  throw new Error('MOD 1 compact summary must track the report filters');
+}
 if (!html.includes('function segmentDiameterValue(seg)') || !html.includes('billingForSegment(seg, rateB, polesPerKm)')) {
   throw new Error('Shared UI/export billing logic is missing');
 }

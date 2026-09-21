@@ -17,7 +17,7 @@
     "data:import-osm-reference": "node scripts/import-osm-reference.mjs",
     "data:prepare-mod2-sites": "node scripts/import-mod2-sites.mjs --prepare-only",
     "data:import-mod2-sites": "node scripts/import-mod2-sites.mjs",
-    "check": "node --check production.js && node --check mod2.js && node --check login.js && node --check admin-users.js && node --check admin-data.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs && node scripts/test-csv-pairing.mjs",
+    "check": "node --check production.js && node --check mod2.js && node --check login.js && node --check admin-users.js && node --check admin-data.js && node --check sw.js && node --check src/worker.js && node scripts/validate.mjs && node scripts/test-worker.mjs && node scripts/test-csv-pairing.mjs && node scripts/test-mod1-filtered-summary.mjs",
     "preview": "node scripts/serve.mjs"
   },
   "engines": {

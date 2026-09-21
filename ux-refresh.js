@@ -621,27 +621,35 @@
 
   const compactSummary = document.createElement('section');
   compactSummary.className = 'compact-result-summary';
-  compactSummary.setAttribute('aria-label', 'สรุปผลล่าสุด');
+  compactSummary.setAttribute('aria-label', 'สรุปผลตามตัวกรอง');
   compactSummary.innerHTML = `
     <div><small>ช่วงเส้นทาง</small><strong id="compactSegmentCount">—</strong></div>
-    <div><small>ระยะฐาน</small><strong id="compactDistance">— กม.</strong></div>
+    <div><small>ระยะทางตามตัวกรอง</small><strong id="compactDistance">— กม.</strong></div>
     <div><small>จำนวนเสา</small><strong id="compactPoles">—</strong></div>
     <div class="is-total"><small>ค่าบริการรวม</small><strong id="compactCost">— บาท</strong></div>`;
   const shellbarInner = q('.shellbar-inner', shellbar);
   const shellbarActions = q('.shellbar-actions', shellbarInner);
   if (shellbarInner && shellbarActions) shellbarInner.insertBefore(compactSummary, shellbarActions);
   else container.insertBefore(compactSummary, workflow);
+  let filteredSummary = null;
   function updateCompactSummary() {
-    const segmentCount = Number(compactSummary.dataset.segmentCount || q('#reportBody')?.children.length || 0);
-    q('#compactSegmentCount').textContent = segmentCount.toLocaleString('th-TH');
-    q('#compactDistance').textContent = `${q('#statTotalA')?.textContent || '—'} กม.`;
+    q('#compactSegmentCount').textContent = filteredSummary
+      ? filteredSummary.segmentCount.toLocaleString('th-TH') : '—';
+    q('#compactDistance').textContent = filteredSummary
+      ? `${filteredSummary.distanceKm.toLocaleString('th-TH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} กม.` : '— กม.';
     q('#compactPoles').textContent = q('#statTotalPoles')?.textContent || '—';
     q('#compactCost').textContent = `${q('#costTotalBig')?.textContent || '—'} บาท`;
   }
   const compactObserver = new MutationObserver(updateCompactSummary);
-  for (const node of [q('#statTotalA'), q('#statTotalPoles'), q('#costTotalBig'), reportBody]) {
+  for (const node of [q('#statTotalPoles'), q('#costTotalBig')]) {
     if (node) compactObserver.observe(node, { childList: true, subtree: true, characterData: true });
   }
+  window.addEventListener('permissionout:filtered-summary', event => {
+    const { segmentCount, distanceKm } = event.detail || {};
+    if (!Number.isFinite(segmentCount) || !Number.isFinite(distanceKm)) return;
+    filteredSummary = { segmentCount, distanceKm };
+    updateCompactSummary();
+  });
   updateCompactSummary();
 
   function enhanceReportRows() {
@@ -712,7 +720,6 @@
   function markAnalysisComplete(event) {
     setAnalyzing(false);
     body.classList.add('has-analysis');
-    if (Number.isFinite(event?.detail?.segmentCount)) compactSummary.dataset.segmentCount = String(event.detail.segmentCount);
     updateCompactSummary();
     q('#reportViewTab').disabled = false;
     for (const key of ['results', 'billing']) {
@@ -735,7 +742,7 @@
   window.addEventListener('permissionout:cleared', () => {
     setAnalyzing(false);
     body.classList.remove('has-analysis');
-    delete compactSummary.dataset.segmentCount;
+    filteredSummary = null;
     updateCompactSummary();
     q('#reportViewTab').disabled = true;
     for (const key of ['results', 'billing']) {

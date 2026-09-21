@@ -3878,6 +3878,7 @@ function recomputeAll() {
   const activeCategories = getActiveCategories();
 
   let totalPoles = 0;
+  let filteredSegmentCount = 0;
   const cost = { new: 0, same: 0, remove: 0 };
   const km = { new: 0, same: 0, remove: 0 };
   let costFiltered = 0;
@@ -3897,6 +3898,7 @@ function recomputeAll() {
       if (costEl) costEl.textContent = '—';
       return;
     }
+    filteredSegmentCount++;
     cost[st] += segCost;
     km[st] += segKm;
     costFiltered += segCost;
@@ -3931,6 +3933,9 @@ function recomputeAll() {
 
   const statTotalCost = document.getElementById('statTotalCost');
   if (statTotalCost) statTotalCost.innerHTML = `<span class="liveDot"></span>${fmtNum(total)}`;
+  window.dispatchEvent(new CustomEvent('permissionout:filtered-summary', {
+    detail: { segmentCount: filteredSegmentCount, distanceKm: kmFiltered }
+  }));
 }
 
 ['rateB', 'polesPerKm', 'surchargePct'].forEach(id => {
