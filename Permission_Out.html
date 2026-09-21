@@ -2627,6 +2627,7 @@ function parseKML(text, sourceName = '') {
         province: pickExtField(ext, [/^\s*province\s*$/i, /^\s*prov(?:ince)?[_\s-]*name\s*$/i, /^\s*changwat\s*$/i, /จังหวัด/i]) || '',
         measured: pickExtField(ext, [/^\s*measured\s*$/i, /ระยะ.*วัด/i]) || '',
         calculated: pickExtField(ext, [/^\s*calculated\s*$/i, /ระยะ.*คำนวณ/i]) || '',
+        calculatedFiberLength: pickExtField(ext, [/^\s*calculated[_\s-]*fiber[_\s-]*length\s*$/i]) || '',
         poleCount: pickExtField(ext, [/^\s*(?:poles?|pole[_\s-]*count|number[_\s-]*of[_\s-]*poles?|no\.?[_\s-]*(?:of[_\s-]*)?poles?|qty[_\s-]*poles?)\s*$/i, /(?:จำนวน|เลข).*เสา/i, /เสา.*(?:จำนวน|ต้น)/i]) || ''
       };
       const extKeys = Object.keys(ext).join(', ');
@@ -4555,7 +4556,7 @@ const TEMPLATE_CSV_HEADERS = Object.freeze([
   'เส้นผ่านศูนย์กลาง(มม.)(RD03)', 'จำนวนเสา ทั้งหมด(RD03)\n(ต้น)',
   'จำนวนเสา ในพื้นที่(RD03)\n(ต้น)', 'พิกัดต้นทาง (RD03)', 'พิกัดปลายทาง (RD03)',
   'รหัส(Maxi)', 'ชื่อ(Maxi)\u00A0', 'Type(Maxi)', 'Core(Maxi)', 'Status(Maxi)', 'Diameter(Maxi)',
-  'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)',
+  'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)', 'เขตการไฟฟ้าหลัก(Maxi)',
   'ระยะทางเส้นทาง(Maxi) (เมตร)', 'ระยะทางเส้นทาง(Maxi) (กม.)',
   'ระยะทางทับซ้อนจริง (เมตร)', '% ทับซ้อนเทียบ RD03'
 ]);
@@ -4567,6 +4568,22 @@ function templatePeaMainOffice(line) {
   return path[0] && path[0] !== 'Other PEA areas'
     ? path[0]
     : (matchingRegion ? `กฟ${matchingRegion}` : (selectedPeaRegion() ? `กฟ${selectedPeaRegion()}` : ''));
+}
+
+function templateMaxiMainRegion(line) {
+  if (!line) return '';
+  const provinces = getSegProvinces(line);
+  const primaryProvince = line._primaryProvince || provinces[0] || '';
+  const region = Object.keys(PEA_REGION_PROVINCES).find(key => (PEA_REGION_PROVINCES[key] || []).includes(primaryProvince));
+  return region ? `กฟ${region}` : '';
+}
+
+function maxiCalculatedFiberLengthMeters(line) {
+  const raw = String(line?.sourceMetadata?.calculatedFiberLength ?? '').trim();
+  const match = raw.match(/^((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s*(?:m|meters?|เมตร)?$/i);
+  if (!match) return null;
+  const meters = Number(match[1].replaceAll(',', ''));
+  return Number.isFinite(meters) ? meters : null;
 }
 
 function templatePoleCounts(line, polesPerKm) {
@@ -4582,7 +4599,7 @@ function templatePoleCounts(line, polesPerKm) {
 function templateCsvRow(rd03Line, maxiLine, polesPerKm) {
   const rd03Coords = rd03Line?.coords || [];
   const maxiCoords = maxiLine?.coords || [];
-  const maxiLengthMeters = maxiCoords.length >= 2 ? lineLengthMeters(maxiCoords) : null;
+  const maxiLengthMeters = maxiCalculatedFiberLengthMeters(maxiLine);
   const poles = templatePoleCounts(rd03Line, polesPerKm);
   return [
     rd03Line ? kmlPeaAreaFolderName(rd03Line) : '',
@@ -4605,6 +4622,7 @@ function templateCsvRow(rd03Line, maxiLine, polesPerKm) {
     maxiCoords.length ? fmtCoord(maxiCoords[0]) : '',
     maxiCoords.length ? fmtCoord(maxiCoords[maxiCoords.length - 1]) : '',
     maxiLine ? getSegProvince(maxiLine) : '',
+    templateMaxiMainRegion(maxiLine),
     maxiLengthMeters === null ? '' : maxiLengthMeters.toFixed(2),
     maxiLengthMeters === null ? '' : (maxiLengthMeters / 1000).toFixed(3)
   ];

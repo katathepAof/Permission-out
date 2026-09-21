@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const html = readFileSync(new URL('../Permission_Out.html', import.meta.url), 'utf8');
-function extract(name) {
- const start=html.indexOf(`function ${name}(`); let pos=html.indexOf('{',start), depth=1, end=pos+1;
- while(depth) {if(html[end]==='{')depth++;if(html[end]==='}')depth--;end++;}
- return (html.slice(start-6,start)==='async ' ? 'async ' : '') + html.slice(start,end);
+const production = readFileSync(new URL('../production.js', import.meta.url), 'utf8');
+function extractFrom(source,name) {
+ const start=source.indexOf(`function ${name}(`); let pos=source.indexOf('{',start), depth=1, end=pos+1;
+ while(depth) {if(source[end]==='{')depth++;if(source[end]==='}')depth--;end++;}
+ return (source.slice(start-6,start)==='async ' ? 'async ' : '') + source.slice(start,end);
 }
+const extract = name => extractFrom(html,name);
 const context = vm.createContext({setTimeout, setExportStatus(){}, mod1ComparisonFileName:l=>l.sourceFile, isMaxiSourceLine:l=>l.sourceFile.includes('maxi')});
 
 vm.runInContext(extract('rd03MaxiMatchRows'), context);
@@ -73,18 +75,37 @@ Object.assign(context, {
   templatePoleCounts: () => ({ total: '', inArea: '' }),
   sourceCodeValue: () => '', placemarkName: () => '',
   segmentDiameterValue: () => '', fmtCoord: () => '',
-  getSegProvince: () => 'Bangkok'
+  getSegProvince: () => 'เชียงใหม่',
+  getSegProvinces: line => line.provinces || [],
+  PEA_REGION_PROVINCES: { 'น.1': ['เชียงใหม่'], 'ฉ.2': ['อุบลราชธานี'] }
 });
 vm.runInContext(html.slice(html.indexOf('const TEMPLATE_CSV_HEADERS ='), html.indexOf('function templatePeaMainOffice(')), context);
+vm.runInContext(['templateMaxiMainRegion','maxiCalculatedFiberLengthMeters'].map(extract).join('\n'),context);
 vm.runInContext(extract('templateCsvRow'), context);
-const maxiOnlyValues=context.templateCsvRow(null,full,29);
+const sourceMaxi={...full,provinces:['เชียงใหม่'],sourceMetadata:{calculatedFiberLength:'19,725 m'}};
+const optimizedContext=vm.createContext({
+  propertiesWithDescriptionFields: properties => properties,
+  routeIdentifier: () => '',
+  lookupDiameterByTypeCore: () => null
+});
+vm.runInContext(['propertyValue','compactLineToApp'].map(name => extractFrom(production,name)).join('\n'),optimizedContext);
+const optimizedMaxi=optimizedContext.compactLineToApp({c:full.coords,n:'Maxi route',p:{CALCULATED_FIBER_LENGTH:'19,725 m'}},{id:'maxi-id',name:'Maxi.kmz'});
+assert.equal(optimizedMaxi.sourceMetadata.calculatedFiberLength,'19,725 m');
+assert.equal(context.maxiCalculatedFiberLengthMeters(optimizedMaxi),19725);
+const maxiOnlyValues=context.templateCsvRow(null,sourceMaxi,29);
 const headers=vm.runInContext('TEMPLATE_CSV_HEADERS',context);
 assert.equal(headers.length,maxiOnlyValues.length+2);
+assert.equal(headers.at(-5),'เขตการไฟฟ้าหลัก(Maxi)');
 assert.equal(headers.at(-4),'ระยะทางเส้นทาง(Maxi) (เมตร)');
 assert.equal(headers.at(-3),'ระยะทางเส้นทาง(Maxi) (กม.)');
-almost(Number(maxiOnlyValues.at(-2)),100);
-almost(Number(maxiOnlyValues.at(-1)),0.1);
-assert.equal(context.templateCsvRow(null,{...full,coords:[]},29).at(-2),'');
+assert.equal(maxiOnlyValues.at(-3),'กฟน.1');
+assert.equal(maxiOnlyValues.at(-2),'19725.00');
+assert.equal(maxiOnlyValues.at(-1),'19.725');
+assert.equal(context.templateCsvRow(null,{...sourceMaxi,provinces:['อุบลราชธานี']},29).at(-3),'กฟฉ.2');
+assert.equal(context.templateCsvRow(null,{...sourceMaxi,sourceMetadata:{}},29).at(-2),'');
+assert.equal(context.templateCsvRow(null,{...sourceMaxi,sourceMetadata:{calculatedFiberLength:'0'}},29).at(-2),'0.00');
+assert.equal(context.templateCsvRow(null,{...sourceMaxi,sourceMetadata:{calculatedFiberLength:'unknown'}},29).at(-2),'');
+assert.equal(context.templateCsvRow(null,{...sourceMaxi,provinces:['unknown']},29).at(-3),'');
 assert.ok(html.includes("overlapMeters === '' ? '' : overlapMeters.toFixed(2)"));
 console.log('Direct CSV overlap: full, partial, reversed, repeated, disjoint, crossing, tolerance, multiple Maxi and unmatched passed');
 vm.runInContext(['exportOverlapParts','exportTrimmedMaxi','trimExportSourceLines'].map(extract).join('\n'),context);

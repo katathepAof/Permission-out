@@ -37,6 +37,12 @@ if (!html.includes("'Type(Maxi)', 'Core(Maxi)', 'Status(Maxi)'") || !html.includ
 for (const marker of ['ระยะทางเส้นทาง(Maxi) (เมตร)', 'ระยะทางเส้นทาง(Maxi) (กม.)', 'maxiLengthMeters.toFixed(2)', "overlapMeters === '' ? '' : overlapMeters.toFixed(2)"]) {
   if (!html.includes(marker)) throw new Error(`MOD 1 Maxi-only CSV length marker is missing: ${marker}`);
 }
+for (const marker of ['เขตการไฟฟ้าหลัก(Maxi)', 'function templateMaxiMainRegion(', 'function maxiCalculatedFiberLengthMeters(', 'sourceMetadata?.calculatedFiberLength', 'calculatedFiberLength: pickExtField(ext,']) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 Maxi source export marker is missing: ${marker}`);
+}
+if (!production.includes('const calculatedFiberLength = propertyValue(properties,') || !production.includes('calculated, calculatedFiberLength')) {
+  throw new Error('Optimized Maxi data must preserve CALCULATED_FIBER_LENGTH for CSV export');
+}
 for (const marker of ['source-mode-tabs', 'compact-result-summary', 'map-layer-menu', 'billing-calculation-details', 'billing-export-menu', 'report-reset-filters']) {
   if (!uxRefresh.includes(marker) && !uxRefreshCss.includes(marker)) throw new Error(`MOD 1 streamlined workflow marker is missing: ${marker}`);
 }

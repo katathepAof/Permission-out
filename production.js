@@ -437,6 +437,7 @@
     const sourceCode = propertyValue(properties, [/^code$/i, /route[_\s-]*code/i, /รหัส/i]) || identifier;
     const measured = propertyValue(properties, [/^measured$/i, /ระยะ.*วัด/i]);
     const calculated = propertyValue(properties, [/^calculated$/i, /ระยะ.*คำนวณ/i]);
+    const calculatedFiberLength = propertyValue(properties, [/^\s*calculated[_\s-]*fiber[_\s-]*length\s*$/i]);
     const province = propertyValue(properties, [/^province$/i, /^prov(?:ince)?[_\s-]*name$/i, /^changwat$/i, /จังหวัด/i]);
     const categoryText = [
       line.importCategory,
@@ -471,7 +472,7 @@
       rawType,
       cableStatus,
       importCategory,
-      sourceMetadata: { tag: sourceTag || '', code: sourceCode, originalName, province, measured, calculated },
+      sourceMetadata: { tag: sourceTag || '', code: sourceCode, originalName, province, measured, calculated, calculatedFiberLength },
       extKeys: Object.keys(properties).join(', '),
       sourceFile: item?.name || line.sourceFile || '',
       sourceDatasetId: item?.id || line.sourceDatasetId || '',
