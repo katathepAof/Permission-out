@@ -1055,6 +1055,18 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
 .quick-area-loader .pea-scope-field label{font-size:.76rem;letter-spacing:.01em;}
 .quick-area-loader .pea-scope-field select{min-height:44px;border-color:#c4d4e7;background-color:#fff;box-shadow:0 2px 7px rgba(15,44,82,.04);}
 .quick-area-loader .pea-scope-field select:focus{outline:3px solid rgba(37,118,210,.13);border-color:#4e91dc;}
+.region-multi-select{position:relative;min-width:0;}
+.region-multi-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;padding:9px 12px;border:1px solid #c4d4e7;border-radius:9px;background:#fff;color:var(--navy-800);font:inherit;text-align:left;cursor:pointer;box-shadow:0 2px 7px rgba(15,44,82,.04);}
+.region-multi-trigger:focus-visible{outline:3px solid rgba(37,118,210,.13);border-color:#4e91dc;}
+.region-multi-trigger::after{content:"⌄";flex:0 0 auto;color:#1e5ba8;font-weight:800;transition:transform .16s ease;}
+.region-multi-select.is-open .region-multi-trigger::after{transform:rotate(180deg);}
+.region-multi-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.region-multi-panel{position:absolute;z-index:80;top:calc(100% + 6px);left:0;right:0;max-height:250px;overflow:auto;padding:7px;border:1px solid #b8d0e9;border-radius:10px;background:#fff;box-shadow:0 14px 34px rgba(15,44,82,.18);}
+.region-multi-option{display:flex;align-items:center;gap:9px;min-height:36px;padding:7px 9px;border-radius:7px;color:var(--navy-800);font-size:.78rem;cursor:pointer;}
+.region-multi-option:hover{background:#edf6ff;}
+.region-multi-option:has(input:checked){background:#e6f2ff;font-weight:700;}
+.region-multi-option input{width:16px;height:16px;margin:0;accent-color:#1e5ba8;}
+.pea-scope-filter .region-multi-select{width:100%;}
 .quick-area-datasets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-width:0;}
 .quick-area-datasets label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:8px 10px;border:1px solid #c4d4e7;border-radius:9px;background:rgba(255,255,255,.88);color:var(--navy-800);font-size:.78rem;font-weight:700;cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease;}
 .quick-area-datasets label:hover{border-color:#79aee7;background:#fff;transform:translateY(-1px);}
@@ -1384,8 +1396,11 @@ table.report td.num{
       <div class="quick-area-content">
         <div class="quick-area-grid">
         <div class="pea-scope-field">
-          <label for="quickPeaRegion">เขตการไฟฟ้าหลัก</label>
-          <select id="quickPeaRegion"><option value="">เลือกเขตการไฟฟ้าหลัก</option></select>
+          <label id="quickPeaRegionLabel">เขตการไฟฟ้าหลัก (เลือกได้หลายเขต)</label>
+          <div id="quickPeaRegion" class="region-multi-select" data-placeholder="เลือกเขตการไฟฟ้าหลัก" aria-labelledby="quickPeaRegionLabel">
+            <button type="button" class="region-multi-trigger" aria-expanded="false"><span class="region-multi-summary">เลือกเขตการไฟฟ้าหลัก</span></button>
+            <div class="region-multi-panel" role="group" hidden></div>
+          </div>
         </div>
         <div class="quick-area-datasets" role="group" aria-label="เลือกชุดข้อมูลที่จะโหลด">
           <label><input type="checkbox" id="quickUseRd03" checked> RD03</label>
@@ -1746,8 +1761,11 @@ table.report td.num{
   </h2>
   <div class="pea-scope-filter" id="peaScopeFilterBar">
     <div class="pea-scope-field">
-      <label for="peaRegionFilter">เขตการไฟฟ้าหลัก</label>
-      <select id="peaRegionFilter"><option value="">เลือกเขตการไฟฟ้าหลัก</option></select>
+      <label id="peaRegionFilterLabel">เขตการไฟฟ้าหลัก (เลือกได้หลายเขต)</label>
+      <div id="peaRegionFilter" class="region-multi-select" data-placeholder="เลือกเขตการไฟฟ้าหลัก" aria-labelledby="peaRegionFilterLabel">
+        <button type="button" class="region-multi-trigger" aria-expanded="false"><span class="region-multi-summary">เลือกเขตการไฟฟ้าหลัก</span></button>
+        <div class="region-multi-panel" role="group" hidden></div>
+      </div>
     </div>
     <div class="pea-scope-field">
       <label for="provinceFilter">จังหวัด</label>
@@ -3525,8 +3543,64 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
   else openRouteDetailForLayer(seg._mapLayer);
 });
 
+function selectedPeaRegions(controlId = 'peaRegionFilter') {
+  const control = document.getElementById(controlId);
+  return control
+    ? Array.from(control.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value)
+    : [];
+}
+
 function selectedPeaRegion() {
-  return document.getElementById('peaRegionFilter')?.value || '';
+  return selectedPeaRegions()[0] || '';
+}
+
+function regionSelectionLabel(regions) {
+  if (!regions.length) return '';
+  if (regions.length <= 3) return regions.map(region => `กฟ${region}`).join(', ');
+  return `${regions.slice(0, 2).map(region => `กฟ${region}`).join(', ')} และอีก ${regions.length - 2} เขต`;
+}
+
+function updateRegionMultiSummary(control) {
+  if (!control) return;
+  const regions = selectedPeaRegions(control.id);
+  const summary = control.querySelector('.region-multi-summary');
+  if (summary) summary.textContent = regionSelectionLabel(regions) || control.dataset.placeholder || 'เลือกเขต';
+}
+
+function initializeRegionMultiSelect(control) {
+  if (!control || control.dataset.initialized === 'true') return;
+  const panel = control.querySelector('.region-multi-panel');
+  const trigger = control.querySelector('.region-multi-trigger');
+  if (!panel || !trigger) return;
+  panel.innerHTML = Object.keys(PEA_REGION_PROVINCES).map(region =>
+    `<label class="region-multi-option"><input type="checkbox" value="${xmlEscape(region)}"> กฟ${xmlEscape(region)}</label>`
+  ).join('');
+  trigger.addEventListener('click', () => {
+    const opening = panel.hidden;
+    document.querySelectorAll('.region-multi-select.is-open').forEach(other => {
+      if (other === control) return;
+      other.classList.remove('is-open');
+      const otherPanel = other.querySelector('.region-multi-panel');
+      const otherTrigger = other.querySelector('.region-multi-trigger');
+      if (otherPanel) otherPanel.hidden = true;
+      otherTrigger?.setAttribute('aria-expanded', 'false');
+    });
+    panel.hidden = !opening;
+    control.classList.toggle('is-open', opening);
+    trigger.setAttribute('aria-expanded', String(opening));
+  });
+  control.addEventListener('change', () => updateRegionMultiSummary(control));
+  control.dataset.initialized = 'true';
+  updateRegionMultiSummary(control);
+}
+
+function setSelectedPeaRegions(controlId, regions) {
+  const control = document.getElementById(controlId);
+  if (!control) return;
+  initializeRegionMultiSelect(control);
+  const selected = new Set(regions || []);
+  control.querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = selected.has(input.value); });
+  updateRegionMultiSummary(control);
 }
 
 function selectedPeaOfficeId() {
@@ -3539,18 +3613,14 @@ function populateProvinceFilter() {
   const provinceSelect = document.getElementById('provinceFilter');
   const officeSelect = document.getElementById('peaOfficeFilter');
   if (!regionSelect || !provinceSelect || !officeSelect) return;
-  if (regionSelect.options.length <= 1) {
-    Object.keys(PEA_REGION_PROVINCES).forEach(region => regionSelect.add(new Option(`กฟ${region}`, region)));
-  }
-  if (quickRegionSelect && quickRegionSelect.options.length <= 1) {
-    Object.keys(PEA_REGION_PROVINCES).forEach(region => quickRegionSelect.add(new Option(`กฟ${region}`, region)));
-  }
-  const region = selectedPeaRegion();
+  initializeRegionMultiSelect(regionSelect);
+  initializeRegionMultiSelect(quickRegionSelect);
+  const regions = selectedPeaRegions();
   const previousProvince = provinceSelect.value;
-  const provinces = PEA_REGION_PROVINCES[region] || [];
-  provinceSelect.innerHTML = '<option value="">ทุกจังหวัดในเขต</option>' + provinces
+  const provinces = regions.flatMap(region => PEA_REGION_PROVINCES[region] || []);
+  provinceSelect.innerHTML = '<option value="">ทุกจังหวัดในเขตที่เลือก</option>' + provinces
     .map(province => `<option value="${xmlEscape(province)}">${xmlEscape(province)}</option>`).join('');
-  provinceSelect.disabled = !region;
+  provinceSelect.disabled = !regions.length;
   if (provinces.includes(previousProvince)) provinceSelect.value = previousProvince;
   officeSelect.innerHTML = '<option value="">ทุกหน่วยงานในจังหวัด</option>';
   officeSelect.disabled = !provinceSelect.value;
@@ -3635,10 +3705,10 @@ function bindCableStatusOptions() {
 
 // กรองตารางรายงาน + เส้นบนแผนที่ ตามจังหวัด และหมวดสถานะ (New/Same/Remove) ที่เลือก
 function getSelectedProvinces() {
-  const region = selectedPeaRegion();
-  if (!region) return ['__NONE__'];
+  const regions = selectedPeaRegions();
+  if (!regions.length) return ['__NONE__'];
   const province = document.getElementById('provinceFilter')?.value || '';
-  return province ? [province] : [...(PEA_REGION_PROVINCES[region] || [])];
+  return province ? [province] : regions.flatMap(region => PEA_REGION_PROVINCES[region] || []);
 }
 // File status and category describe Maxi; preserve RD03 as the reference side.
 function matchesMaxiFileFilters(line, selectedCableStatuses, activeCategories) {
@@ -3659,12 +3729,12 @@ function segmentMatchesReportFilters(seg, selectedProvinces = getSelectedProvinc
 function applyProvinceFilter(fitMapToSelection = false) {
   window.permissionOutShowPeaOffice?.(selectedPeaOfficeId());
   const selectedProvinces = getSelectedProvinces();
-  const region = selectedPeaRegion();
+  const regions = selectedPeaRegions();
   const province = document.getElementById('provinceFilter')?.value || '';
   const officeSelect = document.getElementById('peaOfficeFilter');
   const officeText = officeSelect?.value ? officeSelect.options[officeSelect.selectedIndex]?.text : '';
-  const hasScope = Boolean(region);
-  const selectedText = province || `ทุกจังหวัดใน กฟ${region}`;
+  const hasScope = regions.length > 0;
+  const selectedText = province || `ทุกจังหวัดใน ${regionSelectionLabel(regions)}`;
   const active = getActiveStatuses();
   const activeOverlaps = getActiveOverlaps();
   const selectedCableStatuses = getSelectedCableStatuses();
@@ -4491,9 +4561,11 @@ const TEMPLATE_CSV_HEADERS = Object.freeze([
 
 function templatePeaMainOffice(line) {
   const path = kmlPeaHierarchy(line).path || [];
+  const primaryProvince = getSegProvinces(line)[0] || '';
+  const matchingRegion = selectedPeaRegions().find(region => (PEA_REGION_PROVINCES[region] || []).includes(primaryProvince));
   return path[0] && path[0] !== 'Other PEA areas'
     ? path[0]
-    : (selectedPeaRegion() ? `กฟ${selectedPeaRegion()}` : '');
+    : (matchingRegion ? `กฟ${matchingRegion}` : (selectedPeaRegion() ? `กฟ${selectedPeaRegion()}` : ''));
 }
 
 function templatePoleCounts(line, polesPerKm) {
@@ -5836,27 +5908,50 @@ const quickAreaLoadBtn = document.getElementById('quickAreaLoadBtn');
 const quickAreaStatus = document.getElementById('quickAreaStatus');
 
 function updateQuickAreaLoaderState() {
-  const hasRegion = Boolean(quickPeaRegion?.value);
+  const regions = selectedPeaRegions('quickPeaRegion');
+  const hasRegion = regions.length > 0;
   const hasDataset = Boolean(quickUseRd03?.checked || quickUseRd05?.checked || quickUseMaxi?.checked);
   if (quickAreaLoadBtn) quickAreaLoadBtn.disabled = !hasRegion || !hasDataset;
   if (quickAreaStatus && !quickAreaLoadBtn?.disabled) {
     const selected = [quickUseRd03.checked ? 'RD03' : '', quickUseRd05.checked ? 'RD05' : '', quickUseMaxi.checked ? 'Maxi' : ''].filter(Boolean).join(' + ');
-    quickAreaStatus.textContent = `พร้อมโหลด ${selected} สำหรับ กฟ${quickPeaRegion.value}`;
+    quickAreaStatus.textContent = `พร้อมโหลด ${selected} สำหรับ ${regionSelectionLabel(regions)}`;
   } else if (quickAreaStatus) {
     quickAreaStatus.textContent = 'เลือกเขตและชุดข้อมูลอย่างน้อยหนึ่งรายการ';
   }
 }
 
 [quickPeaRegion, quickUseRd03, quickUseRd05, quickUseMaxi].forEach(control => control?.addEventListener('change', updateQuickAreaLoaderState));
+document.addEventListener('click', event => {
+  document.querySelectorAll('.region-multi-select.is-open').forEach(control => {
+    if (control.contains(event.target)) return;
+    control.classList.remove('is-open');
+    const panel = control.querySelector('.region-multi-panel');
+    const trigger = control.querySelector('.region-multi-trigger');
+    if (panel) panel.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+  });
+});
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  document.querySelectorAll('.region-multi-select.is-open').forEach(control => {
+    control.classList.remove('is-open');
+    const panel = control.querySelector('.region-multi-panel');
+    const trigger = control.querySelector('.region-multi-trigger');
+    if (panel) panel.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+    trigger?.focus();
+  });
+});
 quickAreaLoadBtn?.addEventListener('click', async () => {
-  const region = quickPeaRegion.value;
-  const provinces = PEA_REGION_PROVINCES[region] || [];
+  const regions = selectedPeaRegions('quickPeaRegion');
+  const provinces = regions.flatMap(region => PEA_REGION_PROVINCES[region] || []);
+  const regionLabel = regionSelectionLabel(regions);
   const useRd03 = quickUseRd03.checked;
   const useRd05 = quickUseRd05.checked;
   const useMaxi = quickUseMaxi.checked;
-  if (!region || (!useRd03 && !useRd05 && !useMaxi)) return;
+  if (!regions.length || (!useRd03 && !useRd05 && !useMaxi)) return;
   quickAreaLoadBtn.disabled = true;
-  quickAreaStatus.textContent = `กำลังเลือกข้อมูลจากฐานสำหรับ กฟ${region}…`;
+  quickAreaStatus.textContent = `กำลังเลือกข้อมูลจากฐานสำหรับ ${regionLabel}…`;
   try {
     if (typeof window.permissionOutSelectRegionDatasets !== 'function') {
       throw new Error('คลังข้อมูลยังไม่พร้อม กรุณารอสักครู่แล้วลองใหม่');
@@ -5868,14 +5963,13 @@ quickAreaLoadBtn?.addEventListener('click', async () => {
     [tagBase, tagCompare].forEach(tag => { if (tag) { tag.textContent = ''; tag.hidden = true; } });
     const selection = window.permissionOutSelectRegionDatasets({ provinces, useRd03, useRd05, useMaxi });
     if (!selection?.ready) throw new Error('รายการข้อมูลจากฐานยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่');
-    const resultRegion = document.getElementById('peaRegionFilter');
-    resultRegion.value = region;
+    setSelectedPeaRegions('peaRegionFilter', regions);
     populateProvinceFilter();
     updateSourceRoleUI();
     quickAreaStatus.textContent = `เลือก RD03 ${selection.rd03Count.toLocaleString('th-TH')} · RD05 ${selection.rd05Count.toLocaleString('th-TH')} · Maxi ${selection.maxiCount.toLocaleString('th-TH')} ชุด · กำลังคำนวณ…`;
     const result = await runAnalysis({ quickRegionProvinces: provinces });
     quickAreaStatus.textContent = result?.segmentCount !== undefined
-      ? `แสดงผล กฟ${region} แล้ว · ${result.segmentCount.toLocaleString('th-TH')} ช่วงก่อนกรองพื้นที่`
+      ? `แสดงผล ${regionLabel} แล้ว · ${result.segmentCount.toLocaleString('th-TH')} ช่วงก่อนกรองพื้นที่`
       : 'วิเคราะห์ไม่สำเร็จ กรุณาตรวจสอบข้อความแจ้งเตือนด้านล่าง';
   } catch (error) {
     quickAreaStatus.textContent = error?.message || 'ไม่สามารถโหลดข้อมูลตามเขตได้';
