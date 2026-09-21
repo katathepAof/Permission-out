@@ -34,6 +34,9 @@ for (const marker of ['TEMPLATE_CSV_HEADERS', 'templateCsvRow(', 'templatePoleCo
 if (!html.includes("'Type(Maxi)', 'Core(Maxi)', 'Status(Maxi)'") || !html.includes("maxiLine && maxiLine.core !== null && maxiLine.core !== undefined ? maxiLine.core : ''")) {
   throw new Error('Template CSV export must include the numeric Core(Maxi) value from the matched Maxi route');
 }
+for (const marker of ['ระยะทางเส้นทาง(Maxi) (เมตร)', 'ระยะทางเส้นทาง(Maxi) (กม.)', 'maxiLengthMeters.toFixed(2)', "overlapMeters === '' ? '' : overlapMeters.toFixed(2)"]) {
+  if (!html.includes(marker)) throw new Error(`MOD 1 Maxi-only CSV length marker is missing: ${marker}`);
+}
 for (const marker of ['source-mode-tabs', 'compact-result-summary', 'map-layer-menu', 'billing-calculation-details', 'billing-export-menu', 'report-reset-filters']) {
   if (!uxRefresh.includes(marker) && !uxRefreshCss.includes(marker)) throw new Error(`MOD 1 streamlined workflow marker is missing: ${marker}`);
 }

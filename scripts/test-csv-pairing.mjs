@@ -44,7 +44,7 @@ assert.equal(context.segmentMatchesReportFilters(rd03, ['Other'], { none: true }
 assert.equal(context.segmentMatchesReportFilters(rd03, ['Bangkok'], { none: false }, status, category), false);
 assert.equal(context.sourceLineMatchesExportFilters(rd03, ['Other'], status, category), false);
 console.log('Maxi-only status/category filters: RD03 retained; Maxi filtered; province and overlap respected');
-// Direct CSV overlap: original columns remain in place; only two are appended.
+// Direct CSV overlap and route length remain separate, including Maxi-only exports.
 vm.runInContext(['exportRouteIndex', 'haversineMeters', 'lineLengthMeters', 'csvDirectOverlapMeters', 'csvDirectMatchRows'].map(extract).join('\n'), context);
 const route = (sourceFile, points) => ({sourceFile, coords: points.map(([x,y])=>[100+x/111320,y/111320])});
 const base=route('rd03',[[0,0],[100,0]]);
@@ -63,7 +63,29 @@ const missing=await context.csvDirectMatchRows([base],1);
 assert.equal(missing[0].maxiLine,null);assert.equal(missing[0].overlapMeters,0);
 const unmatched=await context.csvDirectMatchRows([base,route('maxi',[[0,10],[100,10]])],1);
 assert.equal(unmatched.length,2);
-assert.ok(html.includes("'จังหวัด(Maxi)',\n  'ระยะทางทับซ้อนจริง (เมตร)', '% ทับซ้อนเทียบ RD03'"));
+const maxiOnly=await context.csvDirectMatchRows([full],1);
+assert.equal(maxiOnly.length,1);
+assert.equal(maxiOnly[0].rd03Line,null);
+assert.equal(maxiOnly[0].maxiLine,full);
+assert.equal(maxiOnly[0].overlapMeters,'');
+assert.equal(maxiOnly[0].overlapPercent,'');
+Object.assign(context, {
+  templatePoleCounts: () => ({ total: '', inArea: '' }),
+  sourceCodeValue: () => '', placemarkName: () => '',
+  segmentDiameterValue: () => '', fmtCoord: () => '',
+  getSegProvince: () => 'Bangkok'
+});
+vm.runInContext(html.slice(html.indexOf('const TEMPLATE_CSV_HEADERS ='), html.indexOf('function templatePeaMainOffice(')), context);
+vm.runInContext(extract('templateCsvRow'), context);
+const maxiOnlyValues=context.templateCsvRow(null,full,29);
+const headers=vm.runInContext('TEMPLATE_CSV_HEADERS',context);
+assert.equal(headers.length,maxiOnlyValues.length+2);
+assert.equal(headers.at(-4),'ระยะทางเส้นทาง(Maxi) (เมตร)');
+assert.equal(headers.at(-3),'ระยะทางเส้นทาง(Maxi) (กม.)');
+almost(Number(maxiOnlyValues.at(-2)),100);
+almost(Number(maxiOnlyValues.at(-1)),0.1);
+assert.equal(context.templateCsvRow(null,{...full,coords:[]},29).at(-2),'');
+assert.ok(html.includes("overlapMeters === '' ? '' : overlapMeters.toFixed(2)"));
 console.log('Direct CSV overlap: full, partial, reversed, repeated, disjoint, crossing, tolerance, multiple Maxi and unmatched passed');
 vm.runInContext(['exportOverlapParts','exportTrimmedMaxi','trimExportSourceLines'].map(extract).join('\n'),context);
 const long=route('maxi',[[-25,0],[125,0]]);

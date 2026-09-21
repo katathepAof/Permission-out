@@ -4545,7 +4545,7 @@ async function csvDirectMatchRows(lines, threshold) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   }
-  maxi.filter(line => !used.has(line)).forEach(maxiLine => rows.push({ rd03Line: null, maxiLine, overlapMeters: 0, overlapPercent: '' }));
+  maxi.filter(line => !used.has(line)).forEach(maxiLine => rows.push({ rd03Line: null, maxiLine, overlapMeters: '', overlapPercent: '' }));
   return rows;
 }
 
@@ -4556,6 +4556,7 @@ const TEMPLATE_CSV_HEADERS = Object.freeze([
   'จำนวนเสา ในพื้นที่(RD03)\n(ต้น)', 'พิกัดต้นทาง (RD03)', 'พิกัดปลายทาง (RD03)',
   'รหัส(Maxi)', 'ชื่อ(Maxi)\u00A0', 'Type(Maxi)', 'Core(Maxi)', 'Status(Maxi)', 'Diameter(Maxi)',
   'พิกัดต้นทาง(Maxi)', 'พิกัดปลายทาง(Maxi)', 'จังหวัด(Maxi)',
+  'ระยะทางเส้นทาง(Maxi) (เมตร)', 'ระยะทางเส้นทาง(Maxi) (กม.)',
   'ระยะทางทับซ้อนจริง (เมตร)', '% ทับซ้อนเทียบ RD03'
 ]);
 
@@ -4581,6 +4582,7 @@ function templatePoleCounts(line, polesPerKm) {
 function templateCsvRow(rd03Line, maxiLine, polesPerKm) {
   const rd03Coords = rd03Line?.coords || [];
   const maxiCoords = maxiLine?.coords || [];
+  const maxiLengthMeters = maxiCoords.length >= 2 ? lineLengthMeters(maxiCoords) : null;
   const poles = templatePoleCounts(rd03Line, polesPerKm);
   return [
     rd03Line ? kmlPeaAreaFolderName(rd03Line) : '',
@@ -4602,7 +4604,9 @@ function templateCsvRow(rd03Line, maxiLine, polesPerKm) {
     maxiLine ? segmentDiameterValue(maxiLine) : '',
     maxiCoords.length ? fmtCoord(maxiCoords[0]) : '',
     maxiCoords.length ? fmtCoord(maxiCoords[maxiCoords.length - 1]) : '',
-    maxiLine ? getSegProvince(maxiLine) : ''
+    maxiLine ? getSegProvince(maxiLine) : '',
+    maxiLengthMeters === null ? '' : maxiLengthMeters.toFixed(2),
+    maxiLengthMeters === null ? '' : (maxiLengthMeters / 1000).toFixed(3)
   ];
 }
 
@@ -4855,7 +4859,7 @@ async function exportCSV(options = {}) {
       return { ...row, maxiLine, overlapMeters, overlapPercent: length ? overlapMeters / length * 100 : 0 };
     });
   });
-  const templateRows = [TEMPLATE_CSV_HEADERS, ...templateMatches.map(({ rd03Line, maxiLine, overlapMeters, overlapPercent }) => [...templateCsvRow(rd03Line, maxiLine, polesPerKm), overlapMeters.toFixed(2), overlapPercent === '' ? '' : overlapPercent.toFixed(2)])];
+  const templateRows = [TEMPLATE_CSV_HEADERS, ...templateMatches.map(({ rd03Line, maxiLine, overlapMeters, overlapPercent }) => [...templateCsvRow(rd03Line, maxiLine, polesPerKm), overlapMeters === '' ? '' : overlapMeters.toFixed(2), overlapPercent === '' ? '' : overlapPercent.toFixed(2)])];
   const templateCsvContent = templateRows.map(row => row.map(csvEscape).join(',')).join('\r\n');
   const templateBlob = new Blob(['\uFEFF' + templateCsvContent], { type: 'text/csv;charset=utf-8;' });
   const templateNow = new Date();
