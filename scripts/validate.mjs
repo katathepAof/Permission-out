@@ -254,6 +254,9 @@ for (const marker of ['class="region-multi-select"', 'function selectedPeaRegion
 if (!html.includes('<details class="quick-area-loader" open>') || !uxRefresh.includes("document.createElement('details')") || !uxRefresh.includes('dataset-selection-toggle')) {
   throw new Error('MOD 1 quick and manual dataset controls must remain independently collapsible');
 }
+if (!html.includes("const transientFileNames = groupKey === 'COMPARE' && window.permissionOutTransientAnalysis") || !html.includes('const retainedTransientFiles = window.permissionOutTransientAnalysis') || !html.includes('const hasBase = hasBaseSources();') || !html.includes('const hasCompare = isTransientAnalysis || hasCompareSources();') || !html.includes('optimizedCompareLines.concat(compareTexts.flatMap') || !html.includes('), transientParsedLines);')) {
+  throw new Error('MOD 1 external files must remain comparable with the selected database baseline');
+}
 for (const marker of ['function filterLinesForQuickRegion(lines)', 'linesA = filterLinesForQuickRegion(linesA)', 'linesB = filterLinesForQuickRegion(linesB)', 'runAnalysis({ quickRegionProvinces: provinces })']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 quick regional prefilter marker is missing: ${marker}`);
 }

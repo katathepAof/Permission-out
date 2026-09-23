@@ -1608,7 +1608,7 @@
   osmBuildingToggle?.addEventListener('change', scheduleOsmReferenceUpdate);
   window.addEventListener('permissionout:analysis-complete', event => {
     if (event.detail?.transient) {
-      toast('คำนวณไฟล์ภายนอกเสร็จแล้ว · ผลลัพธ์จะไม่ถูกบันทึก', 'success');
+      toast('เปรียบเทียบข้อมูลจากฐานกับไฟล์ภายนอกเสร็จแล้ว · ผลลัพธ์จะไม่ถูกบันทึก', 'success');
       return;
     }
     markDirty();

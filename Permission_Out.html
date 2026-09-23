@@ -1476,12 +1476,12 @@ table.report td.num{
     <div class="external-calc" style="margin-top:14px;padding:14px;border:1px dashed var(--border-strong);border-radius:12px;background:var(--surface-soft);">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <strong style="display:block;color:var(--navy-800);">คำนวณไฟล์ภายนอกแบบชั่วคราว</strong>
-          <small style="color:var(--ink-mute);">อ่าน KML/KMZ จากเครื่องเพื่อคำนวณค่าบริการเท่านั้น — ไม่เพิ่มเข้าคลังและไม่บันทึกเป็นโครงการ</small>
+          <strong style="display:block;color:var(--navy-800);">เปรียบเทียบข้อมูลในระบบกับไฟล์ภายนอก</strong>
+          <small style="color:var(--ink-mute);">ใช้ข้อมูลที่เลือกจากฐานเป็นชุดฐาน และใช้ KML/KMZ จากเครื่องเป็นชุดเปรียบเทียบ — ไม่เพิ่มไฟล์เข้าคลังและไม่บันทึกเป็นโครงการ</small>
         </div>
         <input type="file" id="externalCalcFiles" accept=".kml,.kmz" multiple hidden>
         <button type="button" class="secondary local-file-trigger" data-file-input="externalCalcFiles">เลือกไฟล์ภายนอก</button>
-        <button type="button" class="primary" id="externalCalcBtn" disabled>คำนวณโดยไม่บันทึก</button>
+        <button type="button" class="primary" id="externalCalcBtn" disabled>เปรียบเทียบและแสดงผล</button>
       </div>
       <div id="externalCalcStatus" class="perfNote" style="margin-top:10px;">ยังไม่ได้เลือกไฟล์</div>
     </div>
@@ -2230,9 +2230,13 @@ function physicalSourceNames(groupKey) {
   const datasetNames = groupKey === 'BASE'
     ? window.permissionOutBaseDatasetNames
     : window.permissionOutCompareDatasetNames;
+  const transientFileNames = groupKey === 'COMPARE' && window.permissionOutTransientAnalysis
+    ? Array.from(externalCalcFiles?.files || []).map(file => file.name)
+    : [];
   return [
     ...(Array.isArray(datasetNames) ? datasetNames : []),
-    ...filesForGroup(groupKey).map(file => file.name)
+    ...filesForGroup(groupKey).map(file => file.name),
+    ...transientFileNames
   ];
 }
 function sourceNamesForGroup(groupKey) {
@@ -3968,10 +3972,19 @@ async function runAnalysis(options = {}) {
     : null;
   undoTrimResults();
   errBox.style.display = 'none';
-  const transientFiles = Array.isArray(options.transientFiles) ? options.transientFiles.filter(Boolean) : [];
+  const requestedTransientFiles = Array.isArray(options.transientFiles) ? options.transientFiles.filter(Boolean) : [];
+  const retainedTransientFiles = window.permissionOutTransientAnalysis
+    ? Array.from(externalCalcFiles?.files || []).filter(Boolean)
+    : [];
+  const transientFiles = requestedTransientFiles.length ? requestedTransientFiles : retainedTransientFiles;
   const isTransientAnalysis = transientFiles.length > 0;
-  const hasBase = isTransientAnalysis || hasBaseSources();
-  const hasCompare = !isTransientAnalysis && hasCompareSources();
+  const hasBase = hasBaseSources();
+  const hasCompare = isTransientAnalysis || hasCompareSources();
+  if (isTransientAnalysis && !hasBase) {
+    errBox.textContent = 'กรุณาเลือกข้อมูลจากฐานเป็นชุดฐานก่อนนำไฟล์ภายนอกมาเปรียบเทียบ';
+    errBox.style.display = 'block';
+    return;
+  }
   if (!hasBase && !hasCompare) {
     errBox.textContent = 'กรุณาเลือกไฟล์ KML อย่างน้อย 1 ไฟล์ก่อนวิเคราะห์ (ฝั่งฐาน หรือ ฝั่งเปรียบเทียบ)';
     errBox.style.display = 'block';
@@ -4031,37 +4044,36 @@ async function runAnalysis(options = {}) {
     }
 
     // ฐานและเปรียบเทียบเป็นชุดตรรกะอิสระ แต่ละชุดรวมได้ทั้ง PEA, UFM และไฟล์ที่นำเข้าเอง
-    const baseFiles = isTransientAnalysis ? transientFiles : filesForGroup('BASE');
-    const compareFiles = isTransientAnalysis ? [] : filesForGroup('COMPARE');
+    // ไฟล์ภายนอกแบบชั่วคราวจะถูกเพิ่มในฝั่งเปรียบเทียบ โดยยังคงข้อมูลจากฐานที่ผู้ใช้เลือกไว้
+    const baseFiles = filesForGroup('BASE');
+    const compareFiles = filesForGroup('COMPARE');
     const [baseTexts, compareTexts, optimizedBaseLines, optimizedCompareLines] = await Promise.all([
-      isTransientAnalysis ? Promise.resolve([]) : Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
+      Promise.all(baseFiles.map(f => readKmlOrKmzText(f))),
       Promise.all(compareFiles.map(f => readKmlOrKmzText(f))),
-      !isTransientAnalysis && selectedBaseDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
+      selectedBaseDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
         ? window.permissionOutLoadGroupLines('BASE')
         : Promise.resolve([]),
-      !isTransientAnalysis && selectedCompareDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
+      selectedCompareDatasetCount() && typeof window.permissionOutLoadGroupLines === 'function'
         ? window.permissionOutLoadGroupLines('COMPARE')
         : Promise.resolve([])
     ]);
 
     if (runRevision !== analysisRunRevision) return;
     updateAnalysisLoading('กำลังเตรียมเส้นทาง', 'กำลังกรองและจัดกลุ่มข้อมูลตามเงื่อนไขที่เลือก');
-    let linesA = isTransientAnalysis
-      ? transientParsedLines
-      : optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
-        parseKML(text, baseFiles[index]?.name || '').map(line => {
-          line.sourceFile = baseFiles[index]?.name || '';
-          line.sourceDatasetId = `local:${index}:${line.sourceFile}`;
-          return line;
-        })
-      ));
+    let linesA = optimizedBaseLines.concat(baseTexts.flatMap((text, index) =>
+      parseKML(text, baseFiles[index]?.name || '').map(line => {
+        line.sourceFile = baseFiles[index]?.name || '';
+        line.sourceDatasetId = `local:${index}:${line.sourceFile}`;
+        return line;
+      })
+    ));
     let linesB = optimizedCompareLines.concat(compareTexts.flatMap((text, index) =>
       parseKML(text, compareFiles[index]?.name || '').map(line => {
         line.sourceFile = compareFiles[index]?.name || '';
         line.sourceDatasetId = `local:${index}:${line.sourceFile}`;
         return line;
       })
-    ));
+    ), transientParsedLines);
     // Keep the existing data loaders, but reduce the expensive geometry
     // comparison to the selected PEA region before analysis begins.
     linesA = filterLinesForQuickRegion(linesA);
@@ -4149,8 +4161,8 @@ async function runAnalysis(options = {}) {
     const cSame = state.segmentsB.filter(s => s.status === 'same').length;
     const breakdown = singleFileMode ? '' : ` (New ${cNew} / Same ${cSame} / Remove ${cRem})`;
     const noteParts = [];
-    if (hasBase) noteParts.push(`${isTransientAnalysis ? `ไฟล์ภายนอกชั่วคราว ${transientFiles.length - transientFileErrors.length}/${transientFiles.length} ไฟล์ ·` : 'นำเข้าฐาน'} ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
-    if (hasCompare) noteParts.push(`เปรียบเทียบ ${rawCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
+    if (hasBase) noteParts.push(`ข้อมูลฐาน ${rawCountA} เส้น${dedupeA.removedCount ? ` (ตัดซ้ำ ${dedupeA.removedCount})` : ''}`);
+    if (hasCompare) noteParts.push(`${isTransientAnalysis ? `เปรียบเทียบกับไฟล์ภายนอกชั่วคราว ${transientFiles.length - transientFileErrors.length}/${transientFiles.length} ไฟล์` : 'เปรียบเทียบ'} · ${rawCountB} เส้น${dedupeB.removedCount ? ` (ตัดซ้ำ ${dedupeB.removedCount})` : ''}`);
     noteParts.push(`รายงาน: ${reportOverlapModeLabel()}`);
     const importNote = noteParts.join(' · ');
     document.getElementById('execMeta').textContent = `${dateStr} · ${timeStr} · ${importNote} · ${state.segmentsB.length} ช่วง${breakdown} · ${elapsedMs.toLocaleString('th-TH')} มิลลิวินาที`;
@@ -4171,7 +4183,7 @@ async function runAnalysis(options = {}) {
     document.getElementById('reportCard').classList.toggle('area-filter-pending', !selectedPeaRegion());
     document.getElementById('results').style.display = selectedPeaRegion() ? 'block' : 'none';
     costStatus.textContent = state.segmentsB.length > 0
-      ? `${isTransientAnalysis ? 'ผลชั่วคราว (ไม่บันทึก) · ' : ''}เริ่มต้นคำนวณค่าพาดสายครบทุกเส้นที่ Import ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง — เมื่อกรองในการ์ด 4 ยอดจะปรับตามผลกรอง`
+      ? `${isTransientAnalysis ? 'ผลเปรียบเทียบกับไฟล์ภายนอก (ไม่บันทึก) · ' : ''}เริ่มต้นคำนวณค่าพาดสายครบทุกเส้นที่ Import ${state.segmentsB.length.toLocaleString('th-TH')} ช่วง — เมื่อกรองในการ์ด 4 ยอดจะปรับตามผลกรอง`
       : 'วิเคราะห์เสร็จแล้ว — ไม่พบช่วงเส้นทาง จึงไม่มีค่าบริการให้คำนวณ';
     window.permissionOutTransientAnalysis = isTransientAnalysis;
     window.dispatchEvent(new CustomEvent('permissionout:analysis-complete', { detail: { elapsedMs, segmentCount: state.segmentsB.length, transient: isTransientAnalysis } }));
@@ -6024,15 +6036,22 @@ document.getElementById('externalCalcBtn')?.addEventListener('click', async () =
   const button = document.getElementById('externalCalcBtn');
   const status = document.getElementById('externalCalcStatus');
   button.disabled = true;
-  if (status) status.textContent = 'กำลังอ่านและคำนวณไฟล์ภายนอก…';
+  if (!hasBaseSources()) {
+    if (status) status.textContent = 'กรุณาเลือกข้อมูลจากฐานเป็นชุดฐานก่อนนำไฟล์มาเปรียบเทียบ';
+    errBox.textContent = 'กรุณาเลือกข้อมูลจากฐานเป็นชุดฐานก่อนนำไฟล์ภายนอกมาเปรียบเทียบ';
+    errBox.style.display = 'block';
+    button.disabled = false;
+    return;
+  }
+  if (status) status.textContent = 'กำลังเปรียบเทียบข้อมูลจากฐานกับไฟล์ภายนอก…';
   try {
     const result = await runAnalysis({ transientFiles: files });
     if (status && result?.transient) {
       const skipped = result?.fileErrors || [];
       const skippedNames = skipped.slice(0, 3).map(item => item.fileName).join(', ');
       status.textContent = skipped.length
-        ? `คำนวณสำเร็จ ${(files.length - skipped.length).toLocaleString('th-TH')}/${files.length.toLocaleString('th-TH')} ไฟล์ · ข้ามไฟล์ที่อ่านไม่ได้ ${skipped.length.toLocaleString('th-TH')} ไฟล์: ${skippedNames}${skipped.length > 3 ? '…' : ''} · ผลนี้ไม่ถูกบันทึกเข้าระบบ`
-        : `คำนวณเสร็จแล้ว ${files.length.toLocaleString('th-TH')} ไฟล์ · ผลนี้ไม่ถูกบันทึกเข้าระบบ`;
+        ? `เปรียบเทียบสำเร็จ ${(files.length - skipped.length).toLocaleString('th-TH')}/${files.length.toLocaleString('th-TH')} ไฟล์ · ข้ามไฟล์ที่อ่านไม่ได้ ${skipped.length.toLocaleString('th-TH')} ไฟล์: ${skippedNames}${skipped.length > 3 ? '…' : ''} · ผลนี้ไม่ถูกบันทึกเข้าระบบ`
+        : `เปรียบเทียบข้อมูลจากฐานกับไฟล์ภายนอกแล้ว ${files.length.toLocaleString('th-TH')} ไฟล์ · ผลนี้ไม่ถูกบันทึกเข้าระบบ`;
     } else if (status) {
       status.textContent = 'คำนวณไม่สำเร็จ · ตรวจสอบรายละเอียดข้อผิดพลาดด้านล่างแล้วลองใหม่';
     }
@@ -6277,7 +6296,7 @@ document.addEventListener('DOMContentLoaded', () => { initMap(); populateProvinc
 </script>
 <script src="bootstrap.js"></script>
 <script src="vendor/supabase.js"></script>
-<script src="production.js?v=20260902-office-boundary"></script>
+<script src="production.js?v=20260923-external-comparison"></script>
 <script src="admin-users.js?v=20260723-auth-admin"></script>
 <script src="admin-data.js?v=20260723-data-versioning"></script>
 <script src="ux-refresh.js?v=20260909-electricity-area-label"></script>
