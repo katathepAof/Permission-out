@@ -1,4 +1,4 @@
-const CACHE = 'permission-out-v138-mod1-external-file-roles';
+const CACHE = 'permission-out-v139-mod1-region-select-all';
 const CORE = ['/', '/mod2/', '/login/', '/production.css?v=20260723-modules', '/production.js?v=20260923-external-comparison', '/pea-hierarchy.js?v=20260801-kml-folder-tree', '/admin-users.css?v=20260723-auth-admin', '/admin-users.js?v=20260723-auth-admin', '/admin-data.css?v=20260723-data-versioning', '/admin-data.js?v=20260723-data-versioning', '/ux-refresh.css?v=20260730-multi-report-filter', '/ux-refresh.js?v=20260909-electricity-area-label', '/mod1-dashboard.css?v=20260909-map-legend-spacing', '/app-theme.css?v=20260807-thailand-overview', '/mod2.css?v=20260909-map-detail-drawers', '/mod2.js?v=20260910-remark-notifications-v2', '/app-theme.js?v=20260807-theme-review', '/login.css?v=20260909-mod1-theme', '/login.js?v=20260726-central-login', '/vendor/leaflet.css', '/vendor/leaflet.js', '/vendor/supabase.js', '/manifest.webmanifest', '/logo.svg'];
 
 self.addEventListener('install', event => {

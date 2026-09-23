@@ -1066,6 +1066,8 @@ body.mod1-map-focus .rightCol > .card .map-focus-toggle-floating{
 .region-multi-option:hover{background:#edf6ff;}
 .region-multi-option:has(input:checked){background:#e6f2ff;font-weight:700;}
 .region-multi-option input{width:16px;height:16px;margin:0;accent-color:#1e5ba8;}
+.region-multi-option.is-select-all{position:sticky;z-index:1;top:-7px;margin:-7px -7px 5px;padding:10px 16px;border-bottom:1px solid #c9dced;border-radius:10px 10px 0 0;background:#f4f8fd;font-weight:800;box-shadow:0 3px 8px rgba(15,44,82,.06);}
+.region-multi-option.is-select-all:hover,.region-multi-option.is-select-all:has(input:checked){background:#e6f2ff;}
 .pea-scope-filter .region-multi-select{width:100%;}
 .quick-area-datasets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-width:0;}
 .quick-area-datasets label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:8px 10px;border:1px solid #c4d4e7;border-radius:9px;background:rgba(255,255,255,.88);color:var(--navy-800);font-size:.78rem;font-weight:700;cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease;}
@@ -3551,7 +3553,7 @@ document.getElementById('reportBody').addEventListener('click', (e) => {
 function selectedPeaRegions(controlId = 'peaRegionFilter') {
   const control = document.getElementById(controlId);
   return control
-    ? Array.from(control.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value)
+    ? Array.from(control.querySelectorAll('input[type="checkbox"]:checked:not([data-region-select-all])')).map(input => input.value)
     : [];
 }
 
@@ -3568,8 +3570,16 @@ function regionSelectionLabel(regions) {
 function updateRegionMultiSummary(control) {
   if (!control) return;
   const regions = selectedPeaRegions(control.id);
+  const regionInputs = Array.from(control.querySelectorAll('input[type="checkbox"]:not([data-region-select-all])'));
+  const selectAll = control.querySelector('[data-region-select-all]');
+  if (selectAll) {
+    selectAll.checked = regionInputs.length > 0 && regions.length === regionInputs.length;
+    selectAll.indeterminate = regions.length > 0 && regions.length < regionInputs.length;
+  }
   const summary = control.querySelector('.region-multi-summary');
-  if (summary) summary.textContent = regionSelectionLabel(regions) || control.dataset.placeholder || 'เลือกเขต';
+  if (summary) summary.textContent = regions.length === regionInputs.length && regionInputs.length
+    ? `เลือกทั้งหมด ${regions.length} เขต`
+    : regionSelectionLabel(regions) || control.dataset.placeholder || 'เลือกเขต';
 }
 
 function initializeRegionMultiSelect(control) {
@@ -3577,7 +3587,7 @@ function initializeRegionMultiSelect(control) {
   const panel = control.querySelector('.region-multi-panel');
   const trigger = control.querySelector('.region-multi-trigger');
   if (!panel || !trigger) return;
-  panel.innerHTML = Object.keys(PEA_REGION_PROVINCES).map(region =>
+  panel.innerHTML = '<label class="region-multi-option is-select-all"><input type="checkbox" data-region-select-all> เลือกทั้งหมด</label>' + Object.keys(PEA_REGION_PROVINCES).map(region =>
     `<label class="region-multi-option"><input type="checkbox" value="${xmlEscape(region)}"> กฟ${xmlEscape(region)}</label>`
   ).join('');
   trigger.addEventListener('click', () => {
@@ -3594,7 +3604,14 @@ function initializeRegionMultiSelect(control) {
     control.classList.toggle('is-open', opening);
     trigger.setAttribute('aria-expanded', String(opening));
   });
-  control.addEventListener('change', () => updateRegionMultiSummary(control));
+  control.addEventListener('change', event => {
+    if (event.target.matches('[data-region-select-all]')) {
+      control.querySelectorAll('input[type="checkbox"]:not([data-region-select-all])').forEach(input => {
+        input.checked = event.target.checked;
+      });
+    }
+    updateRegionMultiSummary(control);
+  });
   control.dataset.initialized = 'true';
   updateRegionMultiSummary(control);
 }
@@ -3604,7 +3621,7 @@ function setSelectedPeaRegions(controlId, regions) {
   if (!control) return;
   initializeRegionMultiSelect(control);
   const selected = new Set(regions || []);
-  control.querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = selected.has(input.value); });
+  control.querySelectorAll('input[type="checkbox"]:not([data-region-select-all])').forEach(input => { input.checked = selected.has(input.value); });
   updateRegionMultiSummary(control);
 }
 

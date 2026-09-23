@@ -248,7 +248,7 @@ if (!html.includes('function getSegProvinces(seg)') || !html.includes('const PEA
 for (const marker of ['id="quickPeaRegion"', 'id="quickUseRd03"', 'id="quickUseRd05"', 'id="quickUseMaxi"', 'id="quickAreaLoadBtn"', 'window.permissionOutSelectRegionDatasets({ provinces, useRd03, useRd05, useMaxi })']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 quick regional database loader marker is missing: ${marker}`);
 }
-for (const marker of ['class="region-multi-select"', 'function selectedPeaRegions(', 'function setSelectedPeaRegions(', "selectedPeaRegions('quickPeaRegion')", "setSelectedPeaRegions('peaRegionFilter', regions)", 'regions.flatMap(region => PEA_REGION_PROVINCES[region] || [])']) {
+for (const marker of ['class="region-multi-select"', 'data-region-select-all', 'เลือกทั้งหมด ${regions.length} เขต', 'selectAll.indeterminate', 'function selectedPeaRegions(', 'function setSelectedPeaRegions(', "selectedPeaRegions('quickPeaRegion')", "setSelectedPeaRegions('peaRegionFilter', regions)", 'regions.flatMap(region => PEA_REGION_PROVINCES[region] || [])']) {
   if (!html.includes(marker)) throw new Error(`MOD 1 multi-region selection marker is missing: ${marker}`);
 }
 if (!html.includes('<details class="quick-area-loader" open>') || !uxRefresh.includes("document.createElement('details')") || !uxRefresh.includes('dataset-selection-toggle')) {
