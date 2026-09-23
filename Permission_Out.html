@@ -3967,9 +3967,11 @@ function hideAnalysisLoading() {
 }
 
 async function runAnalysis(options = {}) {
-  window.permissionOutQuickRegionProvinces = Array.isArray(options.quickRegionProvinces)
-    ? [...options.quickRegionProvinces]
-    : null;
+  if (Object.prototype.hasOwnProperty.call(options, 'quickRegionProvinces')) {
+    window.permissionOutQuickRegionProvinces = Array.isArray(options.quickRegionProvinces)
+      ? [...options.quickRegionProvinces]
+      : null;
+  }
   undoTrimResults();
   errBox.style.display = 'none';
   const requestedTransientFiles = Array.isArray(options.transientFiles) ? options.transientFiles.filter(Boolean) : [];
@@ -4079,11 +4081,17 @@ async function runAnalysis(options = {}) {
     linesA = filterLinesForQuickRegion(linesA);
     linesB = filterLinesForQuickRegion(linesB);
     if (!singleFileMode) {
-      const selectedComparisonLines = [...linesA, ...linesB];
-      linesA = filterMod1ComparisonPair(selectedComparisonLines, 'BASE');
-      linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE');
+      // The catalog-to-catalog workflow keeps the established RD03/Maxi pairing.
+      // External files use their explicit UI role instead, because their names are user-defined.
+      if (!isTransientAnalysis) {
+        const selectedComparisonLines = [...linesA, ...linesB];
+        linesA = filterMod1ComparisonPair(selectedComparisonLines, 'BASE');
+        linesB = filterMod1ComparisonPair(selectedComparisonLines, 'COMPARE');
+      }
       if (!linesA.length || !linesB.length) {
-        throw new Error('การเปรียบเทียบต้องมีข้อมูลฝั่งฐาน rd03 และฝั่งเปรียบเทียบ Maxi.kmz');
+        throw new Error(isTransientAnalysis
+          ? 'ไม่พบเส้นทางสำหรับเปรียบเทียบ กรุณาตรวจสอบข้อมูลจากฐานและไฟล์ภายนอก'
+          : 'การเปรียบเทียบต้องมีข้อมูลฝั่งฐาน rd03 และฝั่งเปรียบเทียบ Maxi.kmz');
       }
     } else if (!linesA.length && !linesB.length) {
       throw new Error('ไม่พบเส้นทางในชุดข้อมูลที่เลือกสำหรับคำนวณค่าบริการ');
